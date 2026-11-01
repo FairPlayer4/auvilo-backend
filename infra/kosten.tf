@@ -105,8 +105,10 @@ locals {
     # Standardkonto für Dienste ohne eigenes Konto (z. B. manuelle Tests).
     compute_standard = "${data.google_project.projekt.number}-compute@developer.gserviceaccount.com"
   }
+  # Von Google dokumentierte Minimalmenge für ein eigenes Build-Konto. Die
+  # breite Rolle roles/cloudbuild.builds.builder ist bewusst nicht dabei: Sie
+  # erlaubt u. a. Nachrichten auf das Budget-Thema (gefälschte Meldungen).
   bauen_rollen = [
-    "roles/cloudbuild.builds.builder",
     "roles/logging.logWriter",
     "roles/artifactregistry.writer",
     "roles/storage.objectViewer",
