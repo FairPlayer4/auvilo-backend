@@ -132,7 +132,7 @@ func TestPruefe(t *testing.T) {
 			return u.anfrage(t, mit(gut, "iss", "accounts.google.com"))
 		}, nil},
 		{"nimmt Token an, das knapp 5 Minuten alt ist", func() Anfrage {
-			return u.anfrage(t, mit(gut, "iat", jetzt.Add(-MaxAlter+time.Second).Unix()))
+			return u.anfrage(t, mit(gut, "iat", jetzt.Add(-5*time.Minute+time.Second).Unix()))
 		}, nil},
 
 		// Google-ID-Token
@@ -167,13 +167,17 @@ func TestPruefe(t *testing.T) {
 		}, ErrZielgruppe},
 
 		// Alter
+		// Feste Werte statt MaxAlter und uhrAbweichung: sonst wanderten die Tests
+		// mit den Konstanten mit und bemerkten keine geänderte Grenze.
 		{"lehnt Token älter als 5 Minuten ab", func() Anfrage {
-			return u.anfrage(t, mit(gut, "iat", jetzt.Add(-MaxAlter-time.Second).Unix()))
+			return u.anfrage(t, mit(gut, "iat", jetzt.Add(-5*time.Minute-time.Second).Unix()))
 		}, ErrZuAlt},
-		// Fester Wert statt uhrAbweichung: sonst wanderte der Test mit der Konstante mit.
 		{"nimmt Token an, dessen iat 59 Sekunden in der Zukunft liegt (Uhr von Google vor)", func() Anfrage {
 			return u.anfrage(t, mit(gut, "iat", jetzt.Add(59*time.Second).Unix()))
 		}, nil},
+		{"lehnt Token ab, dessen iat 61 Sekunden in der Zukunft liegt", func() Anfrage {
+			return u.anfrage(t, mit(gut, "iat", jetzt.Add(61*time.Second).Unix()))
+		}, ErrZuAlt},
 		{"lehnt Token ohne iat ab", func() Anfrage { return u.anfrage(t, mit(gut, "iat", nil)) }, ErrZuAlt},
 		{"lehnt Token aus der Zukunft ab", func() Anfrage {
 			return u.anfrage(t, mit(gut, "iat", jetzt.Add(2*time.Minute).Unix()))
