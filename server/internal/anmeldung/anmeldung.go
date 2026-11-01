@@ -97,7 +97,7 @@ type Ergebnis struct {
 //  1. Geräteschlüssel ist ein P-256-Schlüssel
 //  2. ID-Token von Google signiert, Aussteller Google, nicht abgelaufen
 //  3. Zielgruppe ist eine unserer Client-IDs
-//  4. höchstens MaxAlter alt (und nicht aus der Zukunft)
+//  4. höchstens MaxAlter alt und höchstens uhrAbweichung (1 Minute) in der Zukunft
 //  5. Nonce im Token = Nonce des Geräteschlüssels
 //  6. Signatur über das Token mit dem Geräteschlüssel
 func (p *Pruefer) Pruefe(ctx context.Context, a Anfrage) (Ergebnis, error) {

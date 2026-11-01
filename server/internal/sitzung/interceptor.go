@@ -69,8 +69,10 @@ func (i *Interceptor) pruefe(ctx context.Context, prozedur string, kopf http.Hea
 	if i.offen[prozedur] {
 		return ctx, nil
 	}
-	token, ok := strings.CutPrefix(kopf.Get("Authorization"), "Bearer ")
-	if !ok || token == "" {
+	// Aufbau: "<Schema> <Token>". Das Schema ist laut RFC 7235 ohne Groß- und
+	// Kleinschreibung zu vergleichen ("bearer" gilt also auch).
+	schema, token, ok := strings.Cut(kopf.Get("Authorization"), " ")
+	if !ok || !strings.EqualFold(schema, "Bearer") || token == "" {
 		return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("Sitzung fehlt"))
 	}
 	s, err := i.sitzungen.Sitzung(ctx, Hash(token))

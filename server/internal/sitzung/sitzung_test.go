@@ -139,6 +139,8 @@ func TestInterceptor(t *testing.T) {
 	}{
 		{"offene Prozedur geht ohne Sitzung", sp, offen, "", 0, ""},
 		{"geschützte Prozedur geht mit gültiger Sitzung", sp, geschuetzt, "Bearer " + gueltig, 0, konto.KontoID},
+		{"akzeptiert bearer in Kleinschreibung", sp, geschuetzt, "bearer " + gueltig, 0, konto.KontoID},
+		{"lehnt Bearer ohne Leerzeichen ab", sp, geschuetzt, "Bearer" + gueltig, connect.CodeUnauthenticated, ""},
 		{"lehnt geschützte Prozedur ohne Sitzung ab", sp, geschuetzt, "", connect.CodeUnauthenticated, ""},
 		{"lehnt anderes Schema als Bearer ab", sp, geschuetzt, "Basic " + gueltig, connect.CodeUnauthenticated, ""},
 		{"lehnt leeres Token ab", sp, geschuetzt, "Bearer ", connect.CodeUnauthenticated, ""},
