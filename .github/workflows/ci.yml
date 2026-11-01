@@ -1,4 +1,4 @@
-# Prüft Go-Code und OpenTofu-Konfiguration. Braucht keinen Zugang zu GCP.
+# Prüft Go-Code, Schnittstelle (proto) und OpenTofu-Konfiguration. Braucht keinen Zugang zu GCP.
 name: CI
 
 on:
@@ -19,27 +19,49 @@ concurrency:
 # schlägt Updates vor (.github/dependabot.yml).
 
 jobs:
-  killswitch:
-    name: Go – Kill-Switch
+  go:
+    name: Go – ${{ matrix.modul }}
     runs-on: ubuntu-latest
     timeout-minutes: 15 # Standard wären 6 Stunden, falls etwas hängt
+    strategy:
+      fail-fast: false # ein rotes Modul bricht das andere nicht ab
+      matrix:
+        modul: [infra/killswitch, server]
     defaults:
       run:
-        working-directory: infra/killswitch
+        working-directory: ${{ matrix.modul }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false # kein GitHub-Token in .git/config für Tests und Werkzeuge
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version-file: infra/killswitch/go.mod
-          cache-dependency-path: infra/killswitch/go.sum
+          go-version-file: ${{ matrix.modul }}/go.mod
+          cache-dependency-path: ${{ matrix.modul }}/go.sum
+      # Der Server testet seinen Speicher auch gegen den Firestore-Emulator
+      # (Vertragstests). Die Google Cloud CLI ist auf dem Runner schon da.
+      - name: Firestore-Emulator starten
+        if: matrix.modul == 'server'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq google-cloud-cli-firestore-emulator
+          export PATH="$JAVA_HOME_21_X64/bin:$PATH" # der Emulator braucht Java 21
+          gcloud emulators firestore start --host-port=localhost:8086 > "$RUNNER_TEMP/emulator.log" 2>&1 &
+          for i in $(seq 60); do
+            curl -sf http://localhost:8086/ > /dev/null && exit 0
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/emulator.log"
+          exit 1
       - name: Formatierung
         run: test -z "$(gofmt -l .)" || (gofmt -l . && exit 1)
       - name: go vet
         run: go vet ./...
       # -race braucht cgo; das gibt es unter Linux ohne Weiteres (lokal unter Windows nicht).
       - name: Tests mit Race-Detector
+        env:
+          FIRESTORE_EMULATOR_HOST: ${{ matrix.modul == 'server' && 'localhost:8086' || '' }}
+          EMULATOR_PFLICHT: ${{ matrix.modul == 'server' && '1' || '' }}
         run: go test -race -cover ./...
       - name: golangci-lint
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
@@ -47,10 +69,56 @@ jobs:
           # Version fest wie lokal (docs/entwicklungsumgebung.md), damit neue
           # Linter-Regeln die CI nicht ohne Codeänderung rot machen.
           version: v2.15.0
-          working-directory: infra/killswitch
-          args: --config ../../.golangci.yml
+          working-directory: ${{ matrix.modul }}
+          args: --config ${{ github.workspace }}/.golangci.yml
       - name: govulncheck
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+
+  proto:
+    name: Schnittstelle (buf)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: proto
+    # Versionen wie lokal (docs/entwicklungsumgebung.md). Andere Versionen der
+    # Plugins erzeugen anderen Code, dann schlüge die Prüfung unten fehl.
+    env:
+      BUF_VERSION: v1.75.0
+      PROTOC_GEN_GO_VERSION: v1.36.12
+      PROTOC_GEN_CONNECT_GO_VERSION: v1.21.1
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0 # buf breaking vergleicht mit main
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+      - name: Werkzeuge installieren
+        run: |
+          go install github.com/bufbuild/buf/cmd/buf@$BUF_VERSION
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@$PROTOC_GEN_GO_VERSION
+          go install connectrpc.com/connect/cmd/protoc-gen-connect-go@$PROTOC_GEN_CONNECT_GO_VERSION
+      - name: Lint und Formatierung
+        run: buf lint && buf format -d --exit-code
+      # Wer die .proto-Dateien ändert, muss den Code neu erzeugen und mit einchecken.
+      - name: Erzeugter Code ist aktuell
+        run: |
+          buf generate
+          git add -N ../server/gen # neue Dateien im Vergleich mitzählen
+          git diff --exit-code -- ../server/gen
+      # Inkompatible Änderungen gegenüber main (z. B. Feld umnummeriert) würden
+      # installierte Apps brechen. Solange main noch keine Schnittstelle hat,
+      # gibt es nichts zu vergleichen.
+      - name: Keine inkompatiblen Änderungen
+        run: |
+          if [ -z "$(git ls-tree origin/main proto)" ]; then
+            echo "main hat noch kein proto/ – übersprungen"
+            exit 0
+          fi
+          buf breaking --against '../.git#ref=origin/main,subdir=proto'
 
   tofu:
     name: OpenTofu
