@@ -39,10 +39,14 @@ jobs:
           go-version-file: ${{ matrix.modul }}/go.mod
           cache-dependency-path: ${{ matrix.modul }}/go.sum
       # Der Server testet seinen Speicher auch gegen den Firestore-Emulator
-      # (Vertragstests). Die Google Cloud CLI ist auf dem Runner schon da.
+      # (Vertragstests). Die Google Cloud CLI ist auf dem Runner schon da, aber
+      # das Runner-Image entfernt Googles apt-Quelle nach der Installation wieder;
+      # deshalb wird sie hier neu eingetragen.
       - name: Firestore-Emulator starten
         if: matrix.modul == 'server'
         run: |
+          curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo gpg --dearmor --yes -o /usr/share/keyrings/cloud.google.gpg
+          echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee /etc/apt/sources.list.d/google-cloud-sdk.list > /dev/null
           sudo apt-get update -qq
           sudo apt-get install -y -qq google-cloud-cli-firestore-emulator
           export PATH="$JAVA_HOME_21_X64/bin:$PATH" # der Emulator braucht Java 21
@@ -114,7 +118,9 @@ jobs:
       # gibt es nichts zu vergleichen.
       - name: Keine inkompatiblen Änderungen
         run: |
-          if [ -z "$(git ls-tree origin/main proto)" ]; then
+          git rev-parse --verify origin/main > /dev/null # fehlt main, rot statt übersprungen
+          # --full-tree: Pfad ab Repo-Wurzel, nicht ab proto/ (sonst nie gefunden)
+          if [ -z "$(git ls-tree --full-tree origin/main proto)" ]; then
             echo "main hat noch kein proto/ – übersprungen"
             exit 0
           fi
