@@ -52,6 +52,10 @@ resource "google_billing_budget" "monat" {
   all_updates_rule {
     pubsub_topic = google_pubsub_topic.budget.id
   }
+
+  # Braucht die Billing-Budgets-API; ohne die Abhängigkeit schlägt ein Neuaufbau
+  # des Projekts fehl, wenn das Budget vor dem Aktivieren der APIs drankommt.
+  depends_on = [google_project_service.apis]
 }
 
 # --- Dienstkonten ------------------------------------------------------------
