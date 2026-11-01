@@ -5,6 +5,8 @@ import com.avlreminder.protokoll.Schluesselbund
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.io.File
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.security.KeyFactory
 import java.security.KeyPairGenerator
 import java.security.PrivateKey
@@ -107,12 +109,11 @@ class Ablage(private val ordner: File) {
         ordner.mkdirs()
         // Erst in eine Nachbardatei, dann umbenennen: Bricht das Programm ab,
         // bleibt die alte Datei ganz.
+        // ATOMIC_MOVE ersetzt auch unter Windows in einem Schritt (File.renameTo
+        // scheitert dort, wenn das Ziel existiert).
         val tmp = File(ordner, datei.name + ".tmp")
         tmp.writeText(inhalt)
-        if (!tmp.renameTo(datei)) {
-            datei.delete()
-            check(tmp.renameTo(datei)) { "konnte $datei nicht schreiben" }
-        }
+        Files.move(tmp.toPath(), datei.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
     }
 
     private companion object {
