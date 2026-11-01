@@ -337,3 +337,5 @@ tragen die Tests die Spezifikation. Anleitung zum Review: [go-review.md](go-revi
 | 2026-11-01 | B1: Google-Konto-ID nur als HMAC mit geheimem Pfeffer (Secret Manager) gespeichert |
 | 2026-11-01 | B1: Test mit Go-Werkzeug `testanmeldung`; Kotlin-Test-Client ab B2 |
 | 2026-11-01 | Namen in Schnittstelle und Code deutsch, ohne Umlaute |
+| 2026-11-01 | Abgefangene Anfragen dürfen sich im Zeitfenster wiederholen (Anmelden ca. 5 min, Erneuern ±2 min); keine Merkliste benutzter Signaturen. Schutz: TLS, kurze Fenster, Sitzung 1 h (Test `TestWiederholteAnfrageImZeitfensterGiltBewusst`) |
+| 2026-11-01 | Geräte-IDs (pseudonym) dürfen in Logs stehen, zur Fehlersuche und Missbrauchsabwehr (Art. 6 Abs. 1 f). Einzeln löschen geht in Cloud Logging nicht; stattdessen: Konto löschen trennt sofort die Zuordnung (Firestore), Logs laufen nach 30 Tagen ab (P5). In die Datenschutzerklärung (P4); vor B6 von jemandem mit Datenschutzerfahrung prüfen lassen |

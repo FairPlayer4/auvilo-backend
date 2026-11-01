@@ -366,3 +366,33 @@ func TestUngueltigeGeraeteIDWirdOhneSpeicherAbgelehnt(t *testing.T) {
 		})
 	}
 }
+
+// Bewusst erlaubt (Entscheidung 2026-11-01, anforderungen.md Kap. 11): Dieselbe
+// Anfrage gilt innerhalb ihres Zeitfensters mehrmals. Schutz kommt von TLS, der
+// kurzen Gültigkeit und der Sitzungsdauer von 1 Stunde. Wird dieser Test rot,
+// weil Wiederholungen abgelehnt werden, ist das eine Änderung der Entscheidung.
+func TestWiederholteAnfrageImZeitfensterGiltBewusst(t *testing.T) {
+	ts := neuerTestServer(t)
+	ctx := context.Background()
+	handy := testhilfe.NeuesGeraet(t)
+
+	anmelden := ts.anmeldeAnfrage(t, "google-kevin", handy)
+	erste, err := ts.anmelde.Anmelden(ctx, connect.NewRequest(anmelden))
+	if err != nil {
+		t.Fatal(err)
+	}
+	zweite, err := ts.anmelde.Anmelden(ctx, connect.NewRequest(anmelden))
+	if err != nil {
+		t.Fatalf("Wiederholung der Anmeldung abgelehnt: %v", err)
+	}
+	if erste.Msg.Sitzung.Token == zweite.Msg.Sitzung.Token {
+		t.Error("Wiederholung lieferte dasselbe Token")
+	}
+
+	erneuern := ts.erneuerAnfrage(t, handy, ts.jetzt)
+	for i := range 2 {
+		if _, err := ts.anmelde.SitzungErneuern(ctx, connect.NewRequest(erneuern)); err != nil {
+			t.Fatalf("Erneuern Nr. %d abgelehnt: %v", i+1, err)
+		}
+	}
+}

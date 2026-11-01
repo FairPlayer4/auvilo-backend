@@ -53,9 +53,7 @@ Vom Entwickler bestätigt am 2026-11-01.
   E-Mail (`infra/alarm.tf`), E10 Actions auf Node 24 per SHA, Dependabot.
 
 ## Offene Fragen an den Entwickler
-- 2026-11-01 (Lauf 2): Wiederholte Anfragen im Zeitfenster (Anmelden ~5 min, Erneuern
-  ±2 min) bewusst zulassen? Vorschlag: ja, festhalten und Test ergänzen.
-- 2026-11-01 (Lauf 2): Geräte-IDs (pseudonym) in Logs zulassen? Vorschlag: ja.
+Keine.
 
 ## Getroffene Entscheidungen
 - 2026-11-01: Architekturbild bestätigt.
@@ -67,5 +65,9 @@ Vom Entwickler bestätigt am 2026-11-01.
   produktiver Einsatz. Nicht erneut als Fund melden.
 - 2026-11-01: Kosten vor Verfügbarkeit: `tofu apply` darf gesperrte Dienste nicht wieder
   öffnen (`ignore_changes = [ingress]`). Hohe Kosten gelten als Zeichen für Fehler/Angriff.
+- 2026-11-01 (Lauf 2): Wiederholte Anfragen im Zeitfenster sind bewusst erlaubt
+  (anforderungen.md Kap. 11, Test in dienst_test). Nicht erneut als Fund melden.
+- 2026-11-01 (Lauf 2): Geräte-IDs dürfen in Logs stehen (anforderungen.md Kap. 11).
+  Nicht erneut als Fund melden; Token, `sub` und Inhalte bleiben verboten.
 - 2026-11-01: `EXCLUDE_ALL_CREDITS` bleibt (auch Gratis-Kontingent zählt) – erlaubt einen
   späteren Live-Test des Kill-Switch. Nicht erneut als Fund melden.
