@@ -7,25 +7,49 @@ import (
 	"testing"
 )
 
+// stufenRekorder merkt sich die Log-Stufe jeder Meldung. Der E-Mail-Alarm
+// (infra/alarm.tf) hängt an der Stufe: ab WARNING kommt eine Mail.
+type stufenRekorder struct{ stufen *[]slog.Level }
+
+func (r stufenRekorder) Enabled(context.Context, slog.Level) bool { return true }
+func (r stufenRekorder) Handle(_ context.Context, rec slog.Record) error {
+	*r.stufen = append(*r.stufen, rec.Level)
+	return nil
+}
+func (r stufenRekorder) WithAttrs([]slog.Attr) slog.Handler { return r }
+func (r stufenRekorder) WithGroup(string) slog.Handler      { return r }
+
 func TestVerarbeite(t *testing.T) {
+	sperrKaputt := errors.New("Sperren-API-Fehler")
 	tests := []struct {
 		name         string
 		daten        string
+		sperrFehler  error
 		wantAktion   Aktion
 		wantGetrennt bool
 		wantErr      bool
+		// KRITISCH: Eingriffe und Fehler müssen mindestens WARN sein, sonst
+		// kommt keine Alarm-Mail.
+		wantStufe slog.Level
 	}{
-		{"echte Meldung unter Budget: nichts", `{"budgetDisplayName":"b","costAmount":3.5,"budgetAmount":20,"currencyCode":"EUR","alertThresholdExceeded":0.25}`, Nichts, false, false},
-		{"Meldung über Budget: sperren", `{"costAmount":21,"budgetAmount":20}`, DiensteSperren, false, false},
-		{"Meldung weit über Budget: trennen", `{"costAmount":31,"budgetAmount":20}`, AbrechnungTrennen, true, false},
-		{"lehnt kaputtes JSON ab", `{kaputt`, Nichts, false, true},
-		{"lehnt Meldung ohne Budget ab", `{"costAmount":21}`, Nichts, false, true},
-		{"lehnt Meldung ohne Kosten ab", `{"budgetAmount":20}`, Nichts, false, true},
-		{"Kosten 0 sind gültig, wenn angegeben", `{"costAmount":0,"budgetAmount":20}`, Nichts, false, false},
+		{"echte Meldung unter Budget: nichts", `{"budgetDisplayName":"b","costAmount":3.5,"budgetAmount":20,"currencyCode":"EUR","alertThresholdExceeded":0.25}`, nil, Nichts, false, false, slog.LevelInfo},
+		{"Meldung über Budget: sperren", `{"costAmount":21,"budgetAmount":20}`, nil, DiensteSperren, false, false, slog.LevelWarn},
+		{"Meldung weit über Budget: trennen", `{"costAmount":31,"budgetAmount":20}`, nil, AbrechnungTrennen, true, false, slog.LevelWarn},
+		{"Fehler beim Sperren wird als ERROR geloggt", `{"costAmount":21,"budgetAmount":20}`, sperrKaputt, DiensteSperren, false, true, slog.LevelError},
+		{"lehnt kaputtes JSON ab", `{kaputt`, nil, Nichts, false, true, slog.LevelError},
+		{"lehnt Meldung ohne Budget ab", `{"costAmount":21}`, nil, Nichts, false, true, slog.LevelError},
+		{"lehnt Meldung ohne Kosten ab", `{"budgetAmount":20}`, nil, Nichts, false, true, slog.LevelError},
+		{"Kosten 0 sind gültig, wenn angegeben", `{"costAmount":0,"budgetAmount":20}`, nil, Nichts, false, false, slog.LevelInfo},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := &attrappe{}
+			// Verarbeite loggt über den globalen Logger; für den Test austauschen.
+			var stufen []slog.Level
+			alt := slog.Default()
+			slog.SetDefault(slog.New(stufenRekorder{&stufen}))
+			t.Cleanup(func() { slog.SetDefault(alt) })
+
+			p := &attrappe{sperrFehler: tt.sperrFehler}
 			erg, err := Verarbeite(context.Background(), []byte(tt.daten), StandardSchwellen, p)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("Fehler = %v, erwartet Fehler: %v", err, tt.wantErr)
@@ -39,8 +63,11 @@ func TestVerarbeite(t *testing.T) {
 			if tt.name == "lehnt Meldung ohne Kosten ab" && !errors.Is(err, ErrKostenFehlen) {
 				t.Errorf("Fehler = %v, erwartet ErrKostenFehlen", err)
 			}
-			if tt.wantErr && (p.gesperrt() || p.getrennt()) {
+			if tt.wantErr && tt.sperrFehler == nil && (p.gesperrt() || p.getrennt()) {
 				t.Error("bei ungültiger Meldung darf nichts passieren")
+			}
+			if len(stufen) != 1 || stufen[0] != tt.wantStufe {
+				t.Errorf("Log-Stufen = %v, erwartet genau eine Meldung mit %v", stufen, tt.wantStufe)
 			}
 		})
 	}
