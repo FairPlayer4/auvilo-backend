@@ -9,6 +9,11 @@ on:
 permissions:
   contents: read
 
+# Ein neuer Push auf denselben Branch bricht den noch laufenden alten Lauf ab.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 # Actions sind auf Commit-SHA festgelegt (ein Tag ließe sich nachträglich auf
 # fremden Code umhängen). Die Version steht als Kommentar dahinter; Dependabot
 # schlägt Updates vor (.github/dependabot.yml).
@@ -17,6 +22,7 @@ jobs:
   killswitch:
     name: Go – Kill-Switch
     runs-on: ubuntu-latest
+    timeout-minutes: 15 # Standard wären 6 Stunden, falls etwas hängt
     defaults:
       run:
         working-directory: infra/killswitch
@@ -49,6 +55,7 @@ jobs:
   tofu:
     name: OpenTofu
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: infra
