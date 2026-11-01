@@ -76,19 +76,6 @@ func TestSchwellenAusUmgebung(t *testing.T) {
 	}
 }
 
-func TestKurzname(t *testing.T) {
-	tests := map[string]string{
-		"projects/p/locations/r/services/api": "api",
-		"api":                                 "api",
-		"":                                    "",
-	}
-	for ein, want := range tests {
-		if got := kurzname(ein); got != want {
-			t.Errorf("kurzname(%q) = %q, erwartet %q", ein, got, want)
-		}
-	}
-}
-
 func TestCloudLoggingFelder(t *testing.T) {
 	tests := []struct {
 		ein, want string

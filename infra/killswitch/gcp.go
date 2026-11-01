@@ -44,45 +44,48 @@ func (p *gcpPlattform) Schliessen() error {
 	return errors.Join(p.run.Close(), p.billing.Close())
 }
 
-// DiensteSperren stellt alle Cloud-Run-Dienste der Region auf "nur intern".
-// Anfragen aus dem Internet werden dann abgewiesen, ohne dass eine Instanz
-// startet – es entstehen keine Rechenkosten mehr. Rückgängig: Ingress wieder
-// auf "all" stellen (z. B. durch erneutes `tofu apply`).
-//
-// KRITISCH: Fehler bei einzelnen Diensten halten die anderen nicht auf.
+// DiensteSperren erfüllt Plattform. Die eigentliche Logik steht in
+// SperreAlle (sperren.go); hier sind nur die Cloud-Run-Aufrufe.
+// Rückgängig: Ingress wieder auf "all" stellen (z. B. per gcloud).
 func (p *gcpPlattform) DiensteSperren(ctx context.Context) (int, error) {
+	return SperreAlle(ctx, p, p.eigenerDienst)
+}
+
+// Dienste listet alle Cloud-Run-Dienste der Region (Teil von CloudRun).
+func (p *gcpPlattform) Dienste(ctx context.Context) ([]Dienst, error) {
 	eltern := fmt.Sprintf("projects/%s/locations/%s", p.projekt, p.region)
 	it := p.run.ListServices(ctx, &runpb.ListServicesRequest{Parent: eltern})
-
-	gesperrt := 0
-	var fehler []error
+	var dienste []Dienst
 	for {
-		dienst, err := it.Next()
+		d, err := it.Next()
 		if errors.Is(err, iterator.Done) {
-			break
+			return dienste, nil
 		}
 		if err != nil {
-			return gesperrt, fmt.Errorf("Dienste auflisten: %w", err)
+			return nil, err
 		}
-		if kurzname(dienst.Name) == p.eigenerDienst {
-			continue
-		}
-		if dienst.Ingress == runpb.IngressTraffic_INGRESS_TRAFFIC_INTERNAL_ONLY {
-			continue
-		}
-		dienst.Ingress = runpb.IngressTraffic_INGRESS_TRAFFIC_INTERNAL_ONLY
-		op, err := p.run.UpdateService(ctx, &runpb.UpdateServiceRequest{Service: dienst})
-		if err == nil {
-			_, err = op.Wait(ctx)
-		}
-		if err != nil {
-			// Weitermachen: Ein Dienst mit Fehler soll die anderen nicht aufhalten.
-			fehler = append(fehler, fmt.Errorf("%s: %w", dienst.Name, err))
-			continue
-		}
-		gesperrt++
+		dienste = append(dienste, Dienst{
+			Name:   d.Name,
+			Intern: d.Ingress == runpb.IngressTraffic_INGRESS_TRAFFIC_INTERNAL_ONLY,
+		})
 	}
-	return gesperrt, errors.Join(fehler...)
+}
+
+// Sperre stellt einen Dienst auf "nur intern" (Teil von CloudRun). Der Dienst
+// wird frisch gelesen, weil die Update-API das vollständige Objekt erwartet,
+// und es wird gewartet, bis die Änderung aktiv ist.
+func (p *gcpPlattform) Sperre(ctx context.Context, name string) error {
+	d, err := p.run.GetService(ctx, &runpb.GetServiceRequest{Name: name})
+	if err != nil {
+		return err
+	}
+	d.Ingress = runpb.IngressTraffic_INGRESS_TRAFFIC_INTERNAL_ONLY
+	op, err := p.run.UpdateService(ctx, &runpb.UpdateServiceRequest{Service: d})
+	if err != nil {
+		return err
+	}
+	_, err = op.Wait(ctx)
+	return err
 }
 
 // AbrechnungTrennen trennt das Projekt vom Rechnungskonto (leerer Kontoname).
@@ -95,14 +98,4 @@ func (p *gcpPlattform) AbrechnungTrennen(ctx context.Context) error {
 		ProjectBillingInfo: &billingpb.ProjectBillingInfo{BillingAccountName: ""},
 	})
 	return err
-}
-
-// kurzname macht aus "projects/p/locations/r/services/name" den Namen "name".
-func kurzname(voll string) string {
-	for i := len(voll) - 1; i >= 0; i-- {
-		if voll[i] == '/' {
-			return voll[i+1:]
-		}
-	}
-	return voll
 }
