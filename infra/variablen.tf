@@ -75,3 +75,12 @@ variable "github_repo" {
   type        = string
   default     = "FairPlayer4/avlreminder-backend"
 }
+
+# Die Zahl bleibt gleich, auch wenn das Repo umbenannt oder gelöscht und unter
+# gleichem Namen neu angelegt wird – der Name allein könnte dann einem fremden
+# Repo gehören. Ermitteln: gh api repos/<besitzer>/<repo> --jq .id
+variable "github_repo_id" {
+  description = "Numerische ID des GitHub-Repos (Prüfung bei Workload Identity Federation)"
+  type        = string
+  default     = "1441701583"
+}

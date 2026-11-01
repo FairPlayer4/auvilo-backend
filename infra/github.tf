@@ -15,13 +15,15 @@ resource "google_iam_workload_identity_pool_provider" "github" {
   display_name                       = "GitHub Actions OIDC"
 
   attribute_mapping = {
-    "google.subject"       = "assertion.sub"
-    "attribute.repository" = "assertion.repository"
-    "attribute.ref"        = "assertion.ref"
+    "google.subject"          = "assertion.sub"
+    "attribute.repository"    = "assertion.repository"
+    "attribute.repository_id" = "assertion.repository_id"
+    "attribute.ref"           = "assertion.ref"
   }
 
-  # Nur unser Repo und nur der Branch main dürfen sich anmelden.
-  attribute_condition = "assertion.repository == '${var.github_repo}' && assertion.ref == 'refs/heads/main'"
+  # Nur unser Repo und nur der Branch main dürfen sich anmelden. Geprüft wird
+  # die feste Repo-ID statt des Namens (siehe var.github_repo_id).
+  attribute_condition = "assertion.repository_id == '${var.github_repo_id}' && assertion.ref == 'refs/heads/main'"
 
   oidc {
     issuer_uri = "https://token.actions.githubusercontent.com"
@@ -37,7 +39,7 @@ resource "google_service_account" "deploy" {
 resource "google_service_account_iam_member" "deploy_github" {
   service_account_id = google_service_account.deploy.name
   role               = "roles/iam.workloadIdentityUser"
-  member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github.name}/attribute.repository/${var.github_repo}"
+  member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github.name}/attribute.repository_id/${var.github_repo_id}"
 }
 
 # Vorerst darf das Deploy-Konto nur Images hochladen. Rechte für Cloud Run
