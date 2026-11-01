@@ -80,7 +80,9 @@ gcloud storage buckets update gs://avlreminder-exp-1ef2-tfstate --versioning
 
 ```bash
 gcloud auth application-default set-quota-project avlreminder-exp-1ef2
-``` Ergebnis: [stand.md](stand.md).
+```
+
+Ergebnis: [stand.md](stand.md).
 
 ## Später – Schritte im Browser je Etappe
 

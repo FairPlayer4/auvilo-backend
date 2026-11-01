@@ -25,18 +25,24 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
 - Cloud-Run-Dienst `server` (0–2 Instanzen, 256 MiB, CPU nur bei Anfragen),
   öffentlich aufrufbar, eigenes Dienstkonto `server` (Firestore, nur Secret `pfeffer`).
   Adresse: `tofu output server_url`.
-- Secret `pfeffer` (nur europe-west1, feste Version 1, Wert nicht im Zustand)
+- Secret `pfeffer` (nur europe-west1, feste Version 1, Wert nicht im Zustand).
+  **Offen:** Schutz gegen Löschen außerhalb von OpenTofu (`version_destroy_ttl`
+  30 Tage, `prevent_destroy` am Secret) ist im Code, aber noch nicht angewendet
+  (`tofu apply`: 1 Änderung in-place).
 - Firestore-TTL auf `sitzungen.laeuft_ab` (aktiv)
-- Deploy aus GitHub Actions (`.github/workflows/deploy.yml`) bei Merge nach `main`:
-  Konto `deploy` darf Images ins Repo `container` schreiben und nur den Dienst
-  `server` ändern.
+- Deploy aus GitHub Actions (`.github/workflows/deploy.yml`) bei Merge nach `main`,
+  wenn sich `server/**` oder der Workflow ändert (sonst von Hand starten). Beim
+  Anlegen lief ein Platzhalter-Image von Google, das erste echte Image kam per
+  Handstart des Workflows. Konto `deploy` darf Images ins Repo `container`
+  schreiben und nur den Dienst `server` ändern.
 - Repo `funktionen` für das Kill-Switch-Image (E5); Kill-Switch mit eigenem Zeitlimit
   fürs Sperren vor dem Trennen (E8) neu deployt.
 - Zustand von OpenTofu: Bucket `avlreminder-exp-1ef2-tfstate` (europe-west1,
   versioniert), angelegt per `gcloud`
 
 ## Geprüft
-- `tofu plan` ohne Abweichungen; kein Konto im Projekt hat mehr die Editor-Rolle
+- `tofu plan` ohne Abweichungen bis auf den noch nicht angewendeten Pfeffer-Schutz
+  (siehe oben); kein Konto im Projekt hat mehr die Editor-Rolle
 - Kill-Switch in der Cloud: Meldung 3 €/20 € → nichts; 22 €/20 € → Testdienst
   gesperrt (Log als WARNING in `logs-eu`), eigene Funktion nicht gesperrt.
   Testdienst danach gelöscht.
@@ -116,6 +122,12 @@ cd server && go run ./cmd/testanmeldung -geraet handy anmelden
 
 ```bash
 cd server && go run ./cmd/testanmeldung geraete
+```
+
+Gegen den Server in der Cloud (Adresse aus `tofu output server_url`):
+
+```bash
+cd server && go run ./cmd/testanmeldung -server "$(cd ../infra && tofu output -raw server_url)" -geraet cloud anmelden
 ```
 
 Kill-Switch von Hand auslösen (sperrt alle Cloud-Run-Dienste!):

@@ -169,7 +169,7 @@ func starte() error {
 }
 
 // leseSecret holt den Pfeffer aus dem Secret Manager. name ist die volle
-// Version, z. B. projects/<p>/secrets/pfeffer/versions/latest.
+// Version, z. B. projects/<p>/secrets/pfeffer/versions/1 (fest, siehe infra/server.tf).
 func leseSecret(ctx context.Context, name string) ([]byte, error) {
 	c, err := secretmanager.NewClient(ctx)
 	if err != nil {
