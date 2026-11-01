@@ -27,7 +27,10 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
   Adresse: `tofu output server_url`.
 - Secret `pfeffer` (nur europe-west1, feste Version 1, Wert nicht im Zustand).
   Schutz auch außerhalb von OpenTofu: Zerstörte Versionen bleiben 30 Tage
-  wiederherstellbar (`version_destroy_ttl`, angewendet 2026-11-01).
+  wiederherstellbar (`version_destroy_ttl`, angewendet 2026-11-01). Das gilt für
+  einzelne Versionen; gegen das Löschen des ganzen Secrets (Console, `gcloud
+  secrets delete`) schützt es nach unserem Verständnis nicht, `prevent_destroy`
+  wirkt nur in OpenTofu.
 - Firestore-TTL auf `sitzungen.laeuft_ab` (aktiv)
 - Deploy aus GitHub Actions (`.github/workflows/deploy.yml`) bei Merge nach `main`,
   wenn sich `server/**` oder der Workflow ändert (sonst von Hand starten). Beim
