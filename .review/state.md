@@ -28,28 +28,31 @@ Vom Entwickler bestätigt am 2026-11-01.
 ## Bereiche
 | Bereich | Pfade | Anforderungen/Doku | Tests | Zuletzt reviewt | Zustand |
 |---|---|---|---|---|---|
-| Kill-Switch | `infra/killswitch/` | anforderungen.md KO3, stand.md | `*_test.go` (54) | 2026-11-01 (Lauf 1) | gut; `gcp.go` ungetestet (E1) |
-| Infrastruktur | `infra/*.tf` | anforderungen.md 4.3, 5, 6; gcp-einrichtung.md | keine (E3) | 2026-11-01 (Lauf 1) | IAM zu breit (E2) |
+| Kill-Switch | `infra/killswitch/` | anforderungen.md KO3, stand.md | `*_test.go` | 2026-11-01 (Lauf 1) | gut (E1 erledigt) |
+| Infrastruktur | `infra/*.tf` | anforderungen.md 4.3, 5, 6; gcp-einrichtung.md | `infra/tests/` (tofu test) | 2026-11-01 (Lauf 1) | gut (E2, E3, E6 erledigt) |
 | CI und Werkzeuge | `.github/workflows/`, `.golangci.yml` | anforderungen.md Q4, go-review.md | – | 2026-11-01 (Lauf 1) | ok; Modul-Matrix fehlt (E4) |
 | Doku | `docs/`, `CLAUDE.md`, `README.md` | – | – | nie | – |
 
 ## Bekannte Schulden und beobachtete Drift
-- 2026-11-01: `gcp.go` enthält Logik ohne Tests (E1). Erstbeobachtung.
-- 2026-11-01: Least Privilege nicht eingehalten: Kill-Switch hat `run.developer` und
-  projektweit `serviceAccountUser`, Build-Konto hat die Builder-Rolle, Standardkonten
-  haben Editor (E2, E6). Erstbeobachtung.
-- 2026-11-01: D1-Absicherung nur über eine Variablen-Validierung, kein Plan-Test (E3).
 - 2026-11-01: Kein Alarm bei Fehlern des Kill-Switch (E9).
-- 2026-11-01: Fixes aus Lauf 1 an Funktion, Thema und Bucket sind noch nicht per
-  `tofu apply` angewendet.
+- 2026-11-01: Offene kleinere Empfehlungen aus Lauf 1: E4 (Modul-Matrix in der CI,
+  spätestens mit `server/`), E5 (eigenes Registry-Repo für Funktionen), E7 (Herkunft
+  der Budget-Meldung prüfen), E8 (Zeitlimit beim Trennen), E10 (Actions-Pflege).
+- Erledigt nach Lauf 1 (in develop): E1 Sperr-Logik testbar (`sperren.go`), E2 Rechte
+  verkleinert, E3 D1-Test in der CI, E6 Build-Konto ohne Builder-Rolle.
 
 ## Offene Fragen an den Entwickler
-1. Cloud-Änderungen aus Lauf 1 anwenden (nach Merge)?
-2. Editor-Rolle der Standardkonten entfernen, `serviceAccountUser` einschränken?
-3. Pflicht-Statuschecks: GitHub Free privat → nur Konvention. Akzeptiert?
-4. `tofu apply` öffnet vom Kill-Switch gesperrte Dienste wieder (ab B1) – gewollt?
-5. `EXCLUDE_ALL_CREDITS` zählt auch Gratis-Kontingent mit – so lassen?
+Keine.
 
 ## Getroffene Entscheidungen
 - 2026-11-01: Architekturbild bestätigt.
 - 2026-11-01: `.review/` wird im Repository versioniert.
+- 2026-11-01: Cloud-Änderungen aus Lauf 1 anwenden: ja.
+- 2026-11-01: Editor-Rolle der Standardkonten entfernen und `serviceAccountUser`
+  einschränken: ja.
+- 2026-11-01: Keine Pflicht-Statuschecks (GitHub Free, privat) – Konvention reicht, kein
+  produktiver Einsatz. Nicht erneut als Fund melden.
+- 2026-11-01: Kosten vor Verfügbarkeit: `tofu apply` darf gesperrte Dienste nicht wieder
+  öffnen (`ignore_changes = [ingress]`). Hohe Kosten gelten als Zeichen für Fehler/Angriff.
+- 2026-11-01: `EXCLUDE_ALL_CREDITS` bleibt (auch Gratis-Kontingent zählt) – erlaubt einen
+  späteren Live-Test des Kill-Switch. Nicht erneut als Fund melden.

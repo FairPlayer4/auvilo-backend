@@ -239,6 +239,13 @@ aber nicht **was**. Wird in der Datenschutzerklärung so benannt.
 - KO2 Budget **20 €/Monat**, Warnungen bei 25/50/90/100 %.
 - KO3 **Kill-Switch**: Budget-Benachrichtigung → Pub/Sub → Funktion stoppt Cloud Run
   bzw. trennt das Rechnungskonto. Budgets allein stoppen nichts.
+  **Kosten gehen vor Verfügbarkeit**: Hohe Kosten deuten auf einen Fehler oder einen
+  Angriff hin. Ein vom Kill-Switch gesperrter Dienst bleibt gesperrt, bis er bewusst
+  von Hand wieder geöffnet wird – auch ein `tofu apply` öffnet ihn nicht
+  (`lifecycle { ignore_changes = [ingress] }` an jedem Cloud-Run-Dienst).
+- KO3a Jeder Cloud-Run-Dienst läuft mit **eigenem Dienstkonto**; dieses wird in
+  `cloud_run_laufzeitkonten` (infra/kosten.tf) eingetragen, damit der Kill-Switch
+  ihn sperren darf. Der Kill-Switch selbst darf nur Dienste lesen und ändern.
 - KO4 Cloud Run `max-instances` 2, `min-instances` 0, kleinste CPU/RAM.
 - KO5 KI-Kontingent pro Konto und Tag.
 - Hinweis: Das Test-Guthaben läuft in der Regel nach 90 Tagen ab; der Kill-Switch
@@ -321,3 +328,7 @@ tragen die Tests die Spezifikation. Anleitung zum Review: [go-review.md](go-revi
 | 2026-11-01 | GCP-Projekt `avlreminder-exp-1ef2`, Region europe-west1; B0 angelegt (siehe stand.md) |
 | 2026-11-01 | Kill-Switch trennt nur dieses Projekt vom Rechnungskonto, nicht das ganze Konto (Schwellen vorläufig 100 %/150 %) |
 | 2026-11-01 | Budget zählt Kosten vor Abzug von Guthaben |
+| 2026-11-01 | Kosten vor Verfügbarkeit: gesperrte Dienste öffnet nur ein bewusster manueller Schritt, nie ein `tofu apply` |
+| 2026-11-01 | Jeder Cloud-Run-Dienst mit eigenem Dienstkonto; Editor-Rolle der Google-Standardkonten entfernt |
+| 2026-11-01 | Budget zählt auch Gratis-Kontingent mit (`EXCLUDE_ALL_CREDITS`) – erlaubt später einen echten Test des Kill-Switch |
+| 2026-11-01 | Keine Pflicht-Statuschecks auf GitHub (Free, privat); „main nur per PR, CI grün“ ist Konvention |

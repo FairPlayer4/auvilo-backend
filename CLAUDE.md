@@ -31,9 +31,17 @@ Kommunikation auf **Deutsch, mit ß**.
 - Änderungen an der Infrastruktur nur über OpenTofu; vor `tofu apply` den Plan
   zusammenfassen. Was Geld kostet oder etwas abschaltet, erst nach Kevins Go.
 - Lokale Werte (Rechnungskonto) in `infra/werte.auto.tfvars`, nicht im Repo.
+- Kosten gehen vor Verfügbarkeit. Jeder Cloud-Run-Dienst bekommt ein eigenes
+  Dienstkonto (in `cloud_run_laufzeitkonten` in `infra/kosten.tf` eintragen) und
+  `lifecycle { ignore_changes = [ingress] }`, damit `tofu apply` vom Kill-Switch
+  gesperrte Dienste nicht wieder öffnet.
+- Nur EU-Regionen: Standorte immer über `var.region`; `tofu test` und
+  `infra/pruefe-regionen.sh` prüfen das.
 
 ## Git
 - Remote `origin`: GitHub `FairPlayer4/avlreminder-backend` (privat). `develop` ist der
   Hauptarbeitsbranch; `main` nur per Pull Request.
 - Commit-Nachrichten auf Deutsch.
 - Vor Commit/Push fragen, solange Kevin das nicht anders sagt (er schaut vorher drüber).
+- Keine Pflicht-Statuschecks auf GitHub (Free, privat): vor einem PR nach `main` selbst
+  prüfen, dass die CI grün ist.
