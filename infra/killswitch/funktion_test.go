@@ -20,6 +20,8 @@ func TestVerarbeite(t *testing.T) {
 		{"Meldung weit über Budget: trennen", `{"costAmount":31,"budgetAmount":20}`, AbrechnungTrennen, true, false},
 		{"lehnt kaputtes JSON ab", `{kaputt`, Nichts, false, true},
 		{"lehnt Meldung ohne Budget ab", `{"costAmount":21}`, Nichts, false, true},
+		{"lehnt Meldung ohne Kosten ab", `{"budgetAmount":20}`, Nichts, false, true},
+		{"Kosten 0 sind gültig, wenn angegeben", `{"costAmount":0,"budgetAmount":20}`, Nichts, false, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -33,6 +35,9 @@ func TestVerarbeite(t *testing.T) {
 			}
 			if p.getrennt() != tt.wantGetrennt {
 				t.Errorf("getrennt = %v, erwartet %v", p.getrennt(), tt.wantGetrennt)
+			}
+			if tt.name == "lehnt Meldung ohne Kosten ab" && !errors.Is(err, ErrKostenFehlen) {
+				t.Errorf("Fehler = %v, erwartet ErrKostenFehlen", err)
 			}
 			if tt.wantErr && (p.gesperrt() || p.getrennt()) {
 				t.Error("bei ungültiger Meldung darf nichts passieren")

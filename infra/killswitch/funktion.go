@@ -61,15 +61,24 @@ func behandleEreignis(ctx context.Context, e event.Event) error {
 	return errors.Join(err, p.Schliessen())
 }
 
+// ErrKostenFehlen meldet eine Budget-Meldung ohne Feld costAmount. Ohne diese
+// Prüfung würde json.Unmarshal 0 einsetzen, und die Meldung ginge still als
+// "nichts tun" durch (etwa wenn Google das Feld umbenennt).
+var ErrKostenFehlen = errors.New("Budget-Meldung ohne costAmount")
+
 // Verarbeite ist der testbare Kern: Meldung lesen, entscheiden, ausführen, loggen.
-// Es werden nur Zahlen geloggt, keine Inhalte – hier gibt es ohnehin keine.
+// Geloggt werden nur Kennzahlen und Fehlertexte, keine Inhalte aus der App.
+// Jeder Fehler – auch ein früher beim Lesen der Meldung – landet als ERROR im
+// Log, damit er in der Console auffällt.
 func Verarbeite(ctx context.Context, daten []byte, s Schwellen, p Plattform) (Ergebnis, error) {
-	var m BudgetMeldung
-	if err := json.Unmarshal(daten, &m); err != nil {
-		return Ergebnis{}, fmt.Errorf("Budget-Meldung lesen: %w", err)
+	m, err := leseMeldung(daten)
+	if err != nil {
+		slog.ErrorContext(ctx, "Budget-Meldung abgelehnt", "fehler", err.Error())
+		return Ergebnis{}, err
 	}
 	a, err := Entscheide(m, s)
 	if err != nil {
+		slog.ErrorContext(ctx, "Budget-Meldung abgelehnt", "fehler", err.Error())
 		return Ergebnis{}, err
 	}
 	erg, err := Ausfuehren(ctx, a, p)
@@ -90,6 +99,25 @@ func Verarbeite(ctx context.Context, daten []byte, s Schwellen, p Plattform) (Er
 		"fehler", fehlerText(err),
 	)
 	return erg, err
+}
+
+// leseMeldung liest das JSON und prüft, dass costAmount vorhanden ist. Ein
+// Zeiger (*float64) unterscheidet "fehlt" (nil) von "ist 0".
+func leseMeldung(daten []byte) (BudgetMeldung, error) {
+	var m BudgetMeldung
+	if err := json.Unmarshal(daten, &m); err != nil {
+		return m, fmt.Errorf("Budget-Meldung lesen: %w", err)
+	}
+	var vorhanden struct {
+		CostAmount *float64 `json:"costAmount"`
+	}
+	if err := json.Unmarshal(daten, &vorhanden); err != nil {
+		return m, fmt.Errorf("Budget-Meldung lesen: %w", err)
+	}
+	if vorhanden.CostAmount == nil {
+		return m, ErrKostenFehlen
+	}
+	return m, nil
 }
 
 func fehlerText(err error) string {
