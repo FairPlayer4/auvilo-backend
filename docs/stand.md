@@ -20,7 +20,7 @@ Etappe **B0** ist angelegt (OpenTofu, `infra/`):
   versioniert), angelegt per `gcloud`
 
 ## Geprüft
-- `tofu plan` ohne Abweichungen
+- `tofu plan`: bis auf Punkt 1 unter „Offen“ ohne Abweichungen
 - Kill-Switch in der Cloud: Meldung 3 €/20 € → nichts; 22 €/20 € → Testdienst
   gesperrt (Log als WARNING in `logs-eu`), eigene Funktion nicht gesperrt.
   Testdienst danach gelöscht.
@@ -34,11 +34,21 @@ Etappe **B0** ist angelegt (OpenTofu, `infra/`):
   Reste, die Google selbst anlegt (z. B. Bucket `gcf-v2-sources-…`, Standard-Dienstkonten),
   und der Log-Bucket `logs-eu` bleibt nach dem Löschen 7 Tage reserviert.
 
+## Review
+- Lauf 1 am 2026-11-01: [.review/runs/2026-11-01.md](../.review/runs/2026-11-01.md).
+  Fixes und die Empfehlungen E1, E2, E3, E6 sind in develop und in GCP angewendet.
+- Kill-Switch nach dem Verkleinern der Rechte erneut in der Cloud getestet
+  (Testdienst mit Standardkonto nach ca. 10 s gesperrt, danach gelöscht).
+
 ## Offen
-1. **Kevin prüft** den Stand, danach Commit und Push (CI läuft erst dann).
-2. Schwellen 100 %/150 % sind so umgesetzt wie empfohlen; Kevin bestätigt sie oder
-   ändert sie (`schwelle_sperren`, `schwelle_trennen` in `infra/variablen.tf`).
-3. Etappe **B1**: Go-Server auf Cloud Run, Google-Login (Zustimmungsbildschirm und
+1. **Ein Rest aus `tofu apply`**: Die Editor-Rolle von `…@appspot.gserviceaccount.com`
+   ist noch nicht entfernt (409 „concurrent policy changes“ beim ersten Lauf).
+   `tofu plan` zeigt genau diese eine Änderung; mit `tofu apply` nachholen.
+2. Push von develop (11+ Commits), danach läuft die CI zum ersten Mal.
+3. Schwellen 100 %/150 % bestätigen oder ändern (`schwelle_sperren`,
+   `schwelle_trennen` in `infra/variablen.tf`).
+4. Kleinere Empfehlungen aus dem Review: E4, E5, E7–E10 (siehe `.review/state.md`).
+5. Etappe **B1**: Go-Server auf Cloud Run, Google-Login (Zustimmungsbildschirm und
    OAuth-Client richtet Kevin nach [gcp-einrichtung.md](gcp-einrichtung.md) ein).
 
 ## Befehle
