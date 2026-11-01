@@ -10,7 +10,7 @@ eigene Geräte sperren. Der Server läuft auf Cloud Run, wird aus GitHub Actions
 deployt und vom Kill-Switch erfasst. Noch **keine** Inhalte, Freigaben oder
 E2E-Schlüssel (B2/B3).
 
-## Entscheidungen zum Bestätigen
+## Entscheidungen (am 2026-11-01 bestätigt)
 
 | # | Frage | Empfehlung | Warum |
 |---|---|---|---|
@@ -170,11 +170,12 @@ abgelaufene Sitzung, Token nach dem Sperren.
   auf diesen Dienst).
 - Kosten im Leerlauf: 0 €.
 
-## Mit B1 erledigt (aus Review Lauf 1)
-- **E4**: CI prüft beide Go-Module (Kill-Switch und Server), gofmt über golangci-lint.
-- **E5**: eigenes Registry-Repo für die Images der Funktion, damit die Aufräumregeln
+## Mit B1 zu erledigen (aus Review Lauf 1)
+- **E4** (erledigt): CI prüft beide Go-Module (Kill-Switch und Server) als Matrix;
+  gofmt als eigener Schritt.
+- **E5** (offen, mit dem Deploy): eigenes Registry-Repo für die Images der Funktion, damit die Aufräumregeln
   für Server-Images sie nicht treffen.
-- **E8**: Zeitlimit beim Trennen vom Rechnungskonto.
+- **E8** (offen, mit dem Deploy): Zeitlimit beim Trennen vom Rechnungskonto.
 - Neu in der CI: `buf lint`, `buf breaking`, Prüfung des erzeugten Codes.
 
 ## Reihenfolge

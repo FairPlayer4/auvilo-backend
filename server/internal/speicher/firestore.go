@@ -61,6 +61,12 @@ func nichtGefunden(err error) bool {
 	return status.Code(err) == codes.NotFound
 }
 
+// Anmelden erfüllt Speicher.Anmelden.
+//
+// KRITISCH: Kennung, Konto, Gerät (samt Sperre und Konto-Zugehörigkeit) werden
+// in derselben Transaktion gelesen, in der geschrieben wird. Sonst könnten zwei
+// gleichzeitige Erst-Anmeldungen zwei Konten anlegen oder ein gerade gesperrtes
+// Gerät eine Sitzung bekommen.
 func (f *Firestore) Anmelden(ctx context.Context, kennung string, g Geraet, s NeueSitzung) (AnmeldeErgebnis, error) {
 	var ergebnis AnmeldeErgebnis
 	// RunTransaction wiederholt die Funktion bei Konflikten mit gleichzeitigen
@@ -150,6 +156,11 @@ func (f *Firestore) Geraet(ctx context.Context, geraetID string) (Geraet, error)
 	return geraetAus(snap)
 }
 
+// SitzungAnlegen erfüllt Speicher.SitzungAnlegen.
+//
+// KRITISCH: Die Sperre wird in derselben Transaktion gelesen, in der die
+// Sitzung entsteht. Läse man das Gerät vorher (außerhalb), könnte ein
+// gleichzeitiges Sperren die neue Sitzung übersehen.
 func (f *Firestore) SitzungAnlegen(ctx context.Context, geraetID string, s NeueSitzung) (string, error) {
 	var kontoID string
 	err := f.c.RunTransaction(ctx, func(ctx context.Context, tx *firestore.Transaction) error {
@@ -214,6 +225,11 @@ func (f *Firestore) Geraete(ctx context.Context, kontoID string) ([]Geraet, erro
 	return liste, nil
 }
 
+// GeraetSperren erfüllt Speicher.GeraetSperren.
+//
+// KRITISCH: Gerät sperren und seine Sitzungen suchen und löschen geschieht in
+// einer Transaktion. Der Interceptor prüft nur die Sitzung, nicht das Gerät:
+// Bliebe eine Sitzung übrig, wäre das gesperrte Gerät nicht draußen.
 func (f *Firestore) GeraetSperren(ctx context.Context, kontoID, geraetID string, jetzt time.Time) error {
 	err := f.c.RunTransaction(ctx, func(ctx context.Context, tx *firestore.Transaction) error {
 		geraetRef := f.c.Collection(sammlungGeraete).Doc(geraetID)

@@ -121,7 +121,10 @@ func starte() error {
 	defer func() { _ = fs.Close() }() // Fehler beim Schließen am Ende ist egal
 
 	// Die Schlüssel von Google werden bei Bedarf geladen und zwischengespeichert.
-	pruefer, err := anmeldung.NeuerPruefer(oidc.NewRemoteKeySet(ctx, anmeldung.GoogleSchluessel), k.clientIDs, nil)
+	// Eigener HTTP-Client mit Zeitlimit: Ein hängender Abruf würde sonst alle
+	// folgenden Anmeldungen blockieren (http.DefaultClient wartet unbegrenzt).
+	googleCtx := oidc.ClientContext(ctx, &http.Client{Timeout: 10 * time.Second})
+	pruefer, err := anmeldung.NeuerPruefer(oidc.NewRemoteKeySet(googleCtx, anmeldung.GoogleSchluessel), k.clientIDs, nil)
 	if err != nil {
 		return err
 	}
