@@ -1,0 +1,25 @@
+# Dependabot schlägt wöchentlich Updates als Pull Request vor (Anforderung SE3).
+# Ziel ist develop; nach main kommt alles nur über den normalen PR-Weg.
+# OpenTofu-Provider fehlen bewusst: Dependabot kennt nur die Terraform-Registry,
+# die Lock-Datei nutzt registry.opentofu.org. Provider aktualisieren:
+# `tofu init -upgrade` in infra/.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: develop
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: gomod
+    directory: /infra/killswitch
+    target-branch: develop
+    schedule:
+      interval: weekly
+    groups:
+      go:
+        patterns: ["*"]
+
