@@ -63,6 +63,14 @@ class EinrichtungTest {
         assertEquals(vorhanden.fingerabdruck, ergebnis.bund.person.oeffentlich.fingerabdruck())
     }
 
+    // Gegenstück zu „lehnt nach drei Tippfehlern ab“: Der dritte Versuch zählt noch.
+    @Test
+    fun `nimmt den richtigen Schlüssel im dritten Versuch an`() = runBlocking {
+        val ablage = FalscheAblage(vorhanden.backup)
+        val ergebnis = einrichtung(ablage, "falsch", fremdes.text, vorhanden.text).ausfuehren()
+        assertEquals(vorhanden.fingerabdruck, ergebnis.bund.person.oeffentlich.fingerabdruck())
+    }
+
     // KRITISCH: Ein anderes Gerät war zwischen Holen und Speichern schneller.
     // Sein Backup bleibt, und dieses Gerät übernimmt dessen Schlüssel.
     @Test

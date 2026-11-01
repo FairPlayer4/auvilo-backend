@@ -57,12 +57,16 @@ func TestZweitesGeraetHoltDasBackupDesErsten(t *testing.T) {
 	}
 }
 
+// Die Grenze aus schluessel.proto als eigene Zahl, nicht als MaxBackup: Sonst bliebe
+// der Test grün, wenn jemand die Konstante im Dienst ändert.
+const sechzehnKiB = 16 << 10
+
 func TestBackupSpeichernPrueftDieAnfrage(t *testing.T) {
 	ts := neuerTestServer(t)
 	token := ts.anmelden(t, "google-kevin", testhilfe.NeuesGeraet(t)).Sitzung.Token
 
 	t.Run("nimmt ein Backup von genau 16 KiB an", func(t *testing.T) {
-		if _, err := ts.backupSpeichern(token, make([]byte, MaxBackup), 0); err != nil {
+		if _, err := ts.backupSpeichern(token, make([]byte, sechzehnKiB), 0); err != nil {
 			t.Fatal(err)
 		}
 	})
@@ -73,7 +77,7 @@ func TestBackupSpeichernPrueftDieAnfrage(t *testing.T) {
 		erwartet int64
 	}{
 		{"lehnt leeres Backup ab", nil, 1},
-		{"lehnt Backup über 16 KiB ab", make([]byte, MaxBackup+1), 1},
+		{"lehnt Backup über 16 KiB ab", make([]byte, sechzehnKiB+1), 1},
 		{"lehnt negative Version ab", []byte("chiffrat"), -1},
 	}
 	for _, fall := range faelle {
@@ -91,7 +95,7 @@ func TestBackupSpeichernPrueftDieAnfrage(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(geholt.Chiffrat) != MaxBackup || geholt.Version != 1 {
+		if len(geholt.Chiffrat) != sechzehnKiB || geholt.Version != 1 {
 			t.Errorf("Backup verändert: %d Bytes, Version %d", len(geholt.Chiffrat), geholt.Version)
 		}
 	})
