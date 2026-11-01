@@ -39,7 +39,17 @@ resource "google_secret_manager_secret" "pfeffer" {
     }
   }
 
+  # Schutz außerhalb von OpenTofu: Wird eine Version zerstört (Konsole,
+  # gcloud), bleibt sie 30 Tage wiederherstellbar. Ohne Pfeffer wären alle
+  # Konten unauffindbar.
+  version_destroy_ttl = "2592000s"
+
   depends_on = [google_project_service.apis]
+
+  # KRITISCH: Das Secret zu ersetzen hieße, auch den Pfeffer zu ersetzen.
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 # Der Wert entsteht nur während `tofu apply` (ephemeral) und wird write-only
