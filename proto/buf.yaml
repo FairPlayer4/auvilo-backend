@@ -1,0 +1,13 @@
+# Schnittstelle zwischen Client und Server (Protobuf, Connect).
+# Prüfen: buf lint · Brüche erkennen: buf breaking --against <alter Stand>
+version: v2
+modules:
+  - path: .
+lint:
+  use:
+    - STANDARD
+  # Dienste heißen bei uns "…Dienst" statt "…Service" (deutsche Namen).
+  service_suffix: Dienst
+breaking:
+  use:
+    - FILE

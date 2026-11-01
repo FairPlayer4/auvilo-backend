@@ -1,0 +1,54 @@
+syntax = "proto3";
+
+package avlreminder.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// Anmeldung eines Geräts und Verlängerung seiner Sitzung.
+// Beide Aufrufe brauchen keine Sitzung (sie stellen eine aus).
+service AnmeldeDienst {
+  // Erstes Anmelden eines Geräts mit einem Google-ID-Token. Legt beim ersten Mal
+  // das Konto an. Derselbe Geräteschlüssel ergibt immer dasselbe Gerät.
+  rpc Anmelden(AnmeldenRequest) returns (AnmeldenResponse);
+
+  // Neue Sitzung ohne Google-Login: Das Gerät beweist mit einer Signatur seines
+  // Geräteschlüssels, dass es das Gerät ist.
+  rpc SitzungErneuern(SitzungErneuernRequest) returns (SitzungErneuernResponse);
+}
+
+message AnmeldenRequest {
+  // ID-Token von Google. Sein Feld "nonce" muss SHA-256 des Geräteschlüssels
+  // (base64url ohne Auffüllung) sein.
+  string google_id_token = 1;
+  // Öffentlicher Geräteschlüssel: ECDSA P-256, PKIX/DER.
+  bytes geraeteschluessel = 2;
+  // ECDSA-Signatur (ASN.1/DER) über "avlreminder/anmelden/v1\n" + google_id_token.
+  bytes signatur = 3;
+}
+
+message AnmeldenResponse {
+  string konto_id = 1;
+  string geraet_id = 2;
+  Sitzung sitzung = 3;
+  // true, wenn das Konto bei diesem Aufruf angelegt wurde.
+  bool neues_konto = 4;
+}
+
+message SitzungErneuernRequest {
+  string geraet_id = 1;
+  // Uhrzeit des Geräts; darf höchstens 2 Minuten von der des Servers abweichen.
+  google.protobuf.Timestamp zeitpunkt = 2;
+  // ECDSA-Signatur (ASN.1/DER) über
+  // "avlreminder/sitzung/v1\n" + geraet_id + "\n" + zeitpunkt in Unix-Sekunden.
+  bytes signatur = 3;
+}
+
+message SitzungErneuernResponse {
+  Sitzung sitzung = 1;
+}
+
+message Sitzung {
+  // Als "Authorization: Bearer <token>" mitschicken.
+  string token = 1;
+  google.protobuf.Timestamp laeuft_ab = 2;
+}
