@@ -72,8 +72,7 @@ Vom Entwickler bestätigt am 2026-11-01.
   - Nach dem Merge von B2: Ausnahme `FILE_SAME_JAVA_*` in buf.yaml entfernen.
 
 ## Offene Fragen an den Entwickler
-Aus Lauf 4 (im Bericht): Reihenfolge Wiederherstellungsschlüssel/Hochladen;
-Regel gegen Tests an Konstanten; Gradle-Prüfsummen; Architekturbild (A1–A3).
+Keine.
 
 ## Getroffene Entscheidungen
 - 2026-11-01: Architekturbild bestätigt.
@@ -97,3 +96,11 @@ Regel gegen Tests an Konstanten; Gradle-Prüfsummen; Architekturbild (A1–A3).
 - 2026-11-01 (nach Lauf 3): Alte Kill-Switch-Images im Repo `container` gelöscht.
 - 2026-11-01: `EXCLUDE_ALL_CREDITS` bleibt (auch Gratis-Kontingent zählt) – erlaubt einen
   späteren Live-Test des Kill-Switch. Nicht erneut als Fund melden.
+- 2026-11-02 (nach Lauf 4): Wiederherstellungsschlüssel vor dem Hochladen zeigen und
+  bestätigen lassen; umgesetzt.
+- 2026-11-02 (nach Lauf 4): Regel „Tests prüfen Verhalten, nicht die Konstante“ in
+  go-review.md und CLAUDE.md.
+- 2026-11-02 (nach Lauf 4): Gradle-Prüfsummen erst vor der App (bekannte Grenze in
+  stand.md und b2-entwurf.md). Bis dahin nicht erneut als Fund melden.
+- 2026-11-02 (nach Lauf 4): A1 umgesetzt (Einrichtung in `protokoll`); A2 und A3 werden
+  im B3-Entwurf geklärt.

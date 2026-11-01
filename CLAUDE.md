@@ -21,6 +21,9 @@ Kommunikation auf **Deutsch, mit ß**.
 - Kotlin (`client/`) gilt dasselbe: JUnit-6-Tests mit deutschen Namen, parametrisiert,
   `// KRITISCH:`; Compiler-Warnungen sind Fehler. Der Code aus `proto/` entsteht im
   Gradle-Build. `protokoll` bleibt ohne Netz und ohne Android, damit es in die App passt.
+- Abläufe, die auch die App braucht, gehören nach `protokoll` (Server und lokale Ablage
+  als Schnittstellen); `testclient` ist nur CLI, Connect-Anbindung und Dateiablage.
+- Tests prüfen Verhalten, nicht die geprüfte Konstante selbst (kein `VERSUCHE == 3`).
 
 ## Zusammenarbeit
 - Kevin entwickelt die Anforderungen iterativ mit Claude: Feedback und Rückfragen geben,

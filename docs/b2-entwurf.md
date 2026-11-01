@@ -45,12 +45,21 @@ Test-Client                                              Server
   |<------------------------------- neues_konto = true ----|
   | Personenschlüssel (X25519 + Ed25519) und
   | Tresorschlüssel erzeugen, Wiederherstellungsschlüssel
-  | erzeugen und anzeigen ("bitte ausdrucken"),
-  | Backup = AEAD(Wiederherstellungsschl., Keysets,
+  | erzeugen, Backup = AEAD(Wiederherstellungsschl., Keysets,
   |               zugehörig: "avlreminder/backup/v1\n" + konto_id)
+  | Wiederherstellungsschlüssel anzeigen ("bitte ausdrucken"),
+  | Bestätigung abwarten (sonst Abbruch, nichts gespeichert)
+  | lokal ablegen: Keysets + offenes Backup
   | BackupSpeichern(chiffrat, erwartet: Version 0) ------->|
   |<------------------------------------ Version 1 --------|
+  | offenes Backup lokal löschen
 ```
+Ergänzt am 2026-11-02 (Review-Lauf 4): Erst nach der Bestätigung wird etwas
+gespeichert, damit nie ein Backup auf dem Server liegt, dessen Schlüssel niemand hat.
+Bricht das Hochladen ab, lädt der nächste Lauf dasselbe offene Backup hoch. Meldet der
+Server dann „Version veraltet“, holt der Client das Backup: Ist es genau das eigene,
+ging nur die Antwort verloren; ist es ein anderes, war ein anderes Gerät schneller,
+und dieses Gerät übernimmt dessen Schlüssel per Wiederherstellungsschlüssel.
 
 ### Weiteres Gerät
 ```
@@ -127,7 +136,8 @@ App):
 client/
   settings.gradle.kts, gradle/libs.versions.toml (Versionen an einer Stelle)
   protokoll/   Schlüsselmodell, Wiederherstellungsschlüssel, Backup, Umschlag,
-               Signatur – nur Tink und Kotlin-Standardbibliothek
+               Signatur, Ablauf Einrichtung (Server und lokale Ablage als
+               Schnittstellen) – nur Tink und Kotlin-Standardbibliothek
   testclient/  CLI: Google-Login (Browser, PKCE, nonce), Geräteschlüssel,
                Connect-Aufrufe (connect-kotlin + OkHttp), Befehle
 ```
@@ -171,6 +181,8 @@ Hat der Kotlin-Client denselben Umfang, kann `testanmeldung` (Go) weg.
   die Version in den Inhalt und beim Einlesen geprüft werden.
 - Der Test-Client speichert die Keysets unverschlüsselt in `%APPDATA%`. Das reicht
   zum Testen und gilt nicht für die App.
+- Gradle prüft keine Prüfsummen der Abhängigkeiten (`verification-metadata.xml`).
+  Vor der App einführen.
 
 ## Bewusst nicht in B2
 - Kontakte, öffentliche Personenschlüssel auf dem Server, Freigaben, Operationen,

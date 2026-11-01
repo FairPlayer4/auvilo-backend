@@ -102,10 +102,17 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
    `pc` richtet neue Schlüssel ein; Gerät `tablet` bricht nach drei falschen
    Eingaben ab, ohne etwas zu speichern; Gerät `handy` übernimmt mit dem richtigen
    Wiederherstellungsschlüssel das Backup (gleicher Fingerabdruck wie `pc`).
-   **Offen:** Deploy und Test in der Cloud, Review-Lauf 4. Danach kann
-   `testanmeldung` (Go) weg.
+   Review-Lauf 4 am 2026-11-01: [.review/runs/2026-11-01-4.md](../.review/runs/2026-11-01-4.md),
+   Fixes in develop. Am 2026-11-02 umgesetzt: Einrichtung liegt in `protokoll` (A1),
+   Wiederherstellungsschlüssel wird vor dem Hochladen gezeigt und bestätigt.
+   **Offen:** Deploy und Test in der Cloud (der Test-Client fragt jetzt nach „ja“).
+   Danach kann `testanmeldung` (Go) weg (A6).
+   **Bekannte Grenze:** keine Gradle-Prüfsummen; vor der App einführen.
 3. Kleinere Empfehlungen aus dem Review: E7 optional; weitere aus Lauf 2 in
    `.review/state.md`.
+4. Für den B3-Entwurf aus Lauf 4: A2 (Mitgliedschaft: Server-Liste oder signiertes
+   Log), A3 (Client-Formate maßgeblich beschreiben, feste Vektoren), A4 (Umschläge an
+   Kontext binden, Keyset-Typen prüfen), A5 (Speicher und Dienste aufteilen).
 
 ## Befehle
 ```bash
