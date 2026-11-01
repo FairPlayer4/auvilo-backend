@@ -18,6 +18,8 @@ jobs:
         working-directory: infra/killswitch
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false # kein GitHub-Token in .git/config für Tests und Werkzeuge
       - uses: actions/setup-go@v6
         with:
           go-version-file: infra/killswitch/go.mod
@@ -32,10 +34,13 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v8
         with:
+          # Version fest wie lokal (docs/entwicklungsumgebung.md), damit neue
+          # Linter-Regeln die CI nicht ohne Codeänderung rot machen.
+          version: v2.15.0
           working-directory: infra/killswitch
           args: --config ../../.golangci.yml
       - name: govulncheck
-        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
 
   tofu:
     name: OpenTofu
@@ -45,7 +50,11 @@ jobs:
         working-directory: infra
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false # kein GitHub-Token in .git/config für Tests und Werkzeuge
       - uses: opentofu/setup-opentofu@v1
+        with:
+          tofu_version: 1.13.1
       - name: Formatierung
         run: tofu fmt -check -recursive
       # Ohne Backend: validate prüft nur die Konfiguration, nicht den Zustand in GCP.
