@@ -6,7 +6,14 @@
 # Rechnungskonto.
 
 resource "google_pubsub_topic" "budget" {
-  name       = "budget-meldungen"
+  name = "budget-meldungen"
+
+  # Pub/Sub-Themen sind global; ohne diese Regel dürfte Google Nachrichten
+  # außerhalb der EU speichern (Anforderung D1).
+  message_storage_policy {
+    allowed_persistence_regions = [var.region]
+  }
+
   depends_on = [google_project_service.apis]
 }
 
