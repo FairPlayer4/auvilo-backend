@@ -40,5 +40,8 @@ protobuf {
 
 // Testvektoren, die auch der Go-Server prüft (proto/testvektoren).
 tasks.test {
-    systemProperty("testvektoren", rootDir.resolve("../proto/testvektoren").absolutePath)
+    val testvektoren = rootDir.resolve("../proto/testvektoren")
+    systemProperty("testvektoren", testvektoren.absolutePath)
+    // Damit Gradle den Test neu ausführt, wenn sich nur die Vektoren ändern.
+    inputs.dir(testvektoren).withPathSensitivity(PathSensitivity.RELATIVE)
 }
