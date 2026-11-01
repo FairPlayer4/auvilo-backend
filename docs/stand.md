@@ -24,8 +24,7 @@ Etappe **B0** ist angelegt (OpenTofu, `infra/`):
 Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
 - Cloud-Run-Dienst `server` (0–2 Instanzen, 256 MiB, CPU nur bei Anfragen),
   öffentlich aufrufbar, eigenes Dienstkonto `server` (Firestore, nur Secret `pfeffer`).
-  Adresse: `tofu output server_url`. Bis zum ersten Deploy läuft Googles
-  Beispiel-Image `hello`.
+  Adresse: `tofu output server_url`.
 - Secret `pfeffer` (nur europe-west1, feste Version 1, Wert nicht im Zustand)
 - Firestore-TTL auf `sitzungen.laeuft_ab` (aktiv)
 - Deploy aus GitHub Actions (`.github/workflows/deploy.yml`) bei Merge nach `main`:
@@ -71,8 +70,11 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
    Am 2026-11-01 lokal von Ende zu Ende getestet: echte Google-Anmeldung im Browser,
    Erneuern, Auflisten, eigenes Gerät sperren (danach Sitzung ungültig, Erneuern
    abgelehnt).
-   Infrastruktur am 2026-11-01 angelegt (siehe oben). **Noch offen:** erster Deploy
-   (nach dem Merge nach `main`), Test in der Cloud mit `testanmeldung -server <url>`.
+   Infrastruktur am 2026-11-01 angelegt (siehe oben), erster Deploy aus GitHub
+   Actions am selben Tag. **In der Cloud getestet** (Gerät `cloud`): echte
+   Google-Anmeldung, Erneuern, Auflisten, eigenes Gerät sperren (danach Sitzung
+   ungültig, Erneuern abgelehnt). Logs enthalten Geräte-ID und Grund, kein Token.
+   Damit ist B1 abgeschlossen.
 2. Kleinere Empfehlungen aus dem Review: E7 optional; weitere aus Lauf 2 in
    `.review/state.md`.
 
