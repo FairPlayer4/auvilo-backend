@@ -23,6 +23,16 @@ updates:
       go:
         patterns: ["*"]
 
+  # Basis-Images im Dockerfile des Servers (per Digest festgelegt).
+  - package-ecosystem: docker
+    directory: /server
+    target-branch: develop
+    schedule:
+      interval: weekly
+    groups:
+      images:
+        patterns: ["*"]
+
   # Neue Versionen von connect oder protobuf: auch die Plugin-Versionen in
   # .github/workflows/ci.yml (Job proto) und docs/entwicklungsumgebung.md anheben.
   - package-ecosystem: gomod

@@ -47,7 +47,7 @@ Vom Entwickler bestätigt am 2026-11-01.
   Drossel beim Laden der Google-Schlüssel oder als Grenze dokumentieren, feste
   Pfeffer-Version in der Infrastruktur, Desktop-Client-ID im Betrieb entfernen (mit
   App), Testlücken (`googleIDToken`, Streaming, Logs, Sperr-Wettlauf in `dienst`),
-  testanmeldung an Server binden. E4 erledigt; E5, E8 mit dem Deploy von B1.
+  testanmeldung an Server binden. E4 erledigt; E5, E8 erledigt am 2026-11-01 (mit der B1-Infrastruktur).
 - 2026-11-01 (Lauf 2): Beobachtung „Test hängt an der Konstante, die er prüfen soll“
   (iat-Fall) – beim nächsten Lauf auf ähnliche Muster achten.
 - Erledigt nach Lauf 1 (in develop): E1 Sperr-Logik testbar (`sperren.go`), E2 Rechte

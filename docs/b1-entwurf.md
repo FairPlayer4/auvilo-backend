@@ -173,9 +173,9 @@ abgelaufene Sitzung, Token nach dem Sperren.
 ## Mit B1 zu erledigen (aus Review Lauf 1)
 - **E4** (erledigt): CI prüft beide Go-Module (Kill-Switch und Server) als Matrix;
   gofmt als eigener Schritt.
-- **E5** (offen, mit dem Deploy): eigenes Registry-Repo für die Images der Funktion, damit die Aufräumregeln
+- **E5** (erledigt 2026-11-01, Repo `funktionen`): eigenes Registry-Repo für die Images der Funktion, damit die Aufräumregeln
   für Server-Images sie nicht treffen.
-- **E8** (offen, mit dem Deploy): Zeitlimit beim Trennen vom Rechnungskonto.
+- **E8** (erledigt 2026-11-01, 60 s fürs Sperren): Zeitlimit beim Trennen vom Rechnungskonto.
 - Neu in der CI: `buf lint`, `buf breaking`, Prüfung des erzeugten Codes.
 
 ## Reihenfolge

@@ -78,6 +78,27 @@ jobs:
       - name: govulncheck
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
 
+  # Baut das Server-Image wie der Deploy (.github/workflows/deploy.yml), lädt es
+  # aber nirgends hoch. So fällt ein kaputtes Dockerfile vor dem Merge auf.
+  container:
+    name: Container bauen
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Image bauen
+        working-directory: server
+        run: docker build -t server .
+      # Startet ohne Konfiguration und muss mit genau dieser Meldung abbrechen:
+      # Das zeigt, dass die Datei im Image läuft (statisch, als Nicht-root).
+      - name: Image startet
+        run: |
+          ausgabe=$(docker run --rm server 2>&1 || true)
+          echo "$ausgabe"
+          grep -q "PROJEKT fehlt" <<< "$ausgabe"
+
   proto:
     name: Schnittstelle (buf)
     runs-on: ubuntu-latest

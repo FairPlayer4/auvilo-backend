@@ -50,12 +50,42 @@ resource "google_artifact_registry_repository" "container" {
   location      = var.region
   repository_id = "container"
   format        = "DOCKER"
-  description   = "Container-Images für avlreminder-backend"
+  description   = "Container-Images des Servers (Deploy aus GitHub Actions)"
 
   cleanup_policy_dry_run = false
 
   # BEHALTEN hat Vorrang vor LÖSCHEN: Die 3 neuesten Versionen je Image bleiben
   # immer, alles andere wird nach 7 Tagen gelöscht.
+  cleanup_policies {
+    id     = "neueste-behalten"
+    action = "KEEP"
+    most_recent_versions {
+      keep_count = 3
+    }
+  }
+  cleanup_policies {
+    id     = "alte-loeschen"
+    action = "DELETE"
+    condition {
+      older_than = "604800s"
+    }
+  }
+
+  depends_on = [google_project_service.apis]
+}
+
+# Eigenes Repo für die Images der Funktionen (Kill-Switch), Empfehlung E5:
+# Das Deploy-Konto hat hier keine Rechte und kann das Kill-Switch-Image nicht
+# überschreiben. Cloud Functions baut bei jedem Deploy ein neues Image; die
+# laufende Version merkt sich die Funktion selbst, alte dürfen weg.
+resource "google_artifact_registry_repository" "funktionen" {
+  location      = var.region
+  repository_id = "funktionen"
+  format        = "DOCKER"
+  description   = "Images der Cloud Functions (nur Cloud Build schreibt)"
+
+  cleanup_policy_dry_run = false
+
   cleanup_policies {
     id     = "neueste-behalten"
     action = "KEEP"

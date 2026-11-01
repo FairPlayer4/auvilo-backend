@@ -1,0 +1,9 @@
+# Nur, was der Build braucht, geht ins Image-Bauen. Schützt auch davor, dass
+# lokale Dateien (Schlüssel, Sitzungen, Notizen) im Build-Kontext landen.
+*
+!go.mod
+!go.sum
+!cmd/server/
+!internal/
+!gen/
+**/*_test.go

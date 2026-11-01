@@ -1,0 +1,62 @@
+# Baut das Server-Image und setzt es im Cloud-Run-Dienst "server" ein.
+#
+# Läuft nur auf main: Workload Identity Federation (infra/github.tf) lässt nur
+# Tokens von main zu. Ein Schlüssel für GCP liegt nirgends in GitHub.
+# Das Konto "deploy" darf nur Images ins Repo "container" schreiben und den
+# Dienst "server" ändern (infra/server.tf).
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "server/**"
+      - ".github/workflows/deploy.yml"
+  workflow_dispatch: # von Hand starten, z. B. nach dem ersten tofu apply
+
+permissions:
+  contents: read
+  id-token: write # GitHub-Token für Workload Identity Federation
+
+# Nie zwei Deploys gleichzeitig; ein laufender wird nicht abgebrochen.
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+env:
+  # Keine Geheimnisse: Ohne Token von main aus diesem Repo nützen sie nichts.
+  WIF_PROVIDER: projects/82416816442/locations/global/workloadIdentityPools/github/providers/github-actions
+  DEPLOY_KONTO: deploy@avlreminder-exp-1ef2.iam.gserviceaccount.com
+  REGION: europe-west1
+  IMAGE: europe-west1-docker.pkg.dev/avlreminder-exp-1ef2/container/server
+
+jobs:
+  deploy:
+    name: Server bauen und deployen
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.DEPLOY_KONTO }}
+
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+
+      - name: Image bauen und hochladen
+        working-directory: server
+        run: |
+          gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
+          docker build -t "${IMAGE}:${GITHUB_SHA}" .
+          docker push "${IMAGE}:${GITHUB_SHA}"
+
+      # Per Digest statt Tag: Cloud Run startet genau das gebaute Image, auch
+      # wenn der Tag später auf etwas anderes zeigen sollte.
+      - name: Dienst aktualisieren
+        run: |
+          digest=$(gcloud artifacts docker images describe "${IMAGE}:${GITHUB_SHA}" --format='value(image_summary.digest)')
+          gcloud run services update server --region "${REGION}" --image "${IMAGE}@${digest}" --quiet

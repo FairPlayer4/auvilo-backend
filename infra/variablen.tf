@@ -84,3 +84,26 @@ variable "github_repo_id" {
   type        = string
   default     = "1441701583"
 }
+
+# Client-IDs sind nicht geheim (sie stehen in jeder App). Heute nur der
+# Desktop-Client für das Werkzeug testanmeldung; der Android-Client kommt mit
+# der App-Anbindung, der Desktop-Client fliegt dann raus (Review Lauf 2).
+variable "google_client_ids" {
+  description = "OAuth-Client-IDs, deren Google-ID-Tokens der Server annimmt"
+  type        = list(string)
+  default     = ["82416816442-vka4ve2no02681umqkn8b0rk37ri37qd.apps.googleusercontent.com"]
+
+  validation {
+    condition     = length(var.google_client_ids) > 0 && alltrue([for id in var.google_client_ids : endswith(id, ".apps.googleusercontent.com")])
+    error_message = "Mindestens eine Client-ID der Form <nummer>-<kennung>.apps.googleusercontent.com."
+  }
+}
+
+# Nur beim ersten Anlegen des Dienstes benutzt; danach setzt der Deploy das
+# Image, und OpenTofu ignoriert es. Das Beispiel-Image von Google beantwortet
+# Anfragen mit einer Begrüßungsseite und verarbeitet keine Daten.
+variable "server_image_start" {
+  description = "Image für das erste Anlegen des Cloud-Run-Dienstes"
+  type        = string
+  default     = "us-docker.pkg.dev/cloudrun/container/hello"
+}

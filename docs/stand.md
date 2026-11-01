@@ -21,6 +21,18 @@ Etappe **B0** ist angelegt (OpenTofu, `infra/`):
 - Workload Identity Federation für GitHub Actions (nur Repo
   `FairPlayer4/avlreminder-backend`, nur Branch `main`), Dienstkonto `deploy` darf
   vorerst nur Images hochladen
+Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
+- Cloud-Run-Dienst `server` (0–2 Instanzen, 256 MiB, CPU nur bei Anfragen),
+  öffentlich aufrufbar, eigenes Dienstkonto `server` (Firestore, nur Secret `pfeffer`).
+  Adresse: `tofu output server_url`. Bis zum ersten Deploy läuft Googles
+  Beispiel-Image `hello`.
+- Secret `pfeffer` (nur europe-west1, feste Version 1, Wert nicht im Zustand)
+- Firestore-TTL auf `sitzungen.laeuft_ab` (aktiv)
+- Deploy aus GitHub Actions (`.github/workflows/deploy.yml`) bei Merge nach `main`:
+  Konto `deploy` darf Images ins Repo `container` schreiben und nur den Dienst
+  `server` ändern.
+- Repo `funktionen` für das Kill-Switch-Image (E5); Kill-Switch mit eigenem Zeitlimit
+  fürs Sperren vor dem Trennen (E8) neu deployt.
 - Zustand von OpenTofu: Bucket `avlreminder-exp-1ef2-tfstate` (europe-west1,
   versioniert), angelegt per `gcloud`
 
@@ -34,6 +46,9 @@ Etappe **B0** ist angelegt (OpenTofu, `infra/`):
 - **Bekannte Grenze:** Ab 100 % sperrt der Kill-Switch nur Cloud-Run-**Dienste** in
   `var.region`. Cloud-Run-Jobs und Dienste in anderen Regionen bleiben offen; dafür
   greift erst das Trennen ab 150 %. Kommen solche dazu, den Kill-Switch erweitern.
+- **Bekannte Grenze:** Das Deploy-Konto darf den Dienst `server` ändern und könnte
+  damit technisch auch den vom Kill-Switch gesperrten Ingress wieder öffnen. Der
+  Deploy selbst ändert nur das Image; ab 150 % trennt der Kill-Switch ohnehin.
 - Go-Tests: Entscheidung, Ausführung, Verarbeitung und Sperr-Logik (`sperren.go`)
   sind getestet. `gcp.go` enthält nur noch die Cloud-Aufrufe und wird durch den
   Test in der Cloud geprüft.
@@ -56,11 +71,10 @@ Etappe **B0** ist angelegt (OpenTofu, `infra/`):
    Am 2026-11-01 lokal von Ende zu Ende getestet: echte Google-Anmeldung im Browser,
    Erneuern, Auflisten, eigenes Gerät sperren (danach Sitzung ungültig, Erneuern
    abgelehnt).
-   **Noch offen:** Infrastruktur (Cloud-Run-Dienst, Pfeffer im Secret Manager,
-   TTL auf `sitzungen.laeuft_ab`), Dockerfile, Deploy aus GitHub Actions – erst
-   nach Kevins Go zum Plan.
-2. Kleinere Empfehlungen aus dem Review: E5, E8 mit dem Deploy von B1; E7 optional
-   (siehe `.review/state.md`).
+   Infrastruktur am 2026-11-01 angelegt (siehe oben). **Noch offen:** erster Deploy
+   (nach dem Merge nach `main`), Test in der Cloud mit `testanmeldung -server <url>`.
+2. Kleinere Empfehlungen aus dem Review: E7 optional; weitere aus Lauf 2 in
+   `.review/state.md`.
 
 ## Befehle
 ```bash

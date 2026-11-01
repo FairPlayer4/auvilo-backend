@@ -14,3 +14,8 @@ output "container_registry" {
   description = "Präfix für Container-Images"
   value       = "${var.region}-docker.pkg.dev/${var.projekt}/${google_artifact_registry_repository.container.repository_id}"
 }
+
+output "server_url" {
+  description = "Adresse des Servers (für testanmeldung -server)"
+  value       = google_cloud_run_v2_service.server.uri
+}
