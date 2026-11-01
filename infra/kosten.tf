@@ -108,14 +108,9 @@ resource "google_storage_bucket" "quellen" {
   public_access_prevention    = "enforced"
   force_destroy               = true
 
-  lifecycle_rule {
-    condition {
-      age = 30
-    }
-    action {
-      type = "Delete"
-    }
-  }
+  # Bewusst keine Lebenszyklusregel: Sie würde auch das gerade genutzte
+  # Quellarchiv löschen, und `tofu plan` zeigte danach eine Abweichung.
+  # Die Archive sind wenige KB groß.
 }
 
 data "archive_file" "killswitch" {
