@@ -34,6 +34,11 @@ variable "rechnungskonto" {
   type        = string
 }
 
+variable "alarm_email" {
+  description = "E-Mail-Adresse für Alarme des Kill-Switch. Steht in werte.auto.tfvars, nicht im Repo."
+  type        = string
+}
+
 variable "budget_eur" {
   description = "Monatliches Budget in Euro"
   type        = number

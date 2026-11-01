@@ -34,12 +34,12 @@ Vom Entwickler bestätigt am 2026-11-01.
 | Doku | `docs/`, `CLAUDE.md`, `README.md` | – | – | nie | – |
 
 ## Bekannte Schulden und beobachtete Drift
-- 2026-11-01: Kein Alarm bei Fehlern des Kill-Switch (E9).
 - 2026-11-01: Offene kleinere Empfehlungen aus Lauf 1: E4 (Modul-Matrix in der CI,
   spätestens mit `server/`), E5 (eigenes Registry-Repo für Funktionen), E7 (Herkunft
-  der Budget-Meldung prüfen), E8 (Zeitlimit beim Trennen), E10 (Actions-Pflege).
+  der Budget-Meldung prüfen, optional), E8 (Zeitlimit beim Trennen).
 - Erledigt nach Lauf 1 (in develop): E1 Sperr-Logik testbar (`sperren.go`), E2 Rechte
-  verkleinert, E3 D1-Test in der CI, E6 Build-Konto ohne Builder-Rolle.
+  verkleinert, E3 D1-Test in der CI, E6 Build-Konto ohne Builder-Rolle, E9 Alarm per
+  E-Mail (`infra/alarm.tf`), E10 Actions auf Node 24 per SHA, Dependabot.
 
 ## Offene Fragen an den Entwickler
 Keine.

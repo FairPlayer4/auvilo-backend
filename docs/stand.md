@@ -11,6 +11,9 @@ Etappe **B0** ist angelegt (OpenTofu, `infra/`):
 - **Kill-Switch** (Cloud Function `killswitch`, Go): ab 100 % werden alle
   Cloud-Run-Dienste auf „nur intern“ gestellt, ab 150 % wird das Projekt vom
   Rechnungskonto getrennt
+- **Alarm per E-Mail**, wenn der Kill-Switch eingreift (WARNING) oder scheitert
+  (ERROR): Log-Alarmregel in Cloud Monitoring (`infra/alarm.tf`), ca. 0,10 $/Monat.
+  Empfänger in `infra/werte.auto.tfvars` (`alarm_email`).
 - Logs gehen in den Bucket `logs-eu` (europe-west1, 30 Tage); der globale
   `_Default`-Bucket bekommt nichts mehr. `_Required` (Admin-Audit) bleibt global.
 - Workload Identity Federation für GitHub Actions (nur Repo
@@ -44,8 +47,11 @@ Etappe **B0** ist angelegt (OpenTofu, `infra/`):
 1. Push von develop, danach läuft die CI zum ersten Mal.
 2. Schwellen 100 %/150 % bestätigen oder ändern (`schwelle_sperren`,
    `schwelle_trennen` in `infra/variablen.tf`).
-3. Kleinere Empfehlungen aus dem Review: E4, E5, E7–E10 (siehe `.review/state.md`).
-4. Etappe **B1**: Go-Server auf Cloud Run, Google-Login (Zustimmungsbildschirm und
+3. Kevin prüft, ob die Alarm-Mail vom Test am 2026-11-01 um 15:30 angekommen ist
+   (ungültige Meldung ohne `costAmount` → ERROR).
+4. Kleinere Empfehlungen aus dem Review: E4, E5, E8 mit B1; E7 optional
+   (siehe `.review/state.md`).
+5. Etappe **B1**: Go-Server auf Cloud Run, Google-Login (Zustimmungsbildschirm und
    OAuth-Client richtet Kevin nach [gcp-einrichtung.md](gcp-einrichtung.md) ein).
 
 ## Befehle

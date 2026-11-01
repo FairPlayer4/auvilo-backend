@@ -26,5 +26,7 @@ angegeben.
 - In PowerShell Argumente mit `=` und Punkt quoten, z. B. `tofu plan "-out=.build\plan"`.
 - Bei `gcloud logging read` immer `--bucket=logs-eu --location=europe-west1
   --view=_AllLogs` angeben – der Standard-Bucket ist absichtlich leer.
+- OpenTofu-Provider aktualisiert Dependabot nicht (nur Terraform-Registry); von Hand
+  mit `tofu init -upgrade` in `infra/`.
 - Netzwerkzugriffe (winget, `go install`, `gcloud`, `git push`) laufen in Claude Code
   außerhalb der Sandbox.

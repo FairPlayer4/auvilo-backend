@@ -56,6 +56,7 @@ mock_provider "archive" {
 variables {
   projekt        = "test-projekt"
   rechnungskonto = "000000-000000-000000"
+  alarm_email    = "test@example.com"
 }
 
 run "alle_standorte_liegen_in_der_eu" {
