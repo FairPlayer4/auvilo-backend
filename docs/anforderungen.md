@@ -287,13 +287,9 @@ tragen die Tests die Spezifikation. Anleitung zum Review: [go-review.md](go-revi
 
 ## 10. Offene Fragen
 
-1. **Kill-Switch**: Bei 20 € nur den Dienst stoppen (Cloud Run nimmt keine Anfragen
-   mehr an, Daten bleiben) oder das Rechnungskonto trennen (stoppt alles, Google
-   kann Ressourcen nach einer Frist löschen)? Empfehlung: bei 100 % Dienst stoppen,
-   bei 150 % Rechnungskonto trennen.
+1. **Kill-Switch-Schwellen**: umgesetzt wie empfohlen (100 % Dienste sperren, 150 %
+   Rechnungskonto trennen) – bitte bestätigen oder ändern.
 2. **Ferneinladung**: Wie wichtig ist sie für den Play Store? (Spätere Etappe.)
-3. **Projekt-ID** in GCP: Vorschlag `avlreminder-exp` plus Zufallsendung (muss
-   weltweit eindeutig sein).
 
 ## 11. Entscheidungen
 
@@ -320,3 +316,6 @@ tragen die Tests die Spezifikation. Anleitung zum Review: [go-review.md](go-revi
 | 2026-11-01 | Schnittstelle mit Protobuf (Connect, buf) |
 | 2026-11-01 | Keine eigene Domain und keine GCP-Organisation vorerst |
 | 2026-11-01 | Code erklärend; gute Tests sind die Hauptgrundlage für Kevins Review |
+| 2026-11-01 | GCP-Projekt `avlreminder-exp-1ef2`, Region europe-west1; B0 angelegt (siehe stand.md) |
+| 2026-11-01 | Kill-Switch trennt nur dieses Projekt vom Rechnungskonto, nicht das ganze Konto (Schwellen vorläufig 100 %/150 %) |
+| 2026-11-01 | Budget zählt Kosten vor Abzug von Guthaben |

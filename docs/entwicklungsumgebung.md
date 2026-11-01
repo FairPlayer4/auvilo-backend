@@ -21,5 +21,10 @@ angegeben.
 - `gcloud components install …` verweigert im nicht-interaktiven Modus (Claude Code)
   das Update mit dem mitgelieferten Python. Abhilfe vorher in PowerShell:
   `$env:CLOUDSDK_PYTHON = (gcloud.cmd components copy-bundled-python).Trim()`
+- `go test -race` braucht cgo und damit einen C-Compiler, den es unter Windows hier
+  nicht gibt. Lokal ohne `-race` testen; die CI (Linux) testet mit `-race`.
+- In PowerShell Argumente mit `=` und Punkt quoten, z. B. `tofu plan "-out=.build\plan"`.
+- Bei `gcloud logging read` immer `--bucket=logs-eu --location=europe-west1
+  --view=_AllLogs` angeben – der Standard-Bucket ist absichtlich leer.
 - Netzwerkzugriffe (winget, `go install`, `gcloud`, `git push`) laufen in Claude Code
   außerhalb der Sandbox.

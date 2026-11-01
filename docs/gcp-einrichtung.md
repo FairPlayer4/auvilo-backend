@@ -29,7 +29,7 @@
 - Nichts weiter anlegen – Projekt, Budget usw. macht Claude reproduzierbar mit
   OpenTofu.
 
-## Schritt 3 – gcloud anmelden [Kevin]
+## Schritt 3 – gcloud anmelden [Kevin] ✅ erledigt
 Die Werkzeuge sind installiert (siehe [entwicklungsumgebung.md](entwicklungsumgebung.md)).
 In einem neuen Terminal nacheinander ausführen; jeweils öffnet sich der Browser:
 
@@ -44,7 +44,7 @@ gcloud auth application-default login
 Der erste Befehl ist für `gcloud` selbst, der zweite für Programme wie OpenTofu und
 lokale Go-Tests gegen GCP. Danach Claude Bescheid geben.
 
-## Schritt 4 – Go für B0 geben [Kevin]
+## Schritt 4 – Go für B0 geben [Kevin] ✅ erledigt am 2026-11-01
 Claude zeigt dir vorher genau, was angelegt wird, und legt dann an:
 1. Projekt (ID z. B. `avlreminder-exp-<zufall>`), mit deinem Rechnungskonto verknüpft
 2. Bucket in der EU für den OpenTofu-Zustand
@@ -54,7 +54,7 @@ Claude zeigt dir vorher genau, was angelegt wird, und legt dann an:
 5. Firestore-Datenbank in `europe-west1`
 6. Workload Identity Federation für GitHub Actions (Deploy ohne Schlüsseldatei)
 
-Alles davon kostet im Leerlauf 0 € bzw. Cent-Beträge.
+Alles davon kostet im Leerlauf 0 € bzw. Cent-Beträge. Ergebnis: [stand.md](stand.md).
 
 ## Später – Schritte im Browser je Etappe
 

@@ -28,3 +28,6 @@ service-account*.json
 .idea/
 .vscode/
 *.iml
+
+# Gebaute Archive
+.build/

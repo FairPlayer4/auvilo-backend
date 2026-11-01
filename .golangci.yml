@@ -1,0 +1,15 @@
+# Konfiguration für golangci-lint (v2). Gilt für alle Go-Module im Repo.
+version: "2"
+linters:
+  default: standard
+  enable:
+    - errorlint   # Fehler mit errors.Is/As vergleichen statt mit ==
+    - gosec       # typische Sicherheitsfehler
+  settings:
+    staticcheck:
+      checks:
+        - all
+        # Fehlertexte sind deutsch; Substantive werden großgeschrieben.
+        - -ST1005
+        # Paket-Kommentar nicht in jedem Paket erzwingen.
+        - -ST1000

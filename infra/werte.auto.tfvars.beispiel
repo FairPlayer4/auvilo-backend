@@ -1,0 +1,3 @@
+# Vorlage: nach werte.auto.tfvars kopieren und ausfüllen.
+projekt        = "avlreminder-exp-xxxx"
+rechnungskonto = "000000-000000-000000"
