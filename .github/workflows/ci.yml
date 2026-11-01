@@ -1,0 +1,78 @@
+# Prüft Go-Code und OpenTofu-Konfiguration. Braucht keinen Zugang zu GCP.
+name: CI
+
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+
+permissions:
+  contents: read
+
+# Ein neuer Push auf denselben Branch bricht den noch laufenden alten Lauf ab.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Actions sind auf Commit-SHA festgelegt (ein Tag ließe sich nachträglich auf
+# fremden Code umhängen). Die Version steht als Kommentar dahinter; Dependabot
+# schlägt Updates vor (.github/dependabot.yml).
+
+jobs:
+  killswitch:
+    name: Go – Kill-Switch
+    runs-on: ubuntu-latest
+    timeout-minutes: 15 # Standard wären 6 Stunden, falls etwas hängt
+    defaults:
+      run:
+        working-directory: infra/killswitch
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false # kein GitHub-Token in .git/config für Tests und Werkzeuge
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: infra/killswitch/go.mod
+          cache-dependency-path: infra/killswitch/go.sum
+      - name: Formatierung
+        run: test -z "$(gofmt -l .)" || (gofmt -l . && exit 1)
+      - name: go vet
+        run: go vet ./...
+      # -race braucht cgo; das gibt es unter Linux ohne Weiteres (lokal unter Windows nicht).
+      - name: Tests mit Race-Detector
+        run: go test -race -cover ./...
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          # Version fest wie lokal (docs/entwicklungsumgebung.md), damit neue
+          # Linter-Regeln die CI nicht ohne Codeänderung rot machen.
+          version: v2.15.0
+          working-directory: infra/killswitch
+          args: --config ../../.golangci.yml
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+
+  tofu:
+    name: OpenTofu
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: infra
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false # kein GitHub-Token in .git/config für Tests und Werkzeuge
+      - uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4 # v2.0.2
+        with:
+          tofu_version: 1.13.1
+      - name: Formatierung
+        run: tofu fmt -check -recursive
+      # Ohne Backend: validate prüft nur die Konfiguration, nicht den Zustand in GCP.
+      - name: Validieren
+        run: tofu init -backend=false -input=false && tofu validate
+      # Anforderung D1 (nur EU): Ersatz für die Standortrichtlinie einer Organisation.
+      - name: Keine fest eingetragenen Standorte
+        run: ./pruefe-regionen.sh
+      - name: Tests (simulierte Provider, kein GCP-Zugang)
+        run: tofu test

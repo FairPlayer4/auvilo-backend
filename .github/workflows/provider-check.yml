@@ -1,0 +1,62 @@
+# Meldet neue Versionen der OpenTofu-Provider. Dependabot kann das nicht, weil
+# es nur die Terraform-Registry kennt (wir nutzen registry.opentofu.org).
+#
+# Schlägt der Lauf fehl, schickt GitHub eine Mail. Dann von Hand aktualisieren:
+#   cd infra && tofu init -upgrade && tofu plan
+# Bei einem neuen Major zuerst die Versionsgrenze in infra/versionen.tf anheben
+# und die Upgrade-Hinweise des Providers lesen.
+#
+# Zeitgesteuerte Workflows laufen nur auf dem Standardbranch (main).
+name: Provider-Updates
+
+on:
+  schedule:
+    - cron: "0 6 1 * *" # am 1. jedes Monats, 06:00 UTC
+  workflow_dispatch: # von Hand startbar (Reiter "Actions")
+
+permissions:
+  contents: read
+
+jobs:
+  pruefen:
+    name: Neue Provider-Versionen
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: infra
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4 # v2.0.2
+        with:
+          tofu_version: 1.13.1
+
+      # Verglichen werden nur die Versionszeilen: Unter Linux ergänzt init
+      # sonst Prüfsummen für diese Plattform, ohne dass es ein Update gibt.
+      - name: Neuere Version innerhalb der erlaubten Grenzen
+        run: |
+          vorher=$(grep -E '^\s*version\s*=' .terraform.lock.hcl)
+          tofu init -backend=false -upgrade -input=false > /dev/null
+          nachher=$(grep -E '^\s*version\s*=' .terraform.lock.hcl)
+          if [ "$vorher" != "$nachher" ]; then
+            echo "::error::Neue Provider-Version verfügbar – 'tofu init -upgrade' in infra/ ausführen."
+            diff <(echo "$vorher") <(echo "$nachher") || true
+            exit 1
+          fi
+          echo "Alle Provider sind innerhalb der Grenzen aktuell."
+
+      # Ein neues Major erlaubt die Grenze "~> 8.0" absichtlich nicht; es
+      # würde von Schritt 1 nie gefunden.
+      - name: Neues Major des Google-Providers
+        if: ${{ !cancelled() }}
+        run: |
+          aktuell=$(grep -A1 'hashicorp/google"' .terraform.lock.hcl | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+          neueste=$(curl -fsSL https://registry.opentofu.org/v1/providers/hashicorp/google/versions \
+            | jq -r '.versions[].version' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)
+          echo "Im Einsatz: $aktuell, neueste: $neueste"
+          if [ "${neueste%%.*}" -gt "${aktuell%%.*}" ]; then
+            echo "::error::Neues Major des Google-Providers: $neueste (im Einsatz: $aktuell)."
+            exit 1
+          fi
