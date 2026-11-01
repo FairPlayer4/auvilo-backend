@@ -70,13 +70,41 @@ resource "google_service_account" "bauen" {
   depends_on   = [google_project_service.apis]
 }
 
-locals {
-  killswitch_rollen = [
-    "roles/run.developer",          # Cloud-Run-Dienste ändern (Ingress)
-    "roles/iam.serviceAccountUser", # nötig, um Dienste mit ihrem Dienstkonto zu aktualisieren
-    "roles/billing.projectManager", # Projekt vom Rechnungskonto trennen
-    "roles/eventarc.eventReceiver", # Ereignisse von Eventarc empfangen
+# Eigene Rolle statt roles/run.developer: Der Kill-Switch darf Dienste nur
+# lesen und ändern, aber keine neuen Dienste oder Jobs anlegen. Sonst könnte
+# Code im Kill-Switch (z. B. eine kompromittierte Abhängigkeit) eigene
+# Container mit fremden Dienstkonten starten.
+resource "google_project_iam_custom_role" "killswitch_cloud_run" {
+  role_id     = "killswitchCloudRun"
+  title       = "Kill-Switch: Cloud-Run-Dienste sperren"
+  description = "Dienste auflisten, lesen und den Ingress ändern"
+  permissions = [
+    "run.services.get",
+    "run.services.list",
+    "run.services.update",
+    "run.operations.get", # Warten, bis die Änderung aktiv ist
   ]
+  depends_on = [google_project_service.apis]
+}
+
+locals {
+  # Map mit festen Schlüsseln: for_each braucht Schlüssel, die schon beim
+  # Plan bekannt sind; der Name der eigenen Rolle entsteht erst beim Anlegen.
+  killswitch_rollen = {
+    cloud_run  = google_project_iam_custom_role.killswitch_cloud_run.name # Dienste sperren
+    abrechnung = "roles/billing.projectManager"                           # Projekt vom Rechnungskonto trennen
+    eventarc   = "roles/eventarc.eventReceiver"                           # Ereignisse von Eventarc empfangen
+  }
+
+  # Wer einen Cloud-Run-Dienst ändert, muss dessen Laufzeit-Dienstkonto
+  # "benutzen" dürfen (actAs). Deshalb bekommt der Kill-Switch dieses Recht
+  # nur für genau diese Konten – nicht projektweit.
+  # NEUE CLOUD-RUN-DIENSTE: Ihr Laufzeitkonto hier eintragen, sonst kann der
+  # Kill-Switch sie nicht sperren (Fehler im Log).
+  cloud_run_laufzeitkonten = {
+    # Standardkonto für Dienste ohne eigenes Konto (z. B. manuelle Tests).
+    compute_standard = "${data.google_project.projekt.number}-compute@developer.gserviceaccount.com"
+  }
   bauen_rollen = [
     "roles/cloudbuild.builds.builder",
     "roles/logging.logWriter",
@@ -86,10 +114,31 @@ locals {
 }
 
 resource "google_project_iam_member" "killswitch" {
-  for_each = toset(local.killswitch_rollen)
+  for_each = local.killswitch_rollen
   project  = var.projekt
   role     = each.value
   member   = google_service_account.killswitch.member
+}
+
+resource "google_service_account_iam_member" "killswitch_act_as" {
+  for_each           = local.cloud_run_laufzeitkonten
+  service_account_id = "projects/${var.projekt}/serviceAccounts/${each.value}"
+  role               = "roles/iam.serviceAccountUser"
+  member             = google_service_account.killswitch.member
+}
+
+# Ohne Organisation gibt Google den Standardkonten automatisch die Rolle
+# Editor. Wer Code unter diesen Konten ausführt, könnte fast alles im Projekt
+# ändern. Die Bindungen werden hier entfernt; Dienste und Funktionen laufen
+# mit eigenen, schmalen Konten.
+resource "google_project_iam_member_remove" "standardkonten_ohne_editor" {
+  for_each = toset([
+    "serviceAccount:${data.google_project.projekt.number}-compute@developer.gserviceaccount.com",
+    "serviceAccount:${var.projekt}@appspot.gserviceaccount.com",
+  ])
+  project = var.projekt
+  role    = "roles/editor"
+  member  = each.value
 }
 
 resource "google_project_iam_member" "bauen" {
@@ -182,4 +231,17 @@ resource "google_cloud_run_service_iam_member" "killswitch_aufrufen" {
   service  = google_cloudfunctions2_function.killswitch.name
   role     = "roles/run.invoker"
   member   = google_service_account.killswitch.member
+}
+
+# Die Schlüssel der Rollen-Bindungen haben sich geändert (Rollenname → kurzer
+# Name). "moved" sagt OpenTofu, dass es dieselben Bindungen sind – sonst würde
+# es sie löschen und neu anlegen, und in der Zwischenzeit fehlten die Rechte.
+moved {
+  from = google_project_iam_member.killswitch["roles/billing.projectManager"]
+  to   = google_project_iam_member.killswitch["abrechnung"]
+}
+
+moved {
+  from = google_project_iam_member.killswitch["roles/eventarc.eventReceiver"]
+  to   = google_project_iam_member.killswitch["eventarc"]
 }
