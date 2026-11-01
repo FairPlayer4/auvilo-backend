@@ -6,11 +6,21 @@ import "google/protobuf/timestamp.proto";
 
 // Die eigenen Geräte verwalten. Alle Aufrufe brauchen eine Sitzung und wirken
 // nur auf das eigene Konto.
+//
+// Fehlercodes (Connect):
+//   unauthenticated Sitzung fehlt, ist ungültig, abgelaufen oder gehört zu
+//                   einem inzwischen gesperrten Gerät.
+//   not_found       GeraetSperren: kein Gerät dieses Kontos mit dieser ID.
+//   unavailable     vorübergehend; später wiederholen.
+//   internal        Fehler im Server.
 service GeraeteDienst {
   rpc GeraeteAuflisten(GeraeteAuflistenRequest) returns (GeraeteAuflistenResponse);
 
   // Sperrt ein eigenes Gerät sofort: Seine Sitzungen werden gelöscht, und es
   // bekommt keine neue mehr. Das eigene Gerät zu sperren heißt abmelden.
+  // Endgültig: Mit demselben Geräteschlüssel lehnt der Server auch Anmelden
+  // ab (permission_denied). Wer sich wieder anmelden will, erzeugt einen
+  // neuen Geräteschlüssel; es gibt kein Entsperren.
   rpc GeraetSperren(GeraetSperrenRequest) returns (GeraetSperrenResponse);
 }
 

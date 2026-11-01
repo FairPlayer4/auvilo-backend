@@ -6,6 +6,18 @@ import "google/protobuf/timestamp.proto";
 
 // Anmeldung eines Geräts und Verlängerung seiner Sitzung.
 // Beide Aufrufe brauchen keine Sitzung (sie stellen eine aus).
+//
+// Fehlercodes (Connect) und was der Client tun soll:
+//   unauthenticated   abgelehnt (Prüfung gescheitert, unbekanntes Gerät, Gerät
+//                     eines anderen Kontos). Den Grund nennt der Server bewusst
+//                     nicht. Nach abgelehntem Erneuern: neu mit Google anmelden.
+//   permission_denied Gerät ist gesperrt – endgültig, auch für Anmelden. Nur
+//                     ein neuer Geräteschlüssel ergibt ein neues Gerät.
+//   invalid_argument  nur SitzungErneuern: geraet_id ist kein 32-stelliges
+//                     Hex oder zeitpunkt fehlt.
+//   unavailable       vorübergehend; später wiederholen.
+//   internal          Fehler im Server.
+// Anfragen über 64 KiB weist der Server ab.
 service AnmeldeDienst {
   // Erstes Anmelden eines Geräts mit einem Google-ID-Token. Legt beim ersten Mal
   // das Konto an. Derselbe Geräteschlüssel ergibt immer dasselbe Gerät.
@@ -22,7 +34,8 @@ message AnmeldenRequest {
   string google_id_token = 1;
   // Öffentlicher Geräteschlüssel: ECDSA P-256, PKIX/DER.
   bytes geraeteschluessel = 2;
-  // ECDSA-Signatur (ASN.1/DER) über "avlreminder/anmelden/v1\n" + google_id_token.
+  // ECDSA-Signatur (ASN.1/DER, SHA-256; Android: "SHA256withECDSA") über die
+  // UTF-8-Bytes von "avlreminder/anmelden/v1\n" + google_id_token.
   bytes signatur = 3;
 }
 
@@ -38,8 +51,9 @@ message SitzungErneuernRequest {
   string geraet_id = 1;
   // Uhrzeit des Geräts; darf höchstens 2 Minuten von der des Servers abweichen.
   google.protobuf.Timestamp zeitpunkt = 2;
-  // ECDSA-Signatur (ASN.1/DER) über
-  // "avlreminder/sitzung/v1\n" + geraet_id + "\n" + zeitpunkt in Unix-Sekunden.
+  // ECDSA-Signatur (ASN.1/DER, SHA-256) über die UTF-8-Bytes von
+  // "avlreminder/sitzung/v1\n" + geraet_id + "\n" + zeitpunkt in ganzen
+  // Unix-Sekunden als Dezimaltext (z. B. "1793534400").
   bytes signatur = 3;
 }
 
@@ -48,7 +62,8 @@ message SitzungErneuernResponse {
 }
 
 message Sitzung {
-  // Als "Authorization: Bearer <token>" mitschicken.
+  // Als "Authorization: Bearer <token>" mitschicken. Gilt 1 Stunde; vor
+  // laeuft_ab mit SitzungErneuern eine neue holen.
   string token = 1;
   google.protobuf.Timestamp laeuft_ab = 2;
 }
