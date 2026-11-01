@@ -15,6 +15,7 @@ build/
 *.tfstate
 *.tfstate.*
 *.tfvars
+*.tfplan
 crash.log
 
 # Secrets und lokale Konfiguration
