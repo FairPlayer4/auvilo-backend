@@ -106,13 +106,24 @@ func TestEntscheideMitUngueltigenSchwellenTutNichts(t *testing.T) {
 	}
 }
 
+// Die Namen erscheinen in Logs und damit in der Alarm-Mail; sie müssen zur
+// Aktion passen (vertauschte Namen würden einen Eingriff falsch melden).
 func TestAktionString(t *testing.T) {
-	if got := Aktion(99).String(); got != "Aktion(99)" {
-		t.Errorf("String = %q", got)
+	tests := []struct {
+		name string
+		a    Aktion
+		want string
+	}{
+		{"nichts", Nichts, "nichts"},
+		{"Dienste sperren", DiensteSperren, "Dienste sperren"},
+		{"Abrechnung trennen", AbrechnungTrennen, "Abrechnung trennen"},
+		{"unbekannte Aktion mit Zahl", Aktion(99), "Aktion(99)"},
 	}
-	for _, a := range []Aktion{Nichts, DiensteSperren, AbrechnungTrennen} {
-		if a.String() == "" {
-			t.Errorf("leerer Name für %d", int(a))
-		}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.a.String(); got != tt.want {
+				t.Errorf("String = %q, erwartet %q", got, tt.want)
+			}
+		})
 	}
 }
