@@ -4,7 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 )
+
+// sperrZeitlimit begrenzt das Sperren vor dem Trennen. Die Funktion hat 120 s
+// (infra/kosten.tf); hängt das Sperren, bleibt so genug Zeit zum Trennen.
+// Eine Variable statt Konstante, damit Tests sie verkürzen können.
+var sperrZeitlimit = 60 * time.Second
 
 // Plattform kapselt die Eingriffe in GCP. Das Interface steht hier beim
 // Verwender (Go-Stil): Die echte Umsetzung liegt in gcp.go, die Tests nutzen
@@ -29,7 +35,8 @@ type Ergebnis struct {
 //
 // KRITISCH: Beim Trennen werden vorher die Dienste gesperrt: Falls das Trennen scheitert,
 // ist so wenigstens der Zugriff von außen schon zu. Scheitert das Sperren, wird
-// trotzdem getrennt – Kosten stoppen geht vor.
+// trotzdem getrennt – Kosten stoppen geht vor. Auch ein hängendes Sperren darf
+// das Trennen nicht verhindern: Es bekommt ein eigenes, kürzeres Zeitlimit.
 func Ausfuehren(ctx context.Context, a Aktion, p Plattform) (Ergebnis, error) {
 	erg := Ergebnis{Aktion: a}
 	switch a {
@@ -45,7 +52,9 @@ func Ausfuehren(ctx context.Context, a Aktion, p Plattform) (Ergebnis, error) {
 		return erg, nil
 
 	case AbrechnungTrennen:
-		n, sperrFehler := p.DiensteSperren(ctx)
+		sperrCtx, abbrechen := context.WithTimeout(ctx, sperrZeitlimit)
+		n, sperrFehler := p.DiensteSperren(sperrCtx)
+		abbrechen() // gibt den Timer frei; ctx fürs Trennen bleibt unberührt
 		erg.GesperrteDienste = n
 		if err := p.AbrechnungTrennen(ctx); err != nil {
 			trennFehler := fmt.Errorf("Abrechnung trennen: %w", err)

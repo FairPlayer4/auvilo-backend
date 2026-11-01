@@ -45,6 +45,8 @@ mock_provider "google" {
   }
 }
 
+mock_provider "random" {}
+
 mock_provider "archive" {
   mock_data "archive_file" {
     defaults = {
@@ -85,6 +87,18 @@ run "alle_standorte_liegen_in_der_eu" {
   assert {
     condition     = google_cloudfunctions2_function.killswitch.event_trigger[0].trigger_region == var.region
     error_message = "Der Trigger der Funktion liegt nicht in var.region."
+  }
+  assert {
+    condition     = google_artifact_registry_repository.funktionen.location == var.region
+    error_message = "Das Registry-Repo der Funktionen liegt nicht in var.region."
+  }
+  assert {
+    condition     = google_cloud_run_v2_service.server.location == var.region
+    error_message = "Der Server liegt nicht in var.region."
+  }
+  assert {
+    condition     = [for r in google_secret_manager_secret.pfeffer.replication[0].user_managed[0].replicas : r.location] == [var.region]
+    error_message = "Der Pfeffer wird außerhalb von var.region gespeichert."
   }
   assert {
     condition     = google_pubsub_topic.budget.message_storage_policy[0].allowed_persistence_regions == toset([var.region])

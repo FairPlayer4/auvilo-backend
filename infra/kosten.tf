@@ -108,6 +108,7 @@ locals {
   cloud_run_laufzeitkonten = {
     # Standardkonto für Dienste ohne eigenes Konto (z. B. manuelle Tests).
     compute_standard = "${data.google_project.projekt.number}-compute@developer.gserviceaccount.com"
+    server           = google_service_account.server.email
   }
   # Von Google dokumentierte Minimalmenge für ein eigenes Build-Konto. Die
   # breite Rolle roles/cloudbuild.builds.builder ist bewusst nicht dabei: Sie
@@ -208,7 +209,7 @@ resource "google_cloudfunctions2_function" "killswitch" {
     runtime           = "go127"
     entry_point       = "KillSwitch"
     service_account   = google_service_account.bauen.id
-    docker_repository = google_artifact_registry_repository.container.id
+    docker_repository = google_artifact_registry_repository.funktionen.id
     source {
       storage_source {
         bucket = google_storage_bucket.quellen.name

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"slices"
 	"testing"
+	"time"
 )
 
 // attrappe ersetzt GCP in Tests und merkt sich, was in welcher Reihenfolge
@@ -13,16 +14,23 @@ type attrappe struct {
 	dienste     int
 	sperrFehler error
 	trennFehler error
+	haengt      bool  // Sperren wartet, bis sein Zeitlimit abläuft
+	trennCtxErr error // Zustand des Kontexts beim Trennen
 	aufrufe     []string
 }
 
-func (a *attrappe) DiensteSperren(context.Context) (int, error) {
+func (a *attrappe) DiensteSperren(ctx context.Context) (int, error) {
 	a.aufrufe = append(a.aufrufe, "sperren")
+	if a.haengt {
+		<-ctx.Done() // wartet, bis das Zeitlimit abläuft
+		return 0, ctx.Err()
+	}
 	return a.dienste, a.sperrFehler
 }
 
-func (a *attrappe) AbrechnungTrennen(context.Context) error {
+func (a *attrappe) AbrechnungTrennen(ctx context.Context) error {
 	a.aufrufe = append(a.aufrufe, "trennen")
+	a.trennCtxErr = ctx.Err()
 	return a.trennFehler
 }
 
@@ -76,5 +84,30 @@ func TestAusfuehren(t *testing.T) {
 				t.Errorf("gesperrte Dienste = %d, erwartet %d", erg.GesperrteDienste, wantDienste)
 			}
 		})
+	}
+}
+
+// KRITISCH: Ein hängendes Sperren darf das Trennen nicht verhindern. Das
+// Sperren läuft in einen eigenen, kürzeren Zeitlimit; das Trennen bekommt
+// danach einen Kontext, der noch gilt.
+func TestTrennenTrotzHaengendemSperren(t *testing.T) {
+	alt := sperrZeitlimit
+	sperrZeitlimit = 50 * time.Millisecond
+	t.Cleanup(func() { sperrZeitlimit = alt })
+
+	// Die Funktion selbst hat mehr Zeit als das Sperren.
+	ctx, abbrechen := context.WithTimeout(context.Background(), 5*time.Second)
+	defer abbrechen()
+
+	p := attrappe{haengt: true}
+	erg, err := Ausfuehren(ctx, AbrechnungTrennen, &p)
+	if !p.getrennt() || !erg.AbrechnungGetrennt {
+		t.Fatalf("nicht getrennt: Aufrufe %v", p.aufrufe)
+	}
+	if p.trennCtxErr != nil {
+		t.Errorf("Trennen bekam einen abgelaufenen Kontext: %v", p.trennCtxErr)
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("Fehler = %v, erwartet den Zeitlimit-Fehler des Sperrens", err)
 	}
 }

@@ -6,7 +6,8 @@
 # nicht selbst anlegen kann.
 
 terraform {
-  required_version = ">= 1.10"
+  # 1.11: ephemeral-Ressourcen und write-only-Attribute (Pfeffer, server.tf).
+  required_version = ">= 1.11"
 
   required_providers {
     google = {
@@ -18,6 +19,11 @@ terraform {
     archive = {
       source  = "hashicorp/archive"
       version = ">= 2.4"
+    }
+    random = {
+      source = "hashicorp/random"
+      # 3.7: random_password auch als ephemeral-Ressource
+      version = "~> 3.7"
     }
   }
 

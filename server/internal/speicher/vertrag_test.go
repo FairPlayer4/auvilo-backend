@@ -5,7 +5,9 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -275,4 +277,113 @@ func pruefeVertrag(t *testing.T, neu func(t *testing.T) Speicher) {
 			t.Errorf("GesperrtAm = %v, erwartet %v", g.GesperrtAm, t0)
 		}
 	})
+
+	// Gleichzeitigkeit: Die folgenden Fälle starten mehrere Aufrufe zur selben
+	// Zeit (Goroutinen = leichtgewichtige Threads). Ein Rennen tritt nicht in
+	// jedem Durchlauf auf; deshalb mehrere Runden mit je frischem Speicher.
+	// Fehler einzelner Aufrufe (etwa zu viele Konflikte in Firestore) sind
+	// erlaubt – geprüft wird, was danach im Speicher steht.
+
+	// KRITISCH: Gesperrt heißt sofort draußen. Egal wie Sperren und neue
+	// Sitzungen sich überschneiden: Danach darf keine Sitzung des Geräts übrig
+	// sein. Gegenprobe zu "SitzungAnlegen prüft die Sperre in der Transaktion".
+	sperrRennen := []struct {
+		name   string
+		aufruf func(s Speicher, hash string) error // legt eine Sitzung für geraet-1 an
+	}{
+		{"Erneuern", func(s Speicher, hash string) error {
+			_, err := s.SitzungAnlegen(ctx, "geraet-1", sitzung(hash))
+			return err
+		}},
+		{"Anmelden", func(s Speicher, hash string) error {
+			_, err := s.Anmelden(ctx, "kennung-a", geraet("geraet-1", 0), sitzung(hash))
+			return err
+		}},
+	}
+	for _, rennen := range sperrRennen {
+		t.Run("Sperren gewinnt gegen gleichzeitiges "+rennen.name, func(t *testing.T) {
+			for runde := range gleichzeitigRunden {
+				s := neu(t)
+				e := anmelden(t, s, "kennung-a", "geraet-1", "hash-0", 0)
+
+				var wg sync.WaitGroup
+				var sperrFehler error
+				hashes := []string{"hash-0"}
+				for i := range gleichzeitigAufrufe {
+					hash := fmt.Sprintf("hash-%d-%d", runde, i+1)
+					hashes = append(hashes, hash)
+					wg.Go(func() { _ = rennen.aufruf(s, hash) })
+					if i == gleichzeitigAufrufe/2 { // Sperren mitten zwischen den anderen starten
+						wg.Go(func() { sperrFehler = s.GeraetSperren(ctx, e.KontoID, "geraet-1", t0) })
+					}
+				}
+				wg.Wait()
+
+				muss(t, sperrFehler)
+				for _, hash := range hashes {
+					if _, err := s.Sitzung(ctx, hash); !errors.Is(err, ErrNichtGefunden) {
+						t.Fatalf("Runde %d: Sitzung %s des gesperrten Geräts ist noch da (Fehler: %v)", runde, hash, err)
+					}
+				}
+			}
+		})
+	}
+
+	// KRITISCH: Meldet sich ein Google-Konto auf mehreren Geräten zugleich zum
+	// ersten Mal an, entsteht genau ein Konto. Sonst wären die Geräte getrennt
+	// und das zweite Konto verwaist.
+	t.Run("gleichzeitiges erstes Anmelden legt genau ein Konto an", func(t *testing.T) {
+		for runde := range gleichzeitigRunden {
+			s := neu(t)
+			ergebnisse := make([]AnmeldeErgebnis, gleichzeitigAufrufe)
+			fehler := make([]error, gleichzeitigAufrufe)
+			var wg sync.WaitGroup
+			for i := range gleichzeitigAufrufe {
+				wg.Go(func() {
+					id := fmt.Sprintf("geraet-%d", i)
+					ergebnisse[i], fehler[i] = s.Anmelden(ctx, "kennung-a", geraet(id, i), sitzung("hash-"+id))
+				})
+			}
+			wg.Wait()
+
+			konten := map[string]bool{}
+			neue := 0
+			for i, e := range ergebnisse {
+				if fehler[i] != nil {
+					t.Logf("Runde %d, Aufruf %d: %v", runde, i, fehler[i])
+					continue
+				}
+				konten[e.KontoID] = true
+				if e.NeuesKonto {
+					neue++
+				}
+			}
+			if len(konten) != 1 || neue != 1 {
+				t.Fatalf("Runde %d: %d Konten, %d davon als neu gemeldet – erwartet genau 1 und 1", runde, len(konten), neue)
+			}
+			// Auch im Speicher: alle erfolgreich angemeldeten Geräte im selben Konto.
+			var kontoID string
+			for k := range konten {
+				kontoID = k
+			}
+			liste, err := s.Geraete(ctx, kontoID)
+			muss(t, err)
+			erfolgreich := 0
+			for _, f := range fehler {
+				if f == nil {
+					erfolgreich++
+				}
+			}
+			if len(liste) != erfolgreich {
+				t.Errorf("Runde %d: %d Geräte im Konto, erwartet %d", runde, len(liste), erfolgreich)
+			}
+		}
+	})
 }
+
+// Umfang der Gleichzeitigkeitsfälle: genug, dass Rennen gegen den Emulator
+// zuverlässig auftreten, und wenig genug für ca. 15 s Laufzeit.
+const (
+	gleichzeitigRunden  = 5
+	gleichzeitigAufrufe = 8
+)
