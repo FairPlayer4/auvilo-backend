@@ -14,6 +14,7 @@ option java_package = "com.avlreminder.schnittstelle.v1";
 //   unauthenticated Sitzung fehlt, ist ungültig, abgelaufen oder gehört zu
 //                   einem inzwischen gesperrten Gerät.
 //   not_found       GeraetSperren: kein Gerät dieses Kontos mit dieser ID.
+//   resource_exhausted Anfrage größer als 64 KiB.
 //   unavailable     vorübergehend; später wiederholen.
 //   internal        Fehler im Server.
 service GeraeteDienst {

@@ -19,6 +19,7 @@ option java_package = "com.avlreminder.schnittstelle.v1";
 //   failed_precondition BackupSpeichern: erwartete_version passt nicht – ein
 //                       anderes Gerät war schneller. Neu holen, nicht überschreiben.
 //   not_found           BackupHolen: Für das Konto gibt es noch kein Backup.
+//   resource_exhausted  Anfrage größer als 64 KiB.
 //   unavailable         vorübergehend; später wiederholen.
 //   internal            Fehler im Server.
 service SchluesselDienst {

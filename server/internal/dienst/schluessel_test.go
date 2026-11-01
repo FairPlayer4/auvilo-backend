@@ -87,6 +87,13 @@ func TestBackupSpeichernPrueftDieAnfrage(t *testing.T) {
 		})
 	}
 
+	// Schutz vor großen Anfragen (Kosten, Speicher): Connect lehnt sie ab, bevor der
+	// Dienst sie sieht. Eigene Zahl statt MaxAnfrage, wie oben.
+	t.Run("lehnt Anfrage über 64 KiB ab", func(t *testing.T) {
+		_, err := ts.backupSpeichern(token, make([]byte, 64<<10), 1)
+		erwarteCode(t, err, connect.CodeResourceExhausted)
+	})
+
 	// KRITISCH: Ein Gerät mit veraltetem Stand überschreibt nichts.
 	t.Run("lehnt veraltete Version ab und behält das gespeicherte Backup", func(t *testing.T) {
 		_, err := ts.backupSpeichern(token, []byte("veraltet"), 0)
