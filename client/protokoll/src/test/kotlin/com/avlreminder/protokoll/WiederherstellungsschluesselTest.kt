@@ -20,6 +20,15 @@ class WiederherstellungsschluesselTest {
         assertTrue(Regex("([0-9A-HJKMNP-TV-Z]{4}-){13}[0-9A-HJKMNP-TV-Z]{4}").matches(text), text)
     }
 
+    // KRITISCH: Gedruckte Schlüssel liegen jahrelang auf Papier. Ändert sich
+    // Alphabet, Bitreihenfolge oder Prüfzeichen-Berechnung, wird dieser Test rot.
+    // Erwartung unabhängig berechnet: Base32 nach RFC 4648 (Python base64.b32encode),
+    // Zeichen auf Crockford umgesetzt; Prüfzeichen = erste 4 Zeichen von SHA-256(Schlüssel).
+    @Test
+    fun `fester Schlüssel ergibt immer denselben Text`() {
+        assertEquals("000G-40R4-0M30-E209-185G-R38E-1W81-24GK-2GAH-C5RR-34D1-P70X-3RFG-CC6W", text)
+    }
+
     @Test
     fun `neue Schlüssel sind verschieden`() {
         assertNotEquals(Wiederherstellungsschluessel.erzeugen().alsText(), Wiederherstellungsschluessel.erzeugen().alsText())

@@ -1,5 +1,8 @@
 package com.avlreminder.protokoll
 
+import com.google.crypto.tink.HybridEncrypt
+import com.google.crypto.tink.InsecureSecretKeyAccess
+import com.google.crypto.tink.TinkProtoKeysetFormat
 import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -60,12 +63,16 @@ class PersonenschluesselTest {
     }
 
     @Test
-    fun `Umschlag passt nicht als Chiffrat eines anderen Zwecks`() {
-        // Gegenprobe zum Zweck-Präfix: Wer denselben Schlüssel für etwas anderes
-        // verwendet, kann Umschläge nicht als solche Daten ausgeben.
+    fun `lehnt Chiffrat für Bens Schlüssel mit anderem Zweck ab`() {
+        // Gegenprobe zum Zweck-Präfix: Etwas, das mit Bens öffentlichem Schlüssel,
+        // aber für einen anderen Zweck verschlüsselt wurde, gilt nicht als Umschlag.
         val ben = Personenschluessel.erzeugen()
-        val umschlag = ben.oeffentlich.verpacken(SymmetrischerSchluessel.erzeugen())
-        assertFalse(ben.oeffentlich.pruefen(Signaturzweck.OPERATION, umschlag, umschlag))
+        val oeffentlich = TinkProtoKeysetFormat
+            .parseKeyset(ben.geheimeBytesEntpacken(), InsecureSecretKeyAccess.get(), Tink.konfiguration)
+            .publicKeysetHandle
+        val fremd = oeffentlich.getPrimitive(Tink.konfiguration, HybridEncrypt::class.java)
+            .encrypt(SymmetrischerSchluessel.erzeugen().geheimeBytes(), Zweck.BACKUP.toByteArray())
+        assertThrows<EntschluesselnFehlgeschlagen> { ben.entpacken(fremd) }
     }
 
     // --- Fingerabdruck -----------------------------------------------------
