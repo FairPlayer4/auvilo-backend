@@ -168,11 +168,27 @@ resource "google_storage_bucket" "quellen" {
   # Die Archive sind wenige KB groß.
 }
 
+locals {
+  # Nur ausdrücklich erlaubte Dateien gehen in die Cloud: Go-Code ohne Tests
+  # plus go.mod/go.sum. Mit dem ganzen Ordner könnten lokale Dateien (z. B.
+  # eine .env oder Notizen) ungewollt in GCP landen.
+  killswitch_dateien = setunion(
+    setsubtract(fileset("${path.module}/killswitch", "*.go"), fileset("${path.module}/killswitch", "*_test.go")),
+    ["go.mod", "go.sum"],
+  )
+}
+
 data "archive_file" "killswitch" {
   type        = "zip"
-  source_dir  = "${path.module}/killswitch"
   output_path = "${path.module}/.build/killswitch.zip"
-  excludes    = ["*_test.go"]
+
+  dynamic "source" {
+    for_each = local.killswitch_dateien
+    content {
+      filename = source.value
+      content  = file("${path.module}/killswitch/${source.value}")
+    }
+  }
 }
 
 resource "google_storage_bucket_object" "killswitch" {
