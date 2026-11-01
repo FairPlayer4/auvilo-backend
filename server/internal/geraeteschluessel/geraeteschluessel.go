@@ -59,6 +59,20 @@ func GeraetID(der []byte) string {
 	return hex.EncodeToString(summe[:16])
 }
 
+// IstGeraetID sagt, ob s das Format hat, das GeraetID erzeugt: genau 32
+// Zeichen 0-9 und a-f. So erreichen nur solche IDs den Speicher.
+func IstGeraetID(s string) bool {
+	if len(s) != 32 {
+		return false
+	}
+	for _, c := range s {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+			return false
+		}
+	}
+	return true
+}
+
 // Nonce ist der Wert, den das Gerät beim Google-Login als "nonce" mitschickt.
 // Google übernimmt ihn ins ID-Token; der Server vergleicht. So gehört ein
 // ID-Token zu genau einem Geräteschlüssel – ein abgefangenes Token nützt mit

@@ -137,3 +137,26 @@ func TestGeraetIDUndNonceSindStabilUndVerschieden(t *testing.T) {
 		t.Errorf("Geräte-ID hat Länge %d, erwartet 32", len(GeraetID(a)))
 	}
 }
+
+func TestIstGeraetID(t *testing.T) {
+	_, der := neuerSchluessel(t)
+	tests := []struct {
+		name string
+		id   string
+		want bool
+	}{
+		{"nimmt abgeleitete ID an", GeraetID(der), true},
+		{"lehnt leere ID ab", "", false},
+		{"lehnt Großbuchstaben ab", "ABCDEF0123456789ABCDEF0123456789", false},
+		{"lehnt 31 Zeichen ab", GeraetID(der)[:31], false},
+		{"lehnt 33 Zeichen ab", GeraetID(der) + "0", false},
+		{"lehnt Pfad ab", "0123456789abcdef/123456789abcdef", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := IstGeraetID(tt.id); got != tt.want {
+				t.Errorf("IstGeraetID(%q) = %v, erwartet %v", tt.id, got, tt.want)
+			}
+		})
+	}
+}

@@ -17,6 +17,7 @@ import (
 	v1 "github.com/FairPlayer4/avlreminder-backend/server/gen/avlreminder/v1"
 	"github.com/FairPlayer4/avlreminder-backend/server/gen/avlreminder/v1/avlreminderv1connect"
 	"github.com/FairPlayer4/avlreminder-backend/server/internal/anmeldung"
+	"github.com/FairPlayer4/avlreminder-backend/server/internal/geraeteschluessel"
 	"github.com/FairPlayer4/avlreminder-backend/server/internal/sitzung"
 	"github.com/FairPlayer4/avlreminder-backend/server/internal/speicher"
 )
@@ -138,7 +139,7 @@ func (d *dienste) Anmelden(ctx context.Context, req *connect.Request[v1.Anmelden
 
 func (d *dienste) SitzungErneuern(ctx context.Context, req *connect.Request[v1.SitzungErneuernRequest]) (*connect.Response[v1.SitzungErneuernResponse], error) {
 	geraetID := req.Msg.GetGeraetId()
-	if geraetID == "" || req.Msg.GetZeitpunkt().CheckValid() != nil {
+	if !geraeteschluessel.IstGeraetID(geraetID) || req.Msg.GetZeitpunkt().CheckValid() != nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("Geräte-ID und Zeitpunkt sind Pflicht"))
 	}
 	g, err := d.k.Speicher.Geraet(ctx, geraetID)
@@ -196,6 +197,10 @@ func (d *dienste) GeraetSperren(ctx context.Context, req *connect.Request[v1.Ger
 	id, err := identitaet(ctx)
 	if err != nil {
 		return nil, err
+	}
+	// Eine ID im falschen Format kann es nicht geben (wie unbekannt behandeln).
+	if !geraeteschluessel.IstGeraetID(req.Msg.GetGeraetId()) {
+		return nil, connect.NewError(connect.CodeNotFound, errors.New("Gerät nicht gefunden"))
 	}
 	// Gesperrt wird nur im eigenen Konto: Die Konto-ID kommt aus der Sitzung,
 	// nie aus der Anfrage.

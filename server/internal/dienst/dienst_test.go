@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -330,5 +331,38 @@ func TestNeuerHandlerVerlangtLangenPfeffer(t *testing.T) {
 	_, err := NeuerHandler(Konfiguration{Pruefer: &anmeldung.Pruefer{}, Speicher: speicher.NeuerArbeitsspeicher(), Pfeffer: []byte("kurz")})
 	if err == nil {
 		t.Error("kurzer Pfeffer angenommen, erwartet Fehler")
+	}
+}
+
+// Geräte-IDs aus Anfragen haben ein festes Format. Alles andere wird abgelehnt,
+// bevor der Speicher sie sieht (Firestore lehnt z. B. "a/b" mit einem Fehler ab,
+// der sonst als Speicherfehler im Log landet).
+func TestUngueltigeGeraeteIDWirdOhneSpeicherAbgelehnt(t *testing.T) {
+	ts := neuerTestServer(t)
+	ctx := context.Background()
+	handy := testhilfe.NeuesGeraet(t)
+	token := ts.anmelden(t, "google-kevin", handy).Sitzung.Token
+
+	tests := []struct {
+		name string
+		id   string
+	}{
+		{"Schrägstrich", "a/b"},
+		{"reservierter Name", "__x__"},
+		{"Großbuchstaben", strings.ToUpper(handy.ID())},
+		{"zu kurz", handy.ID()[:31]},
+		{"zu lang", handy.ID() + "0"},
+	}
+	for _, tt := range tests {
+		t.Run("Erneuern: "+tt.name, func(t *testing.T) {
+			req := ts.erneuerAnfrage(t, handy, ts.jetzt)
+			req.GeraetId = tt.id
+			_, err := ts.anmelde.SitzungErneuern(ctx, connect.NewRequest(req))
+			erwarteCode(t, err, connect.CodeInvalidArgument)
+		})
+		t.Run("Sperren: "+tt.name, func(t *testing.T) {
+			_, err := ts.geraete.GeraetSperren(ctx, mitSitzung(&v1.GeraetSperrenRequest{GeraetId: tt.id}, token))
+			erwarteCode(t, err, connect.CodeNotFound)
+		})
 	}
 }
