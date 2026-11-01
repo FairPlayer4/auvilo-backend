@@ -39,6 +39,33 @@ func TestEntscheide(t *testing.T) {
 	}
 }
 
+// Die konfigurierten Schwellen müssen wirklich in die Entscheidung eingehen,
+// nicht nur die Standardwerte.
+func TestEntscheideMitEigenenSchwellen(t *testing.T) {
+	eigene := Schwellen{Sperren: 0.8, Trennen: 1.2}
+	tests := []struct {
+		name   string
+		kosten float64
+		want   Aktion
+	}{
+		{"knapp unter 80 %: nichts tun", 15.99, Nichts},
+		{"genau 80 %: Dienste sperren", 16, DiensteSperren},
+		{"knapp unter 120 %: noch nicht trennen", 23.99, DiensteSperren},
+		{"genau 120 %: Abrechnung trennen", 24, AbrechnungTrennen},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := Entscheide(BudgetMeldung{CostAmount: tt.kosten, BudgetAmount: 20}, eigene)
+			if err != nil {
+				t.Fatalf("unerwarteter Fehler: %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("Aktion = %v, erwartet %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestSchwellenPruefe(t *testing.T) {
 	tests := []struct {
 		name    string
