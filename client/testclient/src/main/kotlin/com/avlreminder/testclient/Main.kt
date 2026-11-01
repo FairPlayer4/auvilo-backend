@@ -8,6 +8,9 @@
 // %APPDATA%\avlreminder – nie im Repo.
 package com.avlreminder.testclient
 
+import com.avlreminder.protokoll.Eingerichtet
+import com.avlreminder.protokoll.Einrichtung
+import com.avlreminder.protokoll.EinrichtungAbgebrochen
 import com.avlreminder.protokoll.Geraetenachrichten
 import com.avlreminder.schnittstelle.v1.AnmeldenRequest
 import com.avlreminder.schnittstelle.v1.GeraetSperrenRequest
@@ -43,7 +46,7 @@ fun main(args: Array<String>) {
         System.err.println("Fehler: ${e.message}")
         exitProcess(1)
     } catch (e: EinrichtungAbgebrochen) {
-        System.err.println("Einrichtung abgebrochen: ${e.message} - es wurde nichts gespeichert.")
+        System.err.println("Einrichtung abgebrochen: ${e.message}")
         exitProcess(1)
     }
 }
@@ -99,31 +102,30 @@ private class Werkzeug(
         speichereSitzung(antwort.kontoId, antwort.geraetId, antwort.sitzung)
         println("Angemeldet: Konto ${antwort.kontoId}, Gerät ${antwort.geraetId}" + if (antwort.neuesKonto) " (neues Konto)" else "")
 
-        val vorhanden = ablage.schluessel(name, antwort.kontoId)
-        if (vorhanden != null) {
-            println("Schlüssel sind auf diesem Gerät schon eingerichtet: ${vorhanden.person.oeffentlich.fingerabdruck()}")
-            return
-        }
         val ergebnis = Einrichtung(
             antwort.kontoId,
             ServerBackupAblage(verbindung, antwort.sitzung.token),
+            ablage.lokal(name, antwort.kontoId),
             frageSchluessel = {
                 print("Wiederherstellungsschlüssel (leer = Abbruch): ")
                 readlnOrNull()?.takeIf { it.isNotBlank() }
             },
-            meldung = ::println,
-        ).ausfuehren()
-        ablage.speichereSchluessel(name, antwort.kontoId, ergebnis.bund)
-        when (ergebnis) {
-            is Eingerichtet.Neu -> {
+            zeigeWiederherstellung = { schluessel ->
                 println()
-                println("Neue Schlüssel eingerichtet. Diesen Wiederherstellungsschlüssel aufschreiben -")
+                println("Neue Schlüssel erzeugt. Diesen Wiederherstellungsschlüssel aufschreiben -")
                 println("ohne ihn sind die Daten weg, wenn alle Geräte verloren sind:")
                 println()
-                println("    ${ergebnis.wiederherstellung.alsText()}")
+                println("    ${schluessel.alsText()}")
                 println()
-            }
+                print("Aufgeschrieben? \"ja\" eingeben (sonst Abbruch): ")
+                readlnOrNull()?.trim()?.lowercase() == "ja"
+            },
+            meldung = ::println,
+        ).ausfuehren()
+        when (ergebnis) {
+            is Eingerichtet.Neu -> println("Schlüssel eingerichtet, Backup hochgeladen.")
             is Eingerichtet.AusBackup -> println("Schlüssel aus dem Backup übernommen.")
+            is Eingerichtet.Vorhanden -> println("Schlüssel sind auf diesem Gerät schon eingerichtet.")
         }
         println("Fingerabdruck: ${ergebnis.bund.person.oeffentlich.fingerabdruck()}")
     }
@@ -160,9 +162,10 @@ private class Werkzeug(
 
     fun schluessel() {
         val s = ablage.sitzung(name)
-        val bund = ablage.schluessel(name, s.kontoId) ?: throw Bedienfehler("Auf diesem Gerät sind noch keine Schlüssel - zuerst anmelden.")
-        println("Fingerabdruck: ${bund.person.oeffentlich.fingerabdruck()}")
-        println("Tresorschlüssel: ${bund.tresor.versionen} Version(en)")
+        val stand = ablage.schluessel(name, s.kontoId) ?: throw Bedienfehler("Auf diesem Gerät sind noch keine Schlüssel - zuerst anmelden.")
+        println("Fingerabdruck: ${stand.bund.person.oeffentlich.fingerabdruck()}")
+        println("Tresorschlüssel: ${stand.bund.tresor.versionen} Version(en)")
+        if (stand.offenesBackup != null) println("Backup noch nicht hochgeladen - erneut anmelden.")
     }
 
     private fun speichereSitzung(kontoId: String, geraetId: String, sitzung: Sitzung) =

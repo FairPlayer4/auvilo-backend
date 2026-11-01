@@ -1,6 +1,8 @@
 package com.avlreminder.testclient
 
 import com.avlreminder.protokoll.Geraetenachrichten
+import com.avlreminder.protokoll.LokaleAblage
+import com.avlreminder.protokoll.LokalerStand
 import com.avlreminder.protokoll.Schluesselbund
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -42,7 +44,12 @@ data class GespeicherteSitzung(
 
 /** Lokal abgelegte Schlüssel eines Geräts (Klartext, nur Test-Client, E-B2-9). */
 @Serializable
-private data class GespeicherteSchluessel(val kontoId: String, val schluesselbund: String)
+private data class GespeicherteSchluessel(
+    val kontoId: String,
+    val schluesselbund: String,
+    /** Backup, das noch nicht sicher hochgeladen ist (Base64), sonst null. */
+    val offenesBackup: String? = null,
+)
 
 /**
  * Legt je Gerätename Dateien in [ordner] ab (standardmäßig
@@ -50,7 +57,7 @@ private data class GespeicherteSchluessel(val kontoId: String, val schluesselbun
  *
  *   geraet-<name>.pem         Geräteschlüssel (privat PKCS #8, öffentlich PKIX)
  *   sitzung-<name>.json       zuletzt erhaltene Sitzung
- *   schluessel-<name>.json    Personen- und Tresorschlüssel
+ *   schluessel-<name>.json    Personen- und Tresorschlüssel, ggf. offenes Backup
  *
  * Mehrere Namen simulieren mehrere Geräte.
  */
@@ -81,21 +88,29 @@ class Ablage(private val ordner: File) {
     }
 
     /** Die Schlüssel des Geräts, oder null, wenn es noch keine hat. */
-    fun schluessel(name: String, kontoId: String): Schluesselbund? {
+    fun schluessel(name: String, kontoId: String): LokalerStand? {
         val datei = datei("schluessel", name, "json")
         if (!datei.exists()) return null
         val s = json.decodeFromString<GespeicherteSchluessel>(datei.readText())
         if (s.kontoId != kontoId) {
             throw Bedienfehler("Gerät \"$name\" hat Schlüssel eines anderen Kontos - anderen Gerätenamen wählen oder $datei löschen.")
         }
-        return Schluesselbund.ausGeheimenBytes(Base64.getDecoder().decode(s.schluesselbund))
+        val b64 = Base64.getDecoder()
+        return LokalerStand(Schluesselbund.ausGeheimenBytes(b64.decode(s.schluesselbund)), s.offenesBackup?.let(b64::decode))
     }
 
-    fun speichereSchluessel(name: String, kontoId: String, bund: Schluesselbund) =
-        schreibe(
-            datei("schluessel", name, "json"),
-            json.encodeToString(GespeicherteSchluessel(kontoId, Base64.getEncoder().encodeToString(bund.geheimeBytes()))),
-        )
+    fun speichereSchluessel(name: String, kontoId: String, stand: LokalerStand) {
+        val b64 = Base64.getEncoder()
+        val gespeichert = GespeicherteSchluessel(kontoId, b64.encodeToString(stand.bund.geheimeBytes()), stand.offenesBackup?.let(b64::encodeToString))
+        schreibe(datei("schluessel", name, "json"), json.encodeToString(gespeichert))
+    }
+
+    /** Die Schlüsselablage eines Geräts für ein Konto, wie die [com.avlreminder.protokoll.Einrichtung] sie braucht. */
+    fun lokal(name: String, kontoId: String): LokaleAblage = object : LokaleAblage {
+        override fun laden() = schluessel(name, kontoId)
+
+        override fun speichern(stand: LokalerStand) = speichereSchluessel(name, kontoId, stand)
+    }
 
     private fun datei(art: String, name: String, endung: String): File {
         // Verhindert Pfade wie "../x" als Gerätename.

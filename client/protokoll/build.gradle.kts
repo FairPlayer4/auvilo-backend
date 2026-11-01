@@ -14,6 +14,7 @@ dependencies {
     testImplementation(platform(libs.junit.bom))
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.serialization.json)
+    testImplementation(libs.coroutines) // runBlocking für die Einrichtung (suspend)
     testRuntimeOnly(libs.junit.launcher)
 }
 

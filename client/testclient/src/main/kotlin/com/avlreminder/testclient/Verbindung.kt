@@ -1,5 +1,8 @@
 package com.avlreminder.testclient
 
+import com.avlreminder.protokoll.BackupAblage
+import com.avlreminder.protokoll.GeholtesBackup
+import com.avlreminder.protokoll.VersionVeraltet
 import com.avlreminder.schnittstelle.v1.AnmeldeDienstClient
 import com.avlreminder.schnittstelle.v1.BackupHolenRequest
 import com.avlreminder.schnittstelle.v1.BackupSpeichernRequest
