@@ -2,6 +2,7 @@ package killswitch
 
 import (
 	"errors"
+	"math"
 	"testing"
 )
 
@@ -77,6 +78,10 @@ func TestSchwellenPruefe(t *testing.T) {
 		{"lehnt Sperren über Trennen ab", Schwellen{2, 1}, true},
 		{"lehnt Sperren 0 ab", Schwellen{0, 1}, true},
 		{"lehnt negatives Trennen ab", Schwellen{1, -1}, true},
+		{"lehnt Trennen 0 ab", Schwellen{0.5, 0}, true},
+		{"lehnt NaN beim Sperren ab", Schwellen{math.NaN(), 1.5}, true},
+		{"lehnt NaN beim Trennen ab", Schwellen{1, math.NaN()}, true},
+		{"lehnt unendliches Trennen ab", Schwellen{1, math.Inf(1)}, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

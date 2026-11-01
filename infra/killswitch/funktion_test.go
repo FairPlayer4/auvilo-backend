@@ -52,6 +52,7 @@ func TestSchwellenAusUmgebung(t *testing.T) {
 		{"ohne Variablen: Standard", "", "", StandardSchwellen, false},
 		{"eigene Werte", "0.8", "1.2", Schwellen{0.8, 1.2}, false},
 		{"lehnt Text ab", "viel", "", StandardSchwellen, true},
+		{"lehnt NaN ab", "NaN", "", StandardSchwellen, true},
 		{"lehnt Sperren über Trennen ab", "2", "1", Schwellen{2, 1}, true},
 	}
 	for _, tt := range tests {

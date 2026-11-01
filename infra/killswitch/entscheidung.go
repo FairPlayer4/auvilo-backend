@@ -15,6 +15,7 @@ package killswitch
 import (
 	"errors"
 	"fmt"
+	"math"
 )
 
 // BudgetMeldung ist der Inhalt einer Pub/Sub-Nachricht des Budgets.
@@ -63,13 +64,16 @@ var StandardSchwellen = Schwellen{Sperren: 1.0, Trennen: 1.5}
 // Fehler, die Aufrufer gezielt prüfen können (errors.Is).
 var (
 	ErrUngueltigesBudget   = errors.New("Budget muss größer als 0 sein")
-	ErrUngueltigeSchwellen = errors.New("Schwellen müssen > 0 sein und Sperren <= Trennen")
+	ErrUngueltigeSchwellen = errors.New("Schwellen müssen endliche Zahlen > 0 sein und Sperren <= Trennen")
 	ErrUngueltigeKosten    = errors.New("Kosten dürfen nicht negativ sein")
 )
 
 // Pruefe stellt sicher, dass die Schwellen sinnvoll sind.
+// NaN muss eigens abgefangen werden: Jeder Vergleich mit NaN ist false, NaN
+// käme also durch die übrigen Prüfungen, und der Kill-Switch griffe nie.
 func (s Schwellen) Pruefe() error {
-	if s.Sperren <= 0 || s.Trennen <= 0 || s.Sperren > s.Trennen {
+	endlich := func(f float64) bool { return !math.IsNaN(f) && !math.IsInf(f, 0) }
+	if !endlich(s.Sperren) || !endlich(s.Trennen) || s.Sperren <= 0 || s.Trennen <= 0 || s.Sperren > s.Trennen {
 		return fmt.Errorf("%w: Sperren=%v, Trennen=%v", ErrUngueltigeSchwellen, s.Sperren, s.Trennen)
 	}
 	return nil

@@ -25,6 +25,12 @@ variable "budget_eur" {
   description = "Monatliches Budget in Euro"
   type        = number
   default     = 20
+
+  validation {
+    # Die Budget-API erwartet ganze Euro.
+    condition     = var.budget_eur > 0 && floor(var.budget_eur) == var.budget_eur
+    error_message = "Das Budget muss eine ganze Zahl größer 0 sein."
+  }
 }
 
 variable "schwelle_sperren" {
@@ -37,6 +43,13 @@ variable "schwelle_trennen" {
   description = "Anteil des Budgets, ab dem das Projekt vom Rechnungskonto getrennt wird"
   type        = number
   default     = 1.5
+
+  validation {
+    # Gleiche Regel wie Schwellen.Pruefe im Kill-Switch – so fällt ein Fehler
+    # schon beim Plan auf statt erst, wenn die Funktion jede Meldung ablehnt.
+    condition     = var.schwelle_sperren > 0 && var.schwelle_sperren <= var.schwelle_trennen
+    error_message = "Es muss gelten: 0 < schwelle_sperren <= schwelle_trennen."
+  }
 }
 
 variable "github_repo" {
