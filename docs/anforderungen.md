@@ -181,8 +181,10 @@ aber nicht **was**. Wird in der Datenschutzerklärung so benannt.
 ### 4.3 EU-Datenhaltung
 - D1 Alle Ressourcen in einer EU-Region. Ohne eigene Domain gibt es keine
   GCP-Organisation und damit keine Standortrichtlinie (`gcp.resourceLocations`).
-  Deshalb legt OpenTofu die Region zentral fest, und ein Test in der CI prüft den Plan
-  auf Regionen außerhalb der EU. Eine Organisation kann später nachgerüstet werden. [E]
+  Deshalb legt OpenTofu die Region zentral fest (Positivliste der EU-Regionen), und
+  die CI prüft das: `tofu test` plant mit simulierten Providern und prüft die
+  Standorte (`infra/tests/eu_regionen.tftest.hcl`), `infra/pruefe-regionen.sh`
+  findet fest eingetragene Standorte. Eine Organisation kann später nachgerüstet werden.
 - D2 Global arbeitende Google-Dienste nur inhaltsfrei: **Google-Login** (nur Prüfung
   des Tokens), **FCM** (leerer Push). Kein Firebase Auth.
 - D3 Vertex AI nur über regionale EU-Endpunkte; Caching und Datenspeicherung des

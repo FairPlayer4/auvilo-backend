@@ -60,3 +60,8 @@ jobs:
       # Ohne Backend: validate prüft nur die Konfiguration, nicht den Zustand in GCP.
       - name: Validieren
         run: tofu init -backend=false -input=false && tofu validate
+      # Anforderung D1 (nur EU): Ersatz für die Standortrichtlinie einer Organisation.
+      - name: Keine fest eingetragenen Standorte
+        run: ./pruefe-regionen.sh
+      - name: Tests (simulierte Provider, kein GCP-Zugang)
+        run: tofu test
