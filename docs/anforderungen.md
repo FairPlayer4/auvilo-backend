@@ -345,5 +345,5 @@ tragen die Tests die Spezifikation. Anleitung zum Review: [go-review.md](go-revi
 | 2026-11-01 | B2: Krypto mit Google Tink (JVM und Android); Personenschlüssel = HPKE/X25519 + Ed25519, Tresor- und Freigabe-Schlüssel XChaCha20-Poly1305 ([b2-entwurf.md](b2-entwurf.md)) |
 | 2026-11-01 | B2: Wiederherstellungsschlüssel = 256 Bit Zufall, gedruckt als Base32 in Vierergruppen mit Prüfzeichen |
 | 2026-11-01 | B2: Server speichert je Konto ein verschlüsseltes Schlüssel-Backup mit Version (kein Überschreiben eines neueren); Konto-ID als zugehörige Daten |
-| 2026-11-01 | B2: Erstes Gerät (neues_konto) erzeugt die Schlüssel; neues Gerät per QR erst in B3 |
+| 2026-11-01 | B2: Das erste Gerät ohne Backup erzeugt die Schlüssel (Version 0 verhindert doppelte); neues Gerät per QR erst in B3 |
 | 2026-11-01 | B2: Kotlin-Code aus proto im Gradle-Build erzeugt (javalite, connect-kotlin), nicht eingecheckt; gemeinsame Testvektoren für Kotlin und Go |
