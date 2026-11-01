@@ -32,7 +32,7 @@ Vom Entwickler bestätigt am 2026-11-01.
 | Kill-Switch | `infra/killswitch/` | anforderungen.md KO3, stand.md | `*_test.go` | 2026-11-01 (Lauf 1) | gut (E1 erledigt) |
 | Infrastruktur | `infra/*.tf` | anforderungen.md 4.3, 5, 6; gcp-einrichtung.md | `infra/tests/` (tofu test) | 2026-11-01 (Lauf 1) | gut (E2, E3, E6 erledigt) |
 | Server: Anmeldung/Sitzung | `server/internal/{geraeteschluessel,anmeldung,sitzung,dienst}`, `proto/` | b1-entwurf.md, anforderungen.md Kap. 11 | `*_test.go` | 2026-11-01 (Lauf 2) | gut; Testlücken (Streaming, Logs) |
-| Server: Speicher/Start | `server/internal/speicher`, `server/cmd/server` | b1-entwurf.md (Daten, Betrieb) | `vertrag_test.go` (auch Emulator), `main_test.go` | 2026-11-01 (Lauf 2) | ok; Gleichzeitigkeit ungetestet |
+| Server: Speicher/Start | `server/internal/speicher`, `server/cmd/server` | b1-entwurf.md (Daten, Betrieb) | `vertrag_test.go` (auch Emulator), `main_test.go` | 2026-11-01 (Lauf 2) | ok; Gleichzeitigkeit seit 2026-11-01 im Vertragstest |
 | Werkzeug testanmeldung | `server/cmd/testanmeldung` | b1-entwurf.md | `main_test.go` | 2026-11-01 (Lauf 2) | ok; Google-Flow ungetestet |
 | CI und Werkzeuge | `.github/`, `.golangci.yml`, `proto/buf*.yaml` | anforderungen.md Q4, go-review.md | – | 2026-11-01 (Lauf 2) | Matrix und buf neu; nie auf GitHub gelaufen |
 | Doku | `docs/`, `CLAUDE.md`, `README.md` | – | – | 2026-11-01 (Lauf 2, nur B1-Teile) | ok |
@@ -41,7 +41,9 @@ Vom Entwickler bestätigt am 2026-11-01.
 - 2026-11-01: Offene kleinere Empfehlungen aus Lauf 1: E4 (Modul-Matrix in der CI,
   spätestens mit `server/`), E5 (eigenes Registry-Repo für Funktionen), E7 (Herkunft
   der Budget-Meldung prüfen, optional), E8 (Zeitlimit beim Trennen).
-- 2026-11-01 (Lauf 2): Offene Empfehlungen: Vertragstest für Gleichzeitigkeit (major),
+- 2026-11-01 (Lauf 2): Offene Empfehlungen: ~~Vertragstest für Gleichzeitigkeit (major)~~
+  erledigt 2026-11-01 (drei Rennen-Fälle; Mutanten „Sperre/Gerät außerhalb der
+  Transaktion lesen“ und „Kennung ohne Transaktion“ fallen gegen den Emulator auf),
   Drossel beim Laden der Google-Schlüssel oder als Grenze dokumentieren, feste
   Pfeffer-Version in der Infrastruktur, Desktop-Client-ID im Betrieb entfernen (mit
   App), Testlücken (`googleIDToken`, Streaming, Logs, Sperr-Wettlauf in `dienst`),
