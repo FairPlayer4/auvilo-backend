@@ -296,9 +296,7 @@ tragen die Tests die Spezifikation. Anleitung zum Review: [go-review.md](go-revi
 
 ## 10. Offene Fragen
 
-1. **Kill-Switch-Schwellen**: umgesetzt wie empfohlen (100 % Dienste sperren, 150 %
-   Rechnungskonto trennen) – bitte bestätigen oder ändern.
-2. **Ferneinladung**: Wie wichtig ist sie für den Play Store? (Spätere Etappe.)
+1. **Ferneinladung**: Wie wichtig ist sie für den Play Store? (Spätere Etappe.)
 
 ## 11. Entscheidungen
 
@@ -332,3 +330,10 @@ tragen die Tests die Spezifikation. Anleitung zum Review: [go-review.md](go-revi
 | 2026-11-01 | Jeder Cloud-Run-Dienst mit eigenem Dienstkonto; Editor-Rolle der Google-Standardkonten entfernt |
 | 2026-11-01 | Budget zählt auch Gratis-Kontingent mit (`EXCLUDE_ALL_CREDITS`) – erlaubt später einen echten Test des Kill-Switch |
 | 2026-11-01 | Keine Pflicht-Statuschecks auf GitHub (Free, privat); „main nur per PR, CI grün“ ist Konvention |
+| 2026-11-01 | Kill-Switch-Schwellen bestätigt: ab 100 % Dienste sperren, ab 150 % Projekt vom Rechnungskonto trennen |
+| 2026-11-01 | B1: Gerät holt neue Sitzungen mit Signatur seines Geräteschlüssels, kein Refresh-Token ([b1-entwurf.md](b1-entwurf.md)) |
+| 2026-11-01 | B1: Geräteschlüssel ECDSA P-256 (Android Keystore inkl. StrongBox); Personen- und Freigabeschlüssel bleiben wie in 4.1 |
+| 2026-11-01 | B1: Sitzungs-Token zufällig, 1 Stunde gültig, auf dem Server nur als Hash; Sperren wirkt sofort |
+| 2026-11-01 | B1: Google-Konto-ID nur als HMAC mit geheimem Pfeffer (Secret Manager) gespeichert |
+| 2026-11-01 | B1: Test mit Go-Werkzeug `testanmeldung`; Kotlin-Test-Client ab B2 |
+| 2026-11-01 | Namen in Schnittstelle und Code deutsch, ohne Umlaute |

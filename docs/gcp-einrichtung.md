@@ -84,17 +84,39 @@ gcloud auth application-default set-quota-project avlreminder-exp-1ef2
 
 ## Später – Schritte im Browser je Etappe
 
-### B1: Google-Login einrichten [Kevin, mit Anleitung]
-Die Seite für den Zustimmungsbildschirm lässt sich nicht per API anlegen:
-1. Console → *Google Auth Platform* → *Branding*: App-Name „avlreminder (Test)“,
-   deine E-Mail als Support-Adresse.
-2. *Zielgruppe*: **Extern**, Status **Testen**. Dich (und später den Haushalt) als
-   **Testnutzer** eintragen. Nur Testnutzer können sich anmelden – gleich ein
-   Missbrauchsschutz.
-3. *Datenzugriff*: nur `openid` (keine E-Mail, kein Profil).
-4. *Clients* → *Client erstellen* → Typ **Desktop-App** (für den Test-Client).
-   Client-ID an Claude geben; das Client-Secret einer Desktop-App gilt nicht als
-   geheim, kommt aber trotzdem nicht ins Repo.
+### B1: Google-Login einrichten [Kevin, mit Anleitung] ✅ erledigt am 2026-11-01
+Client-ID des Test-Clients (Desktop-App, nicht geheim):
+`82416816442-vka4ve2no02681umqkn8b0rk37ri37qd.apps.googleusercontent.com`
+
+Zustimmungsbildschirm und OAuth-Client lassen sich nicht per API/OpenTofu anlegen.
+Oben links muss das Projekt **avlreminder-exp** ausgewählt sein.
+
+1. console.cloud.google.com/auth/overview → *Google Auth Platform* → **Jetzt starten**.
+   Der Assistent fragt:
+   - App-Informationen: Name **avlreminder (Test)**, Support-E-Mail: deine Adresse
+   - Zielgruppe: **Extern** (ohne Organisation die einzige Wahl)
+   - Kontaktdaten: deine Adresse
+   - Richtlinie zu Nutzerdaten akzeptieren → **Erstellen**
+2. *Zielgruppe*: Status bleibt **Testen** (nicht veröffentlichen). Unter
+   **Testnutzer** dein Google-Konto eintragen, den Haushalt später. Nur Testnutzer
+   können sich anmelden – gleich ein Missbrauchsschutz.
+3. *Datenzugriff*: **keine** Bereiche hinzufügen. `openid` ist immer dabei und reicht:
+   Das ID-Token enthält dann nur die Konto-ID (`sub`), keine E-Mail und keinen Namen
+   (Anforderung ID2). Ohne sensible Bereiche ist auch keine Prüfung durch Google nötig.
+4. *Clients* → **Client erstellen** → Anwendungstyp **Desktop-App**, Name
+   **Test-Client** → Erstellen. Im Dialog **JSON herunterladen**.
+   - Die JSON-Datei **nicht** ins Repo legen, sondern in den Ordner
+     `%APPDATA%\avlreminder\` (Name so lassen, wie Google ihn vergibt:
+     `client_secret_….json`).
+   - Claude nur die **Client-ID** nennen (`….apps.googleusercontent.com`); sie ist
+     nicht geheim und kommt in die Server-Konfiguration. Das Secret einer Desktop-App
+     gilt laut Google nicht als geheim, bleibt aber trotzdem lokal.
+
+Hinweise:
+- Im Status *Testen* zeigt Google beim Anmelden „Google hat diese App nicht
+  überprüft“ – für Testnutzer normal, weiter über *Fortfahren*.
+- Für die Android-App kommen später ein Web- und ein Android-Client dazu (Etappe
+  mit App-Anbindung); der Server akzeptiert dann mehrere Client-IDs.
 
 ### B4: Firebase für Push [Kevin, mit Anleitung]
 - console.firebase.google.com → *Projekt hinzufügen* → **bestehendes GCP-Projekt**
