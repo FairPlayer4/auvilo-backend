@@ -31,10 +31,10 @@ func TestVerarbeite(t *testing.T) {
 			if erg.Aktion != tt.wantAktion {
 				t.Errorf("Aktion = %v, erwartet %v", erg.Aktion, tt.wantAktion)
 			}
-			if p.getrennt != tt.wantGetrennt {
-				t.Errorf("getrennt = %v, erwartet %v", p.getrennt, tt.wantGetrennt)
+			if p.getrennt() != tt.wantGetrennt {
+				t.Errorf("getrennt = %v, erwartet %v", p.getrennt(), tt.wantGetrennt)
 			}
-			if tt.wantErr && (p.gesperrt || p.getrennt) {
+			if tt.wantErr && (p.gesperrt() || p.getrennt()) {
 				t.Error("bei ungültiger Meldung darf nichts passieren")
 			}
 		})

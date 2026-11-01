@@ -3,68 +3,73 @@ package killswitch
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 )
 
-// attrappe ersetzt GCP in Tests und merkt sich, was aufgerufen wurde.
+// attrappe ersetzt GCP in Tests und merkt sich, was in welcher Reihenfolge
+// aufgerufen wurde.
 type attrappe struct {
 	dienste     int
 	sperrFehler error
 	trennFehler error
-	gesperrt    bool
-	getrennt    bool
+	aufrufe     []string
 }
 
 func (a *attrappe) DiensteSperren(context.Context) (int, error) {
-	a.gesperrt = true
+	a.aufrufe = append(a.aufrufe, "sperren")
 	return a.dienste, a.sperrFehler
 }
 
 func (a *attrappe) AbrechnungTrennen(context.Context) error {
-	a.getrennt = true
+	a.aufrufe = append(a.aufrufe, "trennen")
 	return a.trennFehler
 }
 
+func (a *attrappe) gesperrt() bool { return slices.Contains(a.aufrufe, "sperren") }
+func (a *attrappe) getrennt() bool { return slices.Contains(a.aufrufe, "trennen") }
+
 func TestAusfuehren(t *testing.T) {
-	kaputt := errors.New("API-Fehler")
+	sperrKaputt := errors.New("Sperren-API-Fehler")
+	trennKaputt := errors.New("Billing-API-Fehler")
 	tests := []struct {
 		name         string
 		aktion       Aktion
 		p            attrappe
-		wantGesperrt bool
-		wantGetrennt bool
+		wantAufrufe  []string // genaue Reihenfolge der Eingriffe
 		wantErgTrenn bool
-		wantErr      bool
+		wantUrsachen []error // diese Fehler müssen per errors.Is im Ergebnis stecken
 	}{
-		{"nichts: keine Eingriffe", Nichts, attrappe{dienste: 2}, false, false, false, false},
-		{"sperren: nur Dienste sperren, nicht trennen", DiensteSperren, attrappe{dienste: 2}, true, false, false, false},
-		{"sperren: Fehler wird gemeldet", DiensteSperren, attrappe{sperrFehler: kaputt}, true, false, false, true},
-		{"trennen: sperrt zuerst und trennt dann", AbrechnungTrennen, attrappe{dienste: 1}, true, true, true, false},
-		{"trennen: trennt auch, wenn Sperren scheitert", AbrechnungTrennen, attrappe{sperrFehler: kaputt}, true, true, true, true},
-		{"trennen: Fehler beim Trennen wird gemeldet", AbrechnungTrennen, attrappe{trennFehler: kaputt}, true, true, false, true},
-		{"unbekannte Aktion: Fehler, keine Eingriffe", Aktion(42), attrappe{}, false, false, false, true},
+		{"nichts: keine Eingriffe", Nichts, attrappe{dienste: 2}, nil, false, nil},
+		{"sperren: nur Dienste sperren, nicht trennen", DiensteSperren, attrappe{dienste: 2}, []string{"sperren"}, false, nil},
+		{"sperren: Fehler wird gemeldet", DiensteSperren, attrappe{sperrFehler: sperrKaputt}, []string{"sperren"}, false, []error{sperrKaputt}},
+		{"trennen: sperrt zuerst und trennt dann", AbrechnungTrennen, attrappe{dienste: 1}, []string{"sperren", "trennen"}, true, nil},
+		{"trennen: trennt auch, wenn Sperren scheitert", AbrechnungTrennen, attrappe{sperrFehler: sperrKaputt}, []string{"sperren", "trennen"}, true, []error{sperrKaputt}},
+		{"trennen: Fehler beim Trennen wird gemeldet", AbrechnungTrennen, attrappe{trennFehler: trennKaputt}, []string{"sperren", "trennen"}, false, []error{trennKaputt}},
+		{"trennen: scheitern beide, werden beide Fehler gemeldet", AbrechnungTrennen, attrappe{sperrFehler: sperrKaputt, trennFehler: trennKaputt}, []string{"sperren", "trennen"}, false, []error{sperrKaputt, trennKaputt}},
+		{"unbekannte Aktion: Fehler, keine Eingriffe", Aktion(42), attrappe{}, nil, false, []error{}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			p := tt.p
 			erg, err := Ausfuehren(context.Background(), tt.aktion, &p)
-			if (err != nil) != tt.wantErr {
-				t.Fatalf("Fehler = %v, erwartet Fehler: %v", err, tt.wantErr)
+			wantErr := tt.wantUrsachen != nil
+			if (err != nil) != wantErr {
+				t.Fatalf("Fehler = %v, erwartet Fehler: %v", err, wantErr)
 			}
-			if err != nil && tt.p.sperrFehler != nil && !errors.Is(err, kaputt) {
-				t.Errorf("Ursache geht verloren: %v", err)
+			for _, ursache := range tt.wantUrsachen {
+				if !errors.Is(err, ursache) {
+					t.Errorf("Ursache %q fehlt im Fehler %q", ursache, err)
+				}
 			}
-			if p.gesperrt != tt.wantGesperrt {
-				t.Errorf("gesperrt = %v, erwartet %v", p.gesperrt, tt.wantGesperrt)
-			}
-			if p.getrennt != tt.wantGetrennt {
-				t.Errorf("Trennen aufgerufen = %v, erwartet %v", p.getrennt, tt.wantGetrennt)
+			if !slices.Equal(p.aufrufe, tt.wantAufrufe) {
+				t.Errorf("Aufrufe = %v, erwartet %v", p.aufrufe, tt.wantAufrufe)
 			}
 			if erg.AbrechnungGetrennt != tt.wantErgTrenn {
 				t.Errorf("Ergebnis getrennt = %v, erwartet %v", erg.AbrechnungGetrennt, tt.wantErgTrenn)
 			}
 			wantDienste := 0
-			if tt.wantGesperrt {
+			if p.gesperrt() {
 				wantDienste = tt.p.dienste
 			}
 			if erg.GesperrteDienste != wantDienste {
