@@ -47,7 +47,7 @@ sourceSets {
 // Der Connect-Generator ist ein Java-Programm (ein JAR), kein natives Werkzeug je
 // Plattform. Über "artifact" würde das Protobuf-Plugin eine Plattform-Variante
 // suchen, die es nicht gibt; deshalb holen wir das JAR selbst und geben den Pfad an.
-val connectGenerator: Configuration by configurations.creating { isTransitive = false }
+val connectGenerator = configurations.create("connectGenerator") { isTransitive = false }
 dependencies { connectGenerator(libs.connect.codegen) }
 
 protobuf {
