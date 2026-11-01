@@ -1,0 +1,30 @@
+# Go
+/bin/
+*.exe
+*.test
+*.out
+coverage.*
+
+# Kotlin/Gradle
+.gradle/
+.kotlin/
+build/
+
+# OpenTofu/Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+crash.log
+
+# Secrets und lokale Konfiguration
+.env
+*.key
+*.pem
+credentials*.json
+service-account*.json
+
+# IDE
+.idea/
+.vscode/
+*.iml
