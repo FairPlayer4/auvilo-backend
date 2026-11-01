@@ -26,9 +26,8 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
   öffentlich aufrufbar, eigenes Dienstkonto `server` (Firestore, nur Secret `pfeffer`).
   Adresse: `tofu output server_url`.
 - Secret `pfeffer` (nur europe-west1, feste Version 1, Wert nicht im Zustand).
-  **Offen:** Schutz gegen Löschen außerhalb von OpenTofu (`version_destroy_ttl`
-  30 Tage, `prevent_destroy` am Secret) ist im Code, aber noch nicht angewendet
-  (`tofu apply`: 1 Änderung in-place).
+  Schutz auch außerhalb von OpenTofu: Zerstörte Versionen bleiben 30 Tage
+  wiederherstellbar (`version_destroy_ttl`, angewendet 2026-11-01).
 - Firestore-TTL auf `sitzungen.laeuft_ab` (aktiv)
 - Deploy aus GitHub Actions (`.github/workflows/deploy.yml`) bei Merge nach `main`,
   wenn sich `server/**` oder der Workflow ändert (sonst von Hand starten). Beim
@@ -41,8 +40,7 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
   versioniert), angelegt per `gcloud`
 
 ## Geprüft
-- `tofu plan` ohne Abweichungen bis auf den noch nicht angewendeten Pfeffer-Schutz
-  (siehe oben); kein Konto im Projekt hat mehr die Editor-Rolle
+- `tofu plan` ohne Abweichungen; kein Konto im Projekt hat mehr die Editor-Rolle
 - Kill-Switch in der Cloud: Meldung 3 €/20 € → nichts; 22 €/20 € → Testdienst
   gesperrt (Log als WARNING in `logs-eu`), eigene Funktion nicht gesperrt.
   Testdienst danach gelöscht.

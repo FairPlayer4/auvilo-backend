@@ -60,11 +60,7 @@ Vom Entwickler bestätigt am 2026-11-01.
   - Nits: siehe runs/2026-11-01-3.md.
 
 ## Offene Fragen an den Entwickler
-Aus Lauf 3 (Details in runs/2026-11-01-3.md):
-1. Pfeffer-Schutz anwenden (`tofu apply`, 1 Änderung in-place)?
-2. Offline-Kopie des Pfeffers? Vorschlag: nein, bis es echte Nutzer gibt.
-3. IP-Adressen 30 Tage in den Anfrage-Logs als Entscheidung festhalten?
-4. Alte Kill-Switch-Images im Repo `container` löschen?
+Keine.
 
 ## Getroffene Entscheidungen
 - 2026-11-01: Architekturbild bestätigt.
@@ -80,5 +76,11 @@ Aus Lauf 3 (Details in runs/2026-11-01-3.md):
   (anforderungen.md Kap. 11, Test in dienst_test). Nicht erneut als Fund melden.
 - 2026-11-01 (Lauf 2): Geräte-IDs dürfen in Logs stehen (anforderungen.md Kap. 11).
   Nicht erneut als Fund melden; Token, `sub` und Inhalte bleiben verboten.
+- 2026-11-01 (nach Lauf 3): Pfeffer-Schutz angewendet (`tofu apply`).
+- 2026-11-01 (nach Lauf 3): Keine Offline-Kopie des Pfeffers bis zu echten Nutzern
+  (anforderungen.md Kap. 11). Nicht erneut als Fund melden.
+- 2026-11-01 (nach Lauf 3): IP-Adressen in den Anfrage-Logs 30 Tage sind gewollt
+  (anforderungen.md Kap. 11). Nicht erneut als Fund melden.
+- 2026-11-01 (nach Lauf 3): Alte Kill-Switch-Images im Repo `container` gelöscht.
 - 2026-11-01: `EXCLUDE_ALL_CREDITS` bleibt (auch Gratis-Kontingent zählt) – erlaubt einen
   späteren Live-Test des Kill-Switch. Nicht erneut als Fund melden.
