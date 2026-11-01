@@ -20,7 +20,7 @@ Etappe **B0** ist angelegt (OpenTofu, `infra/`):
   versioniert), angelegt per `gcloud`
 
 ## Geprüft
-- `tofu plan`: bis auf Punkt 1 unter „Offen“ ohne Abweichungen
+- `tofu plan` ohne Abweichungen; kein Konto im Projekt hat mehr die Editor-Rolle
 - Kill-Switch in der Cloud: Meldung 3 €/20 € → nichts; 22 €/20 € → Testdienst
   gesperrt (Log als WARNING in `logs-eu`), eigene Funktion nicht gesperrt.
   Testdienst danach gelöscht.
@@ -41,14 +41,11 @@ Etappe **B0** ist angelegt (OpenTofu, `infra/`):
   (Testdienst mit Standardkonto nach ca. 10 s gesperrt, danach gelöscht).
 
 ## Offen
-1. **Ein Rest aus `tofu apply`**: Die Editor-Rolle von `…@appspot.gserviceaccount.com`
-   ist noch nicht entfernt (409 „concurrent policy changes“ beim ersten Lauf).
-   `tofu plan` zeigt genau diese eine Änderung; mit `tofu apply` nachholen.
-2. Push von develop (11+ Commits), danach läuft die CI zum ersten Mal.
-3. Schwellen 100 %/150 % bestätigen oder ändern (`schwelle_sperren`,
+1. Push von develop, danach läuft die CI zum ersten Mal.
+2. Schwellen 100 %/150 % bestätigen oder ändern (`schwelle_sperren`,
    `schwelle_trennen` in `infra/variablen.tf`).
-4. Kleinere Empfehlungen aus dem Review: E4, E5, E7–E10 (siehe `.review/state.md`).
-5. Etappe **B1**: Go-Server auf Cloud Run, Google-Login (Zustimmungsbildschirm und
+3. Kleinere Empfehlungen aus dem Review: E4, E5, E7–E10 (siehe `.review/state.md`).
+4. Etappe **B1**: Go-Server auf Cloud Run, Google-Login (Zustimmungsbildschirm und
    OAuth-Client richtet Kevin nach [gcp-einrichtung.md](gcp-einrichtung.md) ein).
 
 ## Befehle
