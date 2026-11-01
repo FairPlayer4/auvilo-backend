@@ -23,3 +23,14 @@ updates:
       go:
         patterns: ["*"]
 
+  # Neue Versionen von connect oder protobuf: auch die Plugin-Versionen in
+  # .github/workflows/ci.yml (Job proto) und docs/entwicklungsumgebung.md anheben.
+  - package-ecosystem: gomod
+    directory: /server
+    target-branch: develop
+    schedule:
+      interval: weekly
+    groups:
+      go:
+        patterns: ["*"]
+

@@ -2,6 +2,9 @@
 # Die Plugins sind lokal installiert, Versionen in docs/entwicklungsumgebung.md
 # und in der CI festgelegt. Der erzeugte Code wird eingecheckt.
 version: v2
+# clean: Zielordner vorher leeren, damit Code gelöschter .proto-Dateien nicht
+# liegen bleibt (sonst merkt die Prüfung in der CI das nicht).
+clean: true
 managed:
   enabled: true
   override:
