@@ -144,6 +144,7 @@ func TestPruefe(t *testing.T) {
 		}, ErrToken},
 		{"lehnt fremden Aussteller ab", func() Anfrage { return u.anfrage(t, mit(gut, "iss", "https://evil.example")) }, ErrToken},
 		{"lehnt abgelaufenes Token ab", func() Anfrage { return u.anfrage(t, mit(gut, "exp", jetzt.Add(-time.Second).Unix())) }, ErrToken},
+		{"lehnt Token ohne exp ab", func() Anfrage { return u.anfrage(t, mit(gut, "exp", nil)) }, ErrToken},
 		{"lehnt Token ohne sub ab", func() Anfrage { return u.anfrage(t, mit(gut, "sub", nil)) }, ErrToken},
 		{"lehnt Müll als Token ab", func() Anfrage {
 			a := u.anfrage(t, gut)
@@ -169,6 +170,11 @@ func TestPruefe(t *testing.T) {
 		{"lehnt Token älter als 5 Minuten ab", func() Anfrage {
 			return u.anfrage(t, mit(gut, "iat", jetzt.Add(-MaxAlter-time.Second).Unix()))
 		}, ErrZuAlt},
+		// Fester Wert statt uhrAbweichung: sonst wanderte der Test mit der Konstante mit.
+		{"nimmt Token an, dessen iat 59 Sekunden in der Zukunft liegt (Uhr von Google vor)", func() Anfrage {
+			return u.anfrage(t, mit(gut, "iat", jetzt.Add(59*time.Second).Unix()))
+		}, nil},
+		{"lehnt Token ohne iat ab", func() Anfrage { return u.anfrage(t, mit(gut, "iat", nil)) }, ErrZuAlt},
 		{"lehnt Token aus der Zukunft ab", func() Anfrage {
 			return u.anfrage(t, mit(gut, "iat", jetzt.Add(2*time.Minute).Unix()))
 		}, ErrZuAlt},
