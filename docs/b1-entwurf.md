@@ -1,7 +1,9 @@
 # Entwurf Etappe B1: Server, Google-Login, Sitzungen, Geräte
 
 > Stand: 2026-11-01. Entscheidungen von Kevin **bestätigt** am 2026-11-01 (auch in
-> [anforderungen.md](anforderungen.md), Kap. 11). Umsetzung läuft.
+> [anforderungen.md](anforderungen.md), Kap. 11). Umgesetzt und abgeschlossen
+> (siehe [stand.md](stand.md)). Maßgeblich für Bytes, Kodierung und Fehlercodes
+> sind die Kommentare in `proto/avlreminder/v1/`.
 
 ## Ziel
 Am Ende von B1 kann sich ein Gerät mit einem Google-Konto anmelden, bekommt ein
@@ -29,7 +31,7 @@ E2E-Schlüssel (B2/B3).
 Gerät                                   Google                  Server
   | 1. Geräteschlüssel erzeugen (P-256)    |                        |
   | 2. Login im Browser, nonce =           |                        |
-  |    SHA-256(öffentlicher Schlüssel) --->|                        |
+  |    b64url(SHA-256(DER-Schlüssel)) ---->|                        |
   |<------------------ ID-Token (nonce) ---|                        |
   | 3. Anmelden(ID-Token, öffentl. Schlüssel, Signatur) ----------->|
   |                                        |   4. prüft (s. u.)     |
@@ -40,8 +42,9 @@ Der Server prüft in Schritt 4 (`// KRITISCH:`, jede Regel mit Ablehnungstest):
 1. Signatur des ID-Tokens gegen die öffentlichen Schlüssel von Google
 2. Aussteller `https://accounts.google.com`, Zielgruppe ist eine **unserer
    Client-IDs**, nicht abgelaufen, höchstens **5 Minuten** alt
-3. `nonce` im Token = SHA-256 des mitgeschickten öffentlichen Schlüssels. So passt ein
-   abgefangenes ID-Token nur zu genau diesem Geräteschlüssel.
+3. `nonce` im Token = SHA-256 des mitgeschickten öffentlichen Schlüssels (DER),
+   base64url ohne Auffüllung. So passt ein abgefangenes ID-Token nur zu genau
+   diesem Geräteschlüssel.
 4. Signatur über das ID-Token mit dem Geräteschlüssel. So beweist das Gerät, dass es
    den privaten Schlüssel hat.
 
@@ -165,8 +168,8 @@ abgelaufene Sitzung, Token nach dem Sperren.
 - Firestore: TTL-Regel für `sitzungen.laeuft_ab`.
 - Client-IDs als Variable `google_client_ids` (nicht geheim).
 - Container: mehrstufiges `Dockerfile`, Laufzeit-Image `distroless/static` als
-  Nicht-root. Erstes Image baue ich lokal; danach baut und deployt GitHub Actions bei
-  jedem Push auf `main` (Workload Identity, Konto `deploy` bekommt Deploy-Rechte nur
+  Nicht-root. Umgesetzt: Beim Anlegen läuft ein Platzhalter-Image; GitHub Actions
+  baut und deployt bei jedem Push auf `main`, der `server/**` ändert (Workload Identity, Konto `deploy` bekommt Deploy-Rechte nur
   auf diesen Dienst).
 - Kosten im Leerlauf: 0 €.
 

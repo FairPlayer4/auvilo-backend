@@ -6,4 +6,6 @@ Lernprojekt, vorerst nicht mit der App verbunden.
 
 ## Status
 
-Anforderungen in Arbeit: [`docs/anforderungen.md`](docs/anforderungen.md).
+Etappen B0 (Grundlagen) und B1 (Server, Anmeldung, Deploy) abgeschlossen; aktueller
+Stand in [`docs/stand.md`](docs/stand.md), Anforderungen in
+[`docs/anforderungen.md`](docs/anforderungen.md).

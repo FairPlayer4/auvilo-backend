@@ -29,7 +29,8 @@ type AnmeldenRequest struct {
 	GoogleIdToken string `protobuf:"bytes,1,opt,name=google_id_token,json=googleIdToken,proto3" json:"google_id_token,omitempty"`
 	// Öffentlicher Geräteschlüssel: ECDSA P-256, PKIX/DER.
 	Geraeteschluessel []byte `protobuf:"bytes,2,opt,name=geraeteschluessel,proto3" json:"geraeteschluessel,omitempty"`
-	// ECDSA-Signatur (ASN.1/DER) über "avlreminder/anmelden/v1\n" + google_id_token.
+	// ECDSA-Signatur (ASN.1/DER, SHA-256; Android: "SHA256withECDSA") über die
+	// UTF-8-Bytes von "avlreminder/anmelden/v1\n" + google_id_token.
 	Signatur      []byte `protobuf:"bytes,3,opt,name=signatur,proto3" json:"signatur,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -160,8 +161,9 @@ type SitzungErneuernRequest struct {
 	GeraetId string                 `protobuf:"bytes,1,opt,name=geraet_id,json=geraetId,proto3" json:"geraet_id,omitempty"`
 	// Uhrzeit des Geräts; darf höchstens 2 Minuten von der des Servers abweichen.
 	Zeitpunkt *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=zeitpunkt,proto3" json:"zeitpunkt,omitempty"`
-	// ECDSA-Signatur (ASN.1/DER) über
-	// "avlreminder/sitzung/v1\n" + geraet_id + "\n" + zeitpunkt in Unix-Sekunden.
+	// ECDSA-Signatur (ASN.1/DER, SHA-256) über die UTF-8-Bytes von
+	// "avlreminder/sitzung/v1\n" + geraet_id + "\n" + zeitpunkt in ganzen
+	// Unix-Sekunden als Dezimaltext (z. B. "1793534400").
 	Signatur      []byte `protobuf:"bytes,3,opt,name=signatur,proto3" json:"signatur,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -264,7 +266,8 @@ func (x *SitzungErneuernResponse) GetSitzung() *Sitzung {
 
 type Sitzung struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// Als "Authorization: Bearer <token>" mitschicken.
+	// Als "Authorization: Bearer <token>" mitschicken. Gilt 1 Stunde; vor
+	// laeuft_ab mit SitzungErneuern eine neue holen.
 	Token         string                 `protobuf:"bytes,1,opt,name=token,proto3" json:"token,omitempty"`
 	LaeuftAb      *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=laeuft_ab,json=laeuftAb,proto3" json:"laeuft_ab,omitempty"`
 	unknownFields protoimpl.UnknownFields

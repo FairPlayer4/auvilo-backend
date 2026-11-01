@@ -42,8 +42,8 @@ resource "google_service_account_iam_member" "deploy_github" {
   member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github.name}/attribute.repository_id/${var.github_repo_id}"
 }
 
-# Vorerst darf das Deploy-Konto nur Images hochladen. Rechte für Cloud Run
-# kommen mit dem Server in Etappe B1.
+# Das Deploy-Konto darf Images nur in dieses Repo hochladen (nicht in
+# "funktionen"). Seine Rechte auf den Dienst "server" stehen in server.tf.
 resource "google_artifact_registry_repository_iam_member" "deploy_schreiben" {
   location   = google_artifact_registry_repository.container.location
   repository = google_artifact_registry_repository.container.name

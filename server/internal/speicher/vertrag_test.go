@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -282,7 +283,11 @@ func pruefeVertrag(t *testing.T, neu func(t *testing.T) Speicher) {
 	// Zeit (Goroutinen = leichtgewichtige Threads). Ein Rennen tritt nicht in
 	// jedem Durchlauf auf; deshalb mehrere Runden mit je frischem Speicher.
 	// Fehler einzelner Aufrufe (etwa zu viele Konflikte in Firestore) sind
-	// erlaubt – geprüft wird, was danach im Speicher steht.
+	// erlaubt – geprüft wird, was danach im Speicher steht. Damit der Test nicht
+	// nur deshalb grün ist, weil jeder Aufruf scheitert, muss über alle Runden
+	// mindestens einer gelingen.
+	// Gegen den Speicher im Arbeitsspeicher beweisen diese Fälle wenig: Er hält
+	// eine Sperre über den ganzen Aufruf. Aussagekräftig sind sie gegen Firestore.
 
 	// KRITISCH: Gesperrt heißt sofort draußen. Egal wie Sperren und neue
 	// Sitzungen sich überschneiden: Danach darf keine Sitzung des Geräts übrig
@@ -302,6 +307,7 @@ func pruefeVertrag(t *testing.T, neu func(t *testing.T) Speicher) {
 	}
 	for _, rennen := range sperrRennen {
 		t.Run("Sperren gewinnt gegen gleichzeitiges "+rennen.name, func(t *testing.T) {
+			var erfolge atomic.Int32 // atomar: Goroutinen zählen gleichzeitig hoch
 			for runde := range gleichzeitigRunden {
 				s := neu(t)
 				e := anmelden(t, s, "kennung-a", "geraet-1", "hash-0", 0)
@@ -312,7 +318,14 @@ func pruefeVertrag(t *testing.T, neu func(t *testing.T) Speicher) {
 				for i := range gleichzeitigAufrufe {
 					hash := fmt.Sprintf("hash-%d-%d", runde, i+1)
 					hashes = append(hashes, hash)
-					wg.Go(func() { _ = rennen.aufruf(s, hash) })
+					wg.Go(func() {
+						switch err := rennen.aufruf(s, hash); {
+						case err == nil:
+							erfolge.Add(1)
+						case !errors.Is(err, ErrGeraetGesperrt):
+							t.Logf("Runde %d, %s: %v", runde, hash, err)
+						}
+					})
 					if i == gleichzeitigAufrufe/2 { // Sperren mitten zwischen den anderen starten
 						wg.Go(func() { sperrFehler = s.GeraetSperren(ctx, e.KontoID, "geraet-1", t0) })
 					}
@@ -325,6 +338,9 @@ func pruefeVertrag(t *testing.T, neu func(t *testing.T) Speicher) {
 						t.Fatalf("Runde %d: Sitzung %s des gesperrten Geräts ist noch da (Fehler: %v)", runde, hash, err)
 					}
 				}
+			}
+			if erfolge.Load() == 0 {
+				t.Fatal("kein einziger Aufruf gelungen – das Rennen hat nie stattgefunden")
 			}
 		})
 	}
@@ -382,7 +398,7 @@ func pruefeVertrag(t *testing.T, neu func(t *testing.T) Speicher) {
 }
 
 // Umfang der Gleichzeitigkeitsfälle: genug, dass Rennen gegen den Emulator
-// zuverlässig auftreten, und wenig genug für ca. 15 s Laufzeit.
+// zuverlässig auftreten, und wenig genug für ca. 35 s Laufzeit.
 const (
 	gleichzeitigRunden  = 5
 	gleichzeitigAufrufe = 8

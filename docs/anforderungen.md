@@ -134,7 +134,8 @@ liegt in einem Kotlin-Modul, das später in die App übernommen werden kann. [E]
 - B1 **Konto löschen** in der App **und über eine Webseite** (Pflicht im Play Store)
   löscht sofort Konto, Geräte, Mitgliedschaften und eigene Operationen.
 - B2 Auskunft/Export der eigenen Server-Daten (Art. 15/20); Inhalte hat die App ohnehin.
-- B3 Strukturierte Logs ohne Inhalte, ohne dauerhaft gespeicherte IP-Adressen.
+- B3 Strukturierte Logs ohne Inhalte, ohne dauerhaft gespeicherte IP-Adressen
+  (die Anfrage-Logs von Cloud Run mit IP höchstens 30 Tage, siehe Kap. 11).
 
 ### 3.6 Idee für später: Backup von Fotos und Audio (kostenpflichtig)
 Optionales Backup der Nachweis-Fotos und -Audios mit einem Kontingent, zum Preis
@@ -339,3 +340,5 @@ tragen die Tests die Spezifikation. Anleitung zum Review: [go-review.md](go-revi
 | 2026-11-01 | Namen in Schnittstelle und Code deutsch, ohne Umlaute |
 | 2026-11-01 | Abgefangene Anfragen dürfen sich im Zeitfenster wiederholen (Anmelden ca. 5 min, Erneuern ±2 min); keine Merkliste benutzter Signaturen. Schutz: TLS, kurze Fenster, Sitzung 1 h (Test `TestWiederholteAnfrageImZeitfensterGiltBewusst`) |
 | 2026-11-01 | Geräte-IDs (pseudonym) dürfen in Logs stehen, zur Fehlersuche und Missbrauchsabwehr (Art. 6 Abs. 1 f). Einzeln löschen geht in Cloud Logging nicht; stattdessen: Konto löschen trennt sofort die Zuordnung (Firestore), Logs laufen nach 30 Tagen ab (P5). In die Datenschutzerklärung (P4); vor B6 von jemandem mit Datenschutzerfahrung prüfen lassen |
+| 2026-11-01 | Anfrage-Logs von Cloud Run (mit IP-Adresse und User-Agent) bleiben 30 Tage in `logs-eu`, zur Missbrauchsabwehr (Art. 6 Abs. 1 f); „nicht dauerhaft“ im Sinne von B3. In die Datenschutzerklärung (P4) |
+| 2026-11-01 | Keine Offline-Kopie des Pfeffers, solange es keine echten Nutzer gibt; Schutz in GCP (`prevent_destroy`, 30 Tage wiederherstellbar). Vor echtem Betrieb neu entscheiden |

@@ -49,6 +49,10 @@
 
 ## 4. Werkzeuge – laufen in der CI, lokal genauso
 
+Go-Befehle im jeweiligen Modul (`server/`, `infra/killswitch/`), buf in `proto/`.
+`-race` geht unter Windows nicht (siehe [entwicklungsumgebung.md](entwicklungsumgebung.md));
+lokal dann ohne `-race`, die CI testet mit.
+
 ```bash
 go test -race -cover ./...
 ```
@@ -62,7 +66,7 @@ govulncheck ./...
 ```
 
 ```bash
-buf lint && buf breaking --against '.git#branch=main'
+cd proto && buf lint && buf breaking --against '../.git#ref=origin/main,subdir=proto'
 ```
 
 - `-race` findet gleichzeitige Zugriffe ohne Schutz.

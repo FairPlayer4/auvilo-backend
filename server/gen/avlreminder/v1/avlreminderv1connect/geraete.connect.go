@@ -46,6 +46,9 @@ type GeraeteDienstClient interface {
 	GeraeteAuflisten(context.Context, *connect.Request[v1.GeraeteAuflistenRequest]) (*connect.Response[v1.GeraeteAuflistenResponse], error)
 	// Sperrt ein eigenes Gerät sofort: Seine Sitzungen werden gelöscht, und es
 	// bekommt keine neue mehr. Das eigene Gerät zu sperren heißt abmelden.
+	// Endgültig: Mit demselben Geräteschlüssel lehnt der Server auch Anmelden
+	// ab (permission_denied). Wer sich wieder anmelden will, erzeugt einen
+	// neuen Geräteschlüssel; es gibt kein Entsperren.
 	GeraetSperren(context.Context, *connect.Request[v1.GeraetSperrenRequest]) (*connect.Response[v1.GeraetSperrenResponse], error)
 }
 
@@ -96,6 +99,9 @@ type GeraeteDienstHandler interface {
 	GeraeteAuflisten(context.Context, *connect.Request[v1.GeraeteAuflistenRequest]) (*connect.Response[v1.GeraeteAuflistenResponse], error)
 	// Sperrt ein eigenes Gerät sofort: Seine Sitzungen werden gelöscht, und es
 	// bekommt keine neue mehr. Das eigene Gerät zu sperren heißt abmelden.
+	// Endgültig: Mit demselben Geräteschlüssel lehnt der Server auch Anmelden
+	// ab (permission_denied). Wer sich wieder anmelden will, erzeugt einen
+	// neuen Geräteschlüssel; es gibt kein Entsperren.
 	GeraetSperren(context.Context, *connect.Request[v1.GeraetSperrenRequest]) (*connect.Response[v1.GeraetSperrenResponse], error)
 }
 
