@@ -1,12 +1,13 @@
 # Review-Gedächtnis
-Letzter Lauf: 2026-11-01 @ 44b2399 (Fixes auf review/2026-11-01)   Laufzähler: 1
+Letzter Lauf: 2026-11-01 @ 871e695 (Fixes auf review/2026-11-01-2)   Laufzähler: 2
 
 ## Beabsichtigte Architektur
 Vom Entwickler bestätigt am 2026-11-01.
 
 - **Monorepo:** `proto/` (Schnittstelle, Protobuf/Connect mit buf), `server/` (Go),
   `client/` (Kotlin: Protokoll-Modul und Test-Client), `infra/` (OpenTofu und
-  Hilfsfunktionen wie `killswitch`), `docs/`. Stand Lauf 1: nur `infra/` und `docs/`.
+  Hilfsfunktionen wie `killswitch`), `docs/`. Stand Lauf 2: `proto/`, `server/`, `infra/`,
+  `docs/`; `client/` kommt mit B2.
 - **Abhängigkeitsregeln:**
   - Server und Client hängen nur über `proto/` zusammen.
   - Krypto und Konfliktauflösung liegen ausschließlich im Client.
@@ -30,19 +31,31 @@ Vom Entwickler bestätigt am 2026-11-01.
 |---|---|---|---|---|---|
 | Kill-Switch | `infra/killswitch/` | anforderungen.md KO3, stand.md | `*_test.go` | 2026-11-01 (Lauf 1) | gut (E1 erledigt) |
 | Infrastruktur | `infra/*.tf` | anforderungen.md 4.3, 5, 6; gcp-einrichtung.md | `infra/tests/` (tofu test) | 2026-11-01 (Lauf 1) | gut (E2, E3, E6 erledigt) |
-| CI und Werkzeuge | `.github/workflows/`, `.golangci.yml` | anforderungen.md Q4, go-review.md | – | 2026-11-01 (Lauf 1) | ok; Modul-Matrix fehlt (E4) |
-| Doku | `docs/`, `CLAUDE.md`, `README.md` | – | – | nie | – |
+| Server: Anmeldung/Sitzung | `server/internal/{geraeteschluessel,anmeldung,sitzung,dienst}`, `proto/` | b1-entwurf.md, anforderungen.md Kap. 11 | `*_test.go` | 2026-11-01 (Lauf 2) | gut; Testlücken (Streaming, Logs) |
+| Server: Speicher/Start | `server/internal/speicher`, `server/cmd/server` | b1-entwurf.md (Daten, Betrieb) | `vertrag_test.go` (auch Emulator), `main_test.go` | 2026-11-01 (Lauf 2) | ok; Gleichzeitigkeit ungetestet |
+| Werkzeug testanmeldung | `server/cmd/testanmeldung` | b1-entwurf.md | `main_test.go` | 2026-11-01 (Lauf 2) | ok; Google-Flow ungetestet |
+| CI und Werkzeuge | `.github/`, `.golangci.yml`, `proto/buf*.yaml` | anforderungen.md Q4, go-review.md | – | 2026-11-01 (Lauf 2) | Matrix und buf neu; nie auf GitHub gelaufen |
+| Doku | `docs/`, `CLAUDE.md`, `README.md` | – | – | 2026-11-01 (Lauf 2, nur B1-Teile) | ok |
 
 ## Bekannte Schulden und beobachtete Drift
 - 2026-11-01: Offene kleinere Empfehlungen aus Lauf 1: E4 (Modul-Matrix in der CI,
   spätestens mit `server/`), E5 (eigenes Registry-Repo für Funktionen), E7 (Herkunft
   der Budget-Meldung prüfen, optional), E8 (Zeitlimit beim Trennen).
+- 2026-11-01 (Lauf 2): Offene Empfehlungen: Vertragstest für Gleichzeitigkeit (major),
+  Drossel beim Laden der Google-Schlüssel oder als Grenze dokumentieren, feste
+  Pfeffer-Version in der Infrastruktur, Desktop-Client-ID im Betrieb entfernen (mit
+  App), Testlücken (`googleIDToken`, Streaming, Logs, Sperr-Wettlauf in `dienst`),
+  testanmeldung an Server binden. E4 erledigt; E5, E8 mit dem Deploy von B1.
+- 2026-11-01 (Lauf 2): Beobachtung „Test hängt an der Konstante, die er prüfen soll“
+  (iat-Fall) – beim nächsten Lauf auf ähnliche Muster achten.
 - Erledigt nach Lauf 1 (in develop): E1 Sperr-Logik testbar (`sperren.go`), E2 Rechte
   verkleinert, E3 D1-Test in der CI, E6 Build-Konto ohne Builder-Rolle, E9 Alarm per
   E-Mail (`infra/alarm.tf`), E10 Actions auf Node 24 per SHA, Dependabot.
 
 ## Offene Fragen an den Entwickler
-Keine.
+- 2026-11-01 (Lauf 2): Wiederholte Anfragen im Zeitfenster (Anmelden ~5 min, Erneuern
+  ±2 min) bewusst zulassen? Vorschlag: ja, festhalten und Test ergänzen.
+- 2026-11-01 (Lauf 2): Geräte-IDs (pseudonym) in Logs zulassen? Vorschlag: ja.
 
 ## Getroffene Entscheidungen
 - 2026-11-01: Architekturbild bestätigt.
