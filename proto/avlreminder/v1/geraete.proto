@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+package avlreminder.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// Die eigenen Geräte verwalten. Alle Aufrufe brauchen eine Sitzung und wirken
+// nur auf das eigene Konto.
+service GeraeteDienst {
+  rpc GeraeteAuflisten(GeraeteAuflistenRequest) returns (GeraeteAuflistenResponse);
+
+  // Sperrt ein eigenes Gerät sofort: Seine Sitzungen werden gelöscht, und es
+  // bekommt keine neue mehr. Das eigene Gerät zu sperren heißt abmelden.
+  rpc GeraetSperren(GeraetSperrenRequest) returns (GeraetSperrenResponse);
+}
+
+message GeraeteAuflistenRequest {}
+
+message GeraeteAuflistenResponse {
+  repeated Geraet geraete = 1;
+}
+
+message Geraet {
+  string geraet_id = 1;
+  google.protobuf.Timestamp angemeldet_am = 2;
+  bool gesperrt = 3;
+  // true für das Gerät, das gerade anfragt.
+  bool dieses_geraet = 4;
+}
+
+message GeraetSperrenRequest {
+  string geraet_id = 1;
+}
+
+message GeraetSperrenResponse {}

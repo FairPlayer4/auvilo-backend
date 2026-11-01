@@ -8,7 +8,8 @@ angegeben.
 | Go | 1.27.3 | Server | `winget GoLang.Go` |
 | golangci-lint | 2.15.0 | Linter-Sammlung für Go | `winget GolangCI.golangci-lint` |
 | govulncheck | aktuell | bekannte Sicherheitslücken in Abhängigkeiten | `go install golang.org/x/vuln/cmd/govulncheck@latest` |
-| protoc-gen-go, protoc-gen-connect-go | aktuell | Go-Code aus Protobuf erzeugen | `go install …` (liegen in `%USERPROFILE%\go\bin`) |
+| protoc-gen-go | 1.36.12 | Go-Code aus Protobuf erzeugen | `go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.12` |
+| protoc-gen-connect-go | 1.21.1 | Connect-Code aus Protobuf erzeugen | `go install connectrpc.com/connect/cmd/protoc-gen-connect-go@v1.21.1` |
 | buf | 1.75.0 | Protobuf: Lint, Breaking-Check, Codegenerierung | `winget bufbuild.buf` |
 | OpenTofu (`tofu`) | 1.13.1 | Infrastruktur als Code | `winget OpenTofu.Tofu` |
 | Google Cloud CLI (`gcloud`) | 591.0.0 | GCP-Verwaltung | `winget Google.CloudSDK` (Benutzerverzeichnis) |
@@ -30,5 +31,13 @@ angegeben.
   meldet der Workflow `provider-check.yml` monatlich neue Versionen (fehlgeschlagener
   Lauf = Mail von GitHub). Aktualisiert wird von Hand mit `tofu init -upgrade` in
   `infra/`; ein neues Major erst nach Anheben der Grenze in `infra/versionen.tf`.
+- Die Versionen von buf und den beiden Plugins stehen auch in `.github/workflows/ci.yml`
+  (Job `proto`). Andere Versionen erzeugen anderen Code; dann meldet die CI „erzeugter
+  Code nicht aktuell“. Beim Aktualisieren beide Stellen ändern.
+- Code neu erzeugen nach Änderungen an `proto/`: `cd proto && buf generate`.
+- Firestore-Emulator für die Server-Tests (in einem eigenen Terminal):
+  `gcloud emulators firestore start --host-port=localhost:8086`, dann
+  `FIRESTORE_EMULATOR_HOST=localhost:8086 go test ./...` in `server/`. Ohne die
+  Variable werden die Firestore-Fälle übersprungen; in der CI sind sie Pflicht.
 - Netzwerkzugriffe (winget, `go install`, `gcloud`, `git push`) laufen in Claude Code
   außerhalb der Sandbox.

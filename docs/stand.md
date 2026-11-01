@@ -49,13 +49,18 @@ Etappe **B0** ist angelegt (OpenTofu, `infra/`):
   (Testdienst mit Standardkonto nach ca. 10 s gesperrt, danach gelöscht).
 
 ## Offen
-1. Push von develop, danach läuft die CI zum ersten Mal.
-2. Schwellen 100 %/150 % bestätigen oder ändern (`schwelle_sperren`,
-   `schwelle_trennen` in `infra/variablen.tf`).
-3. Kleinere Empfehlungen aus dem Review: E4, E5, E8 mit B1; E7 optional
+1. Etappe **B1** (begonnen 2026-11-01): Go-Server auf Cloud Run, Google-Login.
+   Entwurf: [b1-entwurf.md](b1-entwurf.md), bestätigt. **Lokal fertig:** Schnittstelle
+   (`proto/`), Server (`server/`) mit Tests gegen Speicher im Arbeitsspeicher und
+   Firestore-Emulator, Werkzeug `testanmeldung`, CI (Go-Module als Matrix = E4, buf).
+   Am 2026-11-01 lokal von Ende zu Ende getestet: echte Google-Anmeldung im Browser,
+   Erneuern, Auflisten, eigenes Gerät sperren (danach Sitzung ungültig, Erneuern
+   abgelehnt).
+   **Noch offen:** Infrastruktur (Cloud-Run-Dienst, Pfeffer im Secret Manager,
+   TTL auf `sitzungen.laeuft_ab`), Dockerfile, Deploy aus GitHub Actions – erst
+   nach Kevins Go zum Plan.
+2. Kleinere Empfehlungen aus dem Review: E5, E8 mit dem Deploy von B1; E7 optional
    (siehe `.review/state.md`).
-4. Etappe **B1**: Go-Server auf Cloud Run, Google-Login (Zustimmungsbildschirm und
-   OAuth-Client richtet Kevin nach [gcp-einrichtung.md](gcp-einrichtung.md) ein).
 
 ## Befehle
 ```bash
@@ -64,6 +69,28 @@ cd infra && tofu plan
 
 ```bash
 cd infra/killswitch && go test -cover ./...
+```
+
+Server lokal gegen den Firestore-Emulator (Emulator vorher starten, siehe
+[entwicklungsumgebung.md](entwicklungsumgebung.md)); `PFEFFER` ist ein Zufallswert
+nur für diesen Lauf:
+
+```bash
+cd server && FIRESTORE_EMULATOR_HOST=localhost:8086 PROJEKT=lokal GOOGLE_CLIENT_IDS=82416816442-vka4ve2no02681umqkn8b0rk37ri37qd.apps.googleusercontent.com PFEFFER=$(openssl rand -base64 32) go run ./cmd/server
+```
+
+Als Gerät anmelden (öffnet den Browser), zweites Gerät, Geräte auflisten:
+
+```bash
+cd server && go run ./cmd/testanmeldung anmelden
+```
+
+```bash
+cd server && go run ./cmd/testanmeldung -geraet handy anmelden
+```
+
+```bash
+cd server && go run ./cmd/testanmeldung geraete
 ```
 
 Kill-Switch von Hand auslösen (sperrt alle Cloud-Run-Dienste!):

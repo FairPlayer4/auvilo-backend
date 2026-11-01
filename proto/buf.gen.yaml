@@ -1,0 +1,19 @@
+# Erzeugt Go-Code für den Server: buf generate (im Ordner proto/).
+# Die Plugins sind lokal installiert, Versionen in docs/entwicklungsumgebung.md
+# und in der CI festgelegt. Der erzeugte Code wird eingecheckt.
+version: v2
+# clean: Zielordner vorher leeren, damit Code gelöschter .proto-Dateien nicht
+# liegen bleibt (sonst merkt die Prüfung in der CI das nicht).
+clean: true
+managed:
+  enabled: true
+  override:
+    - file_option: go_package_prefix
+      value: github.com/FairPlayer4/avlreminder-backend/server/gen
+plugins:
+  - local: protoc-gen-go
+    out: ../server/gen
+    opt: paths=source_relative
+  - local: protoc-gen-connect-go
+    out: ../server/gen
+    opt: paths=source_relative
