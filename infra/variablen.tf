@@ -10,9 +10,22 @@ variable "region" {
 
   validation {
     # Ersatz für die Standortrichtlinie einer Organisation: Alle Ressourcen
-    # nutzen diese Variable, und sie lässt nur europe-* zu.
-    condition     = can(regex("^europe-[a-z]+[0-9]+$", var.region))
-    error_message = "Nur EU-Regionen (europe-…) sind erlaubt."
+    # nutzen diese Variable. Positivliste statt "europe-*", denn europe-west2
+    # (London) und europe-west6 (Zürich) liegen nicht in der EU.
+    condition = contains([
+      "europe-central2",   # Warschau
+      "europe-north1",     # Finnland
+      "europe-north2",     # Stockholm
+      "europe-southwest1", # Madrid
+      "europe-west1",      # Belgien
+      "europe-west3",      # Frankfurt
+      "europe-west4",      # Niederlande
+      "europe-west8",      # Mailand
+      "europe-west9",      # Paris
+      "europe-west10",     # Berlin
+      "europe-west12",     # Turin
+    ], var.region)
+    error_message = "Nur Regionen innerhalb der EU sind erlaubt."
   }
 }
 
