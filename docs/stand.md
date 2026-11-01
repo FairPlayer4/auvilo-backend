@@ -20,7 +20,7 @@ Etappe **B0** ist angelegt (OpenTofu, `infra/`):
   `_Default`-Bucket bekommt nichts mehr. `_Required` (Admin-Audit) bleibt global.
 - Workload Identity Federation für GitHub Actions (nur Repo
   `FairPlayer4/avlreminder-backend`, nur Branch `main`), Dienstkonto `deploy` darf
-  vorerst nur Images hochladen
+  Images ins Repo `container` hochladen und den Dienst `server` ändern (B1)
 Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
 - Cloud-Run-Dienst `server` (0–2 Instanzen, 256 MiB, CPU nur bei Anfragen),
   öffentlich aufrufbar, eigenes Dienstkonto `server` (Firestore, nur Secret `pfeffer`).
@@ -45,9 +45,18 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
 - **Bekannte Grenze:** Ab 100 % sperrt der Kill-Switch nur Cloud-Run-**Dienste** in
   `var.region`. Cloud-Run-Jobs und Dienste in anderen Regionen bleiben offen; dafür
   greift erst das Trennen ab 150 %. Kommen solche dazu, den Kill-Switch erweitern.
-- **Bekannte Grenze:** Das Deploy-Konto darf den Dienst `server` ändern und könnte
-  damit technisch auch den vom Kill-Switch gesperrten Ingress wieder öffnen. Der
-  Deploy selbst ändert nur das Image; ab 150 % trennt der Kill-Switch ohnehin.
+- **Bekannte Grenze (Deploy-Konto):** Es darf den Dienst `server` ändern
+  (`roles/run.developer`) und könnte damit technisch mehr als das Image setzen:
+  den vom Kill-Switch gesperrten Ingress wieder öffnen, Mindestinstanzen, CPU
+  dauerhaft, bis zu 100 Instanzen, oder den Dienst löschen. Mindestinstanzen
+  kosten auch nach dem Sperren weiter, bis ab 150 % getrennt wird. Der Deploy
+  selbst ändert nur das Image; `tofu apply` setzt alles außer Image und Ingress
+  zurück. Voraussetzung wäre fremder Code auf `main`.
+- **Bekannte Grenze (Kill-Switch):** Er darf Dienste ändern und dabei die
+  eingetragenen Laufzeitkonten benutzen (actAs, nötig fürs Sperren). Eine
+  kompromittierte Abhängigkeit im Kill-Switch könnte so ein fremdes Image als
+  Konto `server` starten (Firestore, Pfeffer). Vor echten Daten (B6) prüfen, ob
+  das Sperren ohne actAs geht (Review Lauf 3).
 - Go-Tests: Entscheidung, Ausführung, Verarbeitung und Sperr-Logik (`sperren.go`)
   sind getestet. `gcp.go` enthält nur noch die Cloud-Aufrufe und wird durch den
   Test in der Cloud geprüft.

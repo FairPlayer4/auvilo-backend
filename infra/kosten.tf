@@ -75,9 +75,10 @@ resource "google_service_account" "bauen" {
 }
 
 # Eigene Rolle statt roles/run.developer: Der Kill-Switch darf Dienste nur
-# lesen und ändern, aber keine neuen Dienste oder Jobs anlegen. Sonst könnte
-# Code im Kill-Switch (z. B. eine kompromittierte Abhängigkeit) eigene
-# Container mit fremden Dienstkonten starten.
+# lesen und ändern, aber keine neuen Dienste oder Jobs anlegen und nichts
+# löschen. Grenze: "ändern" umfasst auch das Image. Zusammen mit actAs auf die
+# Laufzeitkonten (unten) könnte kompromittierter Code im Kill-Switch ein
+# fremdes Image als z. B. Konto "server" starten (siehe docs/stand.md).
 resource "google_project_iam_custom_role" "killswitch_cloud_run" {
   role_id     = "killswitchCloudRun"
   title       = "Kill-Switch: Cloud-Run-Dienste sperren"
