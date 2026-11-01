@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+// Formate, die nur Clients lesen: Der Server sieht sie nie im Klartext und
+// bekommt dafür keinen Code (buf.gen.yaml schließt diesen Ordner aus).
+package avlreminder.inhalt.v1;
+
+option java_multiple_files = true;
+option java_package = "com.avlreminder.protokoll.inhalt.v1";
+
+// Inhalt des Schlüssel-Backups, bevor es mit dem Wiederherstellungsschlüssel
+// verschlüsselt wird. Die Felder sind Tink-Keysets im Binärformat
+// (TinkProtoKeysetFormat), jeweils mit dem privaten Teil.
+message SchluesselBackup {
+  // Personenschlüssel zum Entpacken (HPKE mit X25519): Andere verpacken
+  // Freigabe-Schlüssel für diese Person.
+  bytes person_entpacken = 1;
+  // Personenschlüssel zum Signieren (Ed25519).
+  bytes person_signieren = 2;
+  // Tresorschlüssel (XChaCha20-Poly1305) für die eigenen Daten.
+  bytes tresor = 3;
+}

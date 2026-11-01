@@ -1,4 +1,5 @@
-# Prüft Go-Code, Schnittstelle (proto) und OpenTofu-Konfiguration. Braucht keinen Zugang zu GCP.
+# Prüft Go-Code, Kotlin-Client, Schnittstelle (proto) und OpenTofu-Konfiguration.
+# Braucht keinen Zugang zu GCP.
 name: CI
 
 on:
@@ -77,6 +78,30 @@ jobs:
           args: --config ${{ github.workspace }}/.golangci.yml
       - name: govulncheck
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+
+  # Kotlin-Client (client/): Protokoll-Modul und Test-Client. Gradle kommt über
+  # den Wrapper; dessen JAR wird vorher gegen die offiziellen Prüfsummen geprüft.
+  # Die Tests lesen dieselben Testvektoren wie der Go-Job (proto/testvektoren).
+  kotlin:
+    name: Kotlin – client
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Gradle-Wrapper prüfen
+        uses: gradle/actions/wrapper-validation@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: microsoft # wie lokal (docs/entwicklungsumgebung.md)
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+      - name: Bauen und testen
+        run: ./gradlew check --console=plain
 
   # Baut das Server-Image wie der Deploy (.github/workflows/deploy.yml), lädt es
   # aber nirgends hoch. So fällt ein kaputtes Dockerfile vor dem Merge auf.

@@ -15,6 +15,7 @@ type Arbeitsspeicher struct {
 	kennungen map[string]string // Kennung → Konto-ID
 	geraete   map[string]Geraet // Geräte-ID → Gerät
 	sitzungen map[string]Sitzung
+	backups   map[string]Backup // Konto-ID → Backup
 }
 
 // NeuerArbeitsspeicher legt einen leeren Speicher an.
@@ -23,6 +24,7 @@ func NeuerArbeitsspeicher() *Arbeitsspeicher {
 		kennungen: map[string]string{},
 		geraete:   map[string]Geraet{},
 		sitzungen: map[string]Sitzung{},
+		backups:   map[string]Backup{},
 	}
 }
 
@@ -124,6 +126,29 @@ func (a *Arbeitsspeicher) GeraetSperren(_ context.Context, kontoID, geraetID str
 		}
 	}
 	return nil
+}
+
+func (a *Arbeitsspeicher) BackupSpeichern(_ context.Context, kontoID string, chiffrat []byte, erwartet int64, jetzt time.Time) (int64, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	// Ohne Eintrag liefert die Map den Nullwert: Version 0 = es gibt keins.
+	if a.backups[kontoID].Version != erwartet {
+		return 0, ErrVersionVeraltet
+	}
+	b := Backup{Chiffrat: slices.Clone(chiffrat), Version: erwartet + 1, Geaendert: jetzt.UTC().Truncate(time.Millisecond)}
+	a.backups[kontoID] = b
+	return b.Version, nil
+}
+
+func (a *Arbeitsspeicher) BackupHolen(_ context.Context, kontoID string) (Backup, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	b, ok := a.backups[kontoID]
+	if !ok {
+		return Backup{}, ErrNichtGefunden
+	}
+	b.Chiffrat = slices.Clone(b.Chiffrat) // Kopie: Der Aufrufer soll den Speicher nicht verändern können
+	return b, nil
 }
 
 // sortiereGeraete sortiert nach Erstellung, bei Gleichstand nach ID – so ist

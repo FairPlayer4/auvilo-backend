@@ -16,6 +16,7 @@ const (
 	sammlungKonten    = "konten"           // Dokument-ID: Konto-ID
 	sammlungGeraete   = "geraete"          // Dokument-ID: Geräte-ID
 	sammlungSitzungen = "sitzungen"        // Dokument-ID: Hash des Tokens; TTL auf laeuft_ab
+	sammlungBackups   = "backups"          // Dokument-ID: Konto-ID (siehe docs/b2-entwurf.md)
 )
 
 // Dokumente, wie sie in Firestore liegen. Die Tags "firestore:..." geben die
@@ -40,6 +41,12 @@ type sitzungDok struct {
 	KontoID  string    `firestore:"konto_id"`
 	GeraetID string    `firestore:"geraet_id"`
 	LaeuftAb time.Time `firestore:"laeuft_ab"`
+}
+
+type backupDok struct {
+	Chiffrat  []byte    `firestore:"chiffrat"`
+	Version   int64     `firestore:"version"`
+	Geaendert time.Time `firestore:"geaendert_am"`
 }
 
 // Firestore speichert in der Firestore-Datenbank des Projekts.
@@ -273,6 +280,54 @@ func (f *Firestore) GeraetSperren(ctx context.Context, kontoID, geraetID string,
 		return fmt.Errorf("Gerät sperren: %w", err)
 	}
 	return nil
+}
+
+// BackupSpeichern erfüllt Speicher.BackupSpeichern.
+//
+// KRITISCH: Version lesen und Backup schreiben in einer Transaktion. Ändert
+// ein anderes Gerät das Backup dazwischen, wiederholt Firestore die Funktion,
+// und die Versionsprüfung schlägt dann fehl – nie gewinnen beide.
+func (f *Firestore) BackupSpeichern(ctx context.Context, kontoID string, chiffrat []byte, erwartet int64, jetzt time.Time) (int64, error) {
+	ref := f.c.Collection(sammlungBackups).Doc(kontoID)
+	var neu int64
+	err := f.c.RunTransaction(ctx, func(ctx context.Context, tx *firestore.Transaction) error {
+		var aktuell int64 // 0, falls es noch keins gibt
+		snap, err := tx.Get(ref)
+		switch {
+		case err == nil:
+			var bd backupDok
+			if err := snap.DataTo(&bd); err != nil {
+				return err
+			}
+			aktuell = bd.Version
+		case !nichtGefunden(err):
+			return err
+		}
+		if aktuell != erwartet {
+			return ErrVersionVeraltet
+		}
+		neu = erwartet + 1
+		return tx.Set(ref, backupDok{Chiffrat: chiffrat, Version: neu, Geaendert: jetzt.UTC().Truncate(time.Millisecond)})
+	})
+	if err != nil {
+		return 0, fmt.Errorf("Backup speichern: %w", err)
+	}
+	return neu, nil
+}
+
+func (f *Firestore) BackupHolen(ctx context.Context, kontoID string) (Backup, error) {
+	snap, err := f.c.Collection(sammlungBackups).Doc(kontoID).Get(ctx)
+	if nichtGefunden(err) {
+		return Backup{}, ErrNichtGefunden
+	}
+	if err != nil {
+		return Backup{}, err
+	}
+	var bd backupDok
+	if err := snap.DataTo(&bd); err != nil {
+		return Backup{}, err
+	}
+	return Backup{Chiffrat: bd.Chiffrat, Version: bd.Version, Geaendert: bd.Geaendert.UTC()}, nil
 }
 
 func geraetAus(snap *firestore.DocumentSnapshot) (Geraet, error) {

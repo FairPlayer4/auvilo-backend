@@ -22,6 +22,9 @@ var (
 	ErrGeraetGesperrt = errors.New("Gerät ist gesperrt")
 	// ErrGeraetFremd: Der Geräteschlüssel gehört schon zu einem anderen Konto.
 	ErrGeraetFremd = errors.New("Gerät gehört zu einem anderen Konto")
+	// ErrVersionVeraltet: Das Backup wurde inzwischen von einem anderen Gerät
+	// geändert (die erwartete Version stimmt nicht).
+	ErrVersionVeraltet = errors.New("Backup-Version passt nicht")
 )
 
 // Geraet ist ein angemeldetes Gerät.
@@ -54,6 +57,14 @@ type NeueSitzung struct {
 type AnmeldeErgebnis struct {
 	KontoID    string
 	NeuesKonto bool
+}
+
+// Backup ist das verschlüsselte Schlüssel-Backup eines Kontos (B2). Der Server
+// kann es nicht lesen; er kennt nur Größe, Version und Änderungszeitpunkt.
+type Backup struct {
+	Chiffrat  []byte
+	Version   int64 // zählt ab 1; 0 heißt "es gibt keins"
+	Geaendert time.Time
 }
 
 // Speicher ist alles, was die Dienste vom Speicher brauchen.
@@ -89,6 +100,18 @@ type Speicher interface {
 	// KRITISCH: Nur Geräte des angegebenen Kontos. Ein fremdes Gerät meldet
 	// ErrNichtGefunden – so verrät der Server nicht, ob es die ID gibt.
 	GeraetSperren(ctx context.Context, kontoID, geraetID string, jetzt time.Time) error
+
+	// BackupSpeichern legt das Backup des Kontos ab oder ersetzt es und
+	// liefert die neue Version (erwartet + 1).
+	//
+	// KRITISCH: Geschrieben wird nur, wenn die gespeicherte Version gleich
+	// erwartet ist (0 = es gibt noch keins), geprüft in derselben Transaktion.
+	// Sonst ErrVersionVeraltet und nichts ändert sich. So überschreibt ein Gerät
+	// nie unbemerkt ein Backup, das ein anderes Gerät inzwischen geändert hat.
+	BackupSpeichern(ctx context.Context, kontoID string, chiffrat []byte, erwartet int64, jetzt time.Time) (int64, error)
+
+	// BackupHolen liefert das Backup des Kontos oder ErrNichtGefunden.
+	BackupHolen(ctx context.Context, kontoID string) (Backup, error)
 }
 
 // neueKontoID erzeugt eine zufällige Konto-ID (128 Bit, hexadezimal).

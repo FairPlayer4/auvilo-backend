@@ -342,3 +342,8 @@ tragen die Tests die Spezifikation. Anleitung zum Review: [go-review.md](go-revi
 | 2026-11-01 | Geräte-IDs (pseudonym) dürfen in Logs stehen, zur Fehlersuche und Missbrauchsabwehr (Art. 6 Abs. 1 f). Einzeln löschen geht in Cloud Logging nicht; stattdessen: Konto löschen trennt sofort die Zuordnung (Firestore), Logs laufen nach 30 Tagen ab (P5). In die Datenschutzerklärung (P4); vor B6 von jemandem mit Datenschutzerfahrung prüfen lassen |
 | 2026-11-01 | Anfrage-Logs von Cloud Run (mit IP-Adresse und User-Agent) bleiben 30 Tage in `logs-eu`, zur Missbrauchsabwehr (Art. 6 Abs. 1 f); „nicht dauerhaft“ im Sinne von B3. In die Datenschutzerklärung (P4) |
 | 2026-11-01 | Keine Offline-Kopie des Pfeffers, solange es keine echten Nutzer gibt; Schutz in GCP (`prevent_destroy`, 30 Tage wiederherstellbar). Vor echtem Betrieb neu entscheiden |
+| 2026-11-01 | B2: Krypto mit Google Tink (JVM und Android); Personenschlüssel = HPKE/X25519 + Ed25519, Tresor- und Freigabe-Schlüssel XChaCha20-Poly1305 ([b2-entwurf.md](b2-entwurf.md)) |
+| 2026-11-01 | B2: Wiederherstellungsschlüssel = 256 Bit Zufall, gedruckt als Base32 in Vierergruppen mit Prüfzeichen |
+| 2026-11-01 | B2: Server speichert je Konto ein verschlüsseltes Schlüssel-Backup mit Version (kein Überschreiben eines neueren); Konto-ID als zugehörige Daten |
+| 2026-11-01 | B2: Erstes Gerät (neues_konto) erzeugt die Schlüssel; neues Gerät per QR erst in B3 |
+| 2026-11-01 | B2: Kotlin-Code aus proto im Gradle-Build erzeugt (javalite, connect-kotlin), nicht eingecheckt; gemeinsame Testvektoren für Kotlin und Go |

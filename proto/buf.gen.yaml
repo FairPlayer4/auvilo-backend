@@ -10,6 +10,12 @@ managed:
   override:
     - file_option: go_package_prefix
       value: github.com/FairPlayer4/avlreminder-backend/server/gen
+# avlreminder/inhalt: Formate, die nur Clients lesen – der Server bekommt dafür
+# keinen Code. Kotlin-Code entsteht im Gradle-Build unter client/.
+inputs:
+  - directory: .
+    exclude_paths:
+      - avlreminder/inhalt
 plugins:
   - local: protoc-gen-go
     out: ../server/gen

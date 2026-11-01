@@ -88,7 +88,20 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
    Google-Anmeldung, Erneuern, Auflisten, eigenes Gerät sperren (danach Sitzung
    ungültig, Erneuern abgelehnt). Logs enthalten Geräte-ID und Grund, kein Token.
    Damit ist B1 abgeschlossen.
-2. Kleinere Empfehlungen aus dem Review: E7 optional; weitere aus Lauf 2 in
+2. Etappe **B2** (begonnen 2026-11-01): Schlüsselmodell und Schlüssel-Backup.
+   Entwurf: [b2-entwurf.md](b2-entwurf.md), bestätigt. **Lokal fertig:**
+   Kotlin-Client `client/` (Gradle) mit Modul `protokoll` (Tink: Personen-, Tresor-
+   und Wiederherstellungsschlüssel, Backup, Umschlag, Signatur) und Test-Client
+   `testclient`; gemeinsame Testvektoren mit Go (`proto/testvektoren`); Server-Dienst
+   `SchluesselDienst` (Firestore-Sammlung `backups`, Version per Transaktion);
+   CI-Job „Kotlin – client“, Dependabot für Gradle.
+   Am 2026-11-01 lokal von Ende zu Ende getestet (echte Google-Anmeldung): Gerät
+   `pc` richtet neue Schlüssel ein; Gerät `tablet` bricht nach drei falschen
+   Eingaben ab, ohne etwas zu speichern; Gerät `handy` übernimmt mit dem richtigen
+   Wiederherstellungsschlüssel das Backup (gleicher Fingerabdruck wie `pc`).
+   **Offen:** Deploy und Test in der Cloud, Review-Lauf 4. Danach kann
+   `testanmeldung` (Go) weg.
+3. Kleinere Empfehlungen aus dem Review: E7 optional; weitere aus Lauf 2 in
    `.review/state.md`.
 
 ## Befehle
@@ -126,6 +139,17 @@ Gegen den Server in der Cloud (Adresse aus `tofu output server_url`):
 
 ```bash
 cd server && go run ./cmd/testanmeldung -server "$(cd ../infra && tofu output -raw server_url)" -geraet cloud anmelden
+```
+
+Test-Client (Kotlin, B2) bauen, dann als Gerät anmelden und Schlüssel einrichten
+bzw. aus dem Backup holen (weitere Befehle mit `--hilfe`):
+
+```bash
+cd client && ./gradlew :testclient:installDist
+```
+
+```bash
+./client/testclient/build/install/testclient/bin/testclient --geraet pc anmelden
 ```
 
 Kill-Switch von Hand auslösen (sperrt alle Cloud-Run-Dienste!):

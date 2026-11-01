@@ -44,3 +44,12 @@ updates:
       go:
         patterns: ["*"]
 
+  # Kotlin-Client: Versionen stehen in client/gradle/libs.versions.toml.
+  - package-ecosystem: gradle
+    directory: /client
+    target-branch: develop
+    schedule:
+      interval: weekly
+    groups:
+      gradle:
+        patterns: ["*"]

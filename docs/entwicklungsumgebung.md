@@ -16,6 +16,7 @@ angegeben.
 | gcloud-Komponenten | – | `beta`, `cloud-firestore-emulator` | `gcloud components install` |
 | JDK | 21 (Microsoft) | Kotlin-Client, Firestore-Emulator | war schon da (App) |
 | Docker Desktop | – | Container-Image lokal bauen/testen | war schon da |
+| Gradle | 9.8.1 | Kotlin-Client bauen | nichts installieren: Wrapper `client/gradlew` |
 
 ## Hinweise
 - Nach der Installation ein **neues Terminal** öffnen, damit der `PATH` stimmt.
@@ -41,3 +42,11 @@ angegeben.
   Variable werden die Firestore-Fälle übersprungen; in der CI sind sie Pflicht.
 - Netzwerkzugriffe (winget, `go install`, `gcloud`, `git push`) laufen in Claude Code
   außerhalb der Sandbox.
+- Kotlin-Client (`client/`): `./gradlew check` baut und testet beide Module. Der
+  Code aus den .proto-Dateien entsteht dabei im Build und wird nicht eingecheckt.
+  Gradle-Cache auf diesem Rechner: `GRADLE_USER_HOME=E:\caches\gradle`.
+- Test-Client gegen den lokalen Server:
+  `./gradlew :testclient:run --args="--geraet pc anmelden"` (Befehle mit `--hilfe`).
+  Er nutzt dieselbe `client_secret_*.json` in `%APPDATA%\avlreminder` wie
+  `testanmeldung` und legt Geräteschlüssel und Schlüssel in
+  `%APPDATA%\avlreminder\testclient` ab.

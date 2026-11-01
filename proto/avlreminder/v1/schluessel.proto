@@ -1,0 +1,51 @@
+syntax = "proto3";
+
+package avlreminder.v1;
+
+option java_multiple_files = true;
+option java_package = "com.avlreminder.schnittstelle.v1";
+
+// Ablage für das verschlüsselte Schlüssel-Backup eines Kontos (Etappe B2).
+// Alle Aufrufe brauchen eine Sitzung und wirken nur auf das eigene Konto.
+//
+// Der Server kann das Backup nicht lesen: Es ist mit dem Wiederherstellungs-
+// schlüssel verschlüsselt, den nur der Mensch auf Papier hat. Der Server prüft
+// nur Größe und Version.
+//
+// Fehlercodes (Connect):
+//   unauthenticated     Sitzung fehlt, ist ungültig oder abgelaufen.
+//   invalid_argument    BackupSpeichern: chiffrat leer oder größer als 16 KiB,
+//                       oder erwartete_version negativ.
+//   failed_precondition BackupSpeichern: erwartete_version passt nicht – ein
+//                       anderes Gerät war schneller. Neu holen, nicht überschreiben.
+//   not_found           BackupHolen: Für das Konto gibt es noch kein Backup.
+//   unavailable         vorübergehend; später wiederholen.
+//   internal            Fehler im Server.
+service SchluesselDienst {
+  // Speichert das Backup, aber nur, wenn die gespeicherte Version gleich
+  // erwartete_version ist (0 = es gibt noch keins). So überschreibt ein Gerät
+  // nie unbemerkt ein neueres Backup.
+  rpc BackupSpeichern(BackupSpeichernRequest) returns (BackupSpeichernResponse);
+
+  rpc BackupHolen(BackupHolenRequest) returns (BackupHolenResponse);
+}
+
+message BackupSpeichernRequest {
+  // Verschlüsseltes Backup (Format: proto/avlreminder/inhalt/v1/backup.proto,
+  // verschlüsselt im Kotlin-Modul "protokoll"). Höchstens 16 KiB.
+  bytes chiffrat = 1;
+  // Version, die das Gerät zuletzt gesehen hat; 0, wenn es noch keins gibt.
+  int64 erwartete_version = 2;
+}
+
+message BackupSpeichernResponse {
+  // Neue Version (erwartete_version + 1).
+  int64 version = 1;
+}
+
+message BackupHolenRequest {}
+
+message BackupHolenResponse {
+  bytes chiffrat = 1;
+  int64 version = 2;
+}

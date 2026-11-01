@@ -4,6 +4,9 @@ package avlreminder.v1;
 
 import "google/protobuf/timestamp.proto";
 
+option java_multiple_files = true;
+option java_package = "com.avlreminder.schnittstelle.v1";
+
 // Anmeldung eines Geräts und Verlängerung seiner Sitzung.
 // Beide Aufrufe brauchen keine Sitzung (sie stellen eine aus).
 //

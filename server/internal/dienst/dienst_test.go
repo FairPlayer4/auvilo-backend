@@ -30,6 +30,7 @@ type testServer struct {
 	google   *testhilfe.Google
 	anmelde  avlreminderv1connect.AnmeldeDienstClient
 	geraete  avlreminderv1connect.GeraeteDienstClient
+	backup   avlreminderv1connect.SchluesselDienstClient
 	speicher *speicher.Arbeitsspeicher
 	jetzt    time.Time // die Uhr des Servers; Tests stellen sie vor
 }
@@ -55,6 +56,7 @@ func neuerTestServer(t *testing.T) *testServer {
 	t.Cleanup(srv.Close)
 	ts.anmelde = avlreminderv1connect.NewAnmeldeDienstClient(http.DefaultClient, srv.URL)
 	ts.geraete = avlreminderv1connect.NewGeraeteDienstClient(http.DefaultClient, srv.URL)
+	ts.backup = avlreminderv1connect.NewSchluesselDienstClient(http.DefaultClient, srv.URL)
 	return ts
 }
 
