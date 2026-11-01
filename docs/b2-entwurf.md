@@ -32,7 +32,7 @@ das er nicht lesen kann. Noch **keine** Kontakte, Freigaben oder Operationen (B3
 | E-B2-5 | Wann entstehen die Schlüssel? | Meldet `Anmelden` **`neues_konto = true`**, erzeugt dieses Gerät die Schlüssel und lädt das Backup hoch. Jedes weitere Gerät holt das Backup und fragt nach dem Wiederherstellungsschlüssel. | Der Server stellt in B1 schon sicher, dass genau ein Gerät `neues_konto` bekommt (Vertragstest). Bricht das erste Gerät vor dem Hochladen ab, gibt es kein Backup. Dann erzeugt das nächste Gerät die Schlüssel. |
 | E-B2-6 | Neues Gerät per QR von einem vorhandenen Gerät (ID3) | **Nicht in B2**, sondern in B3 zusammen mit den QR-Kontakten | Beides braucht dieselbe Technik: einen Schlüsselaustausch über einen Code, den man abtippen oder scannen kann. B2 bleibt beim Wiederherstellungsschlüssel, wie es Kap. 9 vorsieht. |
 | E-B2-7 | Code aus der proto-Datei für Kotlin | **Im Gradle-Build erzeugen** (Protobuf-Gradle-Plugin, `protobuf-javalite` und `connect-kotlin`), **nicht** einchecken. buf bleibt für Lint und den Breaking-Check. | Der erzeugte Code kann so nicht veralten, und die CI braucht keinen Diff-Check. „Lite“ ist die Variante für Android, und die App kann denselben Weg nehmen. Für Go bleibt der eingecheckte Code, wie er ist. |
-| E-B2-8 | Gleiche Bytes in Kotlin und Go | **Gemeinsame Testvektoren** (`proto/testvektoren/*.json`): Der Kotlin-Test signiert mit festem Schlüssel, der Go-Test prüft dieselben Bytes, und umgekehrt. | So bricht ein Unterschied bei Präfix, Zeilenumbruch oder Kodierung zwischen den Sprachen sofort einen Test, ohne Google und ohne Netz. Den ganzen Ablauf mit echter Google-Anmeldung testen wir von Hand (lokal und in der Cloud, wie in B1). |
+| E-B2-8 | Gleiche Bytes in Kotlin und Go | **Gemeinsame Testvektoren** (`proto/testvektoren/*.json`): einmal erzeugte Nachrichten mit Signatur eines Wegwerf-Schlüssels. Der Kotlin-Test baut dieselben Bytes und prüft die Signatur, der Go-Test ebenso. Ob der Test-Client selbst passend signiert, zeigt der Test von Hand. | So bricht ein Unterschied bei Präfix, Zeilenumbruch oder Kodierung zwischen den Sprachen sofort einen Test, ohne Google und ohne Netz. Den ganzen Ablauf mit echter Google-Anmeldung testen wir von Hand (lokal und in der Cloud, wie in B1). |
 | E-B2-9 | Wo liegt der Geräteschlüssel im Test-Client? | **P-256 in einer Datei** je Gerätename unter `%APPDATA%\avlreminder\testclient\`, wie bei `testanmeldung` | In der App kommt er später in den Android Keystore (E-B1-2). Personen- und Tresor-Keyset liegen dort ebenfalls, im Klartext, nur für den Test-Client. In der App kommen sie später mit einem Keystore-Schlüssel verschlüsselt. |
 | E-B2-10 | Tests in Kotlin | **JUnit 6** (wie die App), parametrisierte Tests mit deutschen Namen, zu jeder Erlaubnis ein Ablehnungsfall. `// KRITISCH:` wie in Go. Compiler-Warnungen gelten als Fehler. | Gleiche Lesart wie die Go-Tests. Property-Based-Tests (Q5) kommen erst mit der Konfliktauflösung (B3). |
 
@@ -164,6 +164,11 @@ Hat der Kotlin-Client denselben Umfang, kann `testanmeldung` (Go) weg.
 - **Wiederherstellungsschlüssel verloren und kein Gerät mehr**: Private Daten sind
   weg. Das ist so gewollt (ID4). Einen neuen Wiederherstellungsschlüssel erzeugen,
   solange noch ein Gerät da ist, kommt später, mit der App.
+- **Älteres Backup vom Server.** Die Version schützt nur gegen gleichzeitige ehrliche
+  Geräte; sie steht nicht im verschlüsselten Inhalt. Ein bösartiger Server könnte ein
+  älteres, gültiges Backup ausliefern. In B2 gibt es nur eine Fassung; sobald sich
+  das Backup ändert (Tresor-Rotation in B4, neuer Wiederherstellungsschlüssel), muss
+  die Version in den Inhalt und beim Einlesen geprüft werden.
 - Der Test-Client speichert die Keysets unverschlüsselt in `%APPDATA%`. Das reicht
   zum Testen und gilt nicht für die App.
 
