@@ -2,7 +2,7 @@
 //
 // Ein GCP-Budget verschickt nur Meldungen, es stoppt nichts. Diese Funktion
 // empfängt die Budget-Meldungen über Pub/Sub und greift ein:
-//   - ab Schwelle "Stoppen" (Standard 100 %): alle Cloud-Run-Dienste nehmen keine
+//   - ab Schwelle "Sperren" (Standard 100 %): alle Cloud-Run-Dienste nehmen keine
 //     Anfragen von außen mehr an. Daten bleiben erhalten.
 //   - ab Schwelle "Trennen" (Standard 150 %): zusätzlich wird das Projekt vom
 //     Rechnungskonto getrennt. Dann stoppt alles; Ressourcen können nach einer
@@ -82,7 +82,9 @@ func (s Schwellen) Pruefe() error {
 // Entscheide bestimmt anhand der Meldung, welche Aktion nötig ist.
 //
 // KRITISCH: Bei ungültigen Eingaben gibt es einen Fehler und NICHT stillschweigend "Nichts",
-// damit ein Fehler im Format auffällt (Log, Wiederholung durch Pub/Sub).
+// damit ein Fehler im Format als ERROR im Log auffällt. Eine Wiederholung
+// gibt es nicht (RETRY_POLICY_DO_NOT_RETRY); die nächste Budget-Meldung kommt
+// ohnehin nach einigen Stunden.
 func Entscheide(m BudgetMeldung, s Schwellen) (Aktion, error) {
 	if err := s.Pruefe(); err != nil {
 		return Nichts, err

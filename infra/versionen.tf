@@ -1,8 +1,9 @@
 # OpenTofu-Grundeinstellungen: benötigte Provider und Ablage des Zustands.
 #
 # Der Zustand (welche Ressourcen OpenTofu verwaltet) liegt in einem Bucket in
-# europe-west1. Den Bucket hat das Bootstrap-Skript angelegt, weil OpenTofu
-# seinen eigenen Zustands-Speicher nicht selbst anlegen kann.
+# europe-west1. Den Bucket hat der Bootstrap per gcloud angelegt (Befehle in
+# docs/gcp-einrichtung.md), weil OpenTofu seinen eigenen Zustands-Speicher
+# nicht selbst anlegen kann.
 
 terraform {
   required_version = ">= 1.10"

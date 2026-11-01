@@ -26,9 +26,14 @@ Etappe **B0** ist angelegt (OpenTofu, `infra/`):
   Testdienst danach gelöscht.
 - **Nicht** in der Cloud getestet: Trennen vom Rechnungskonto (ab 150 %). Nur
   Unit-Tests; ein echter Test würde das Projekt abschalten.
-- Go-Tests: Abdeckung 61 %. Die Logik (Entscheidung, Ausführung, Verarbeitung) ist
-  vollständig getestet; nicht abgedeckt sind die dünnen GCP-Aufrufe in `gcp.go` und der
-  Einstieg in `funktion.go` – diese prüft der Test in der Cloud.
+- Go-Tests: Entscheidung, Ausführung und Verarbeitung sind getestet. **Nicht**
+  getestet ist `gcp.go`, und dort steckt eigene Logik (eigenen Dienst auslassen,
+  schon interne überspringen, bei Fehlern weitermachen). Geprüft nur durch den
+  Test in der Cloud; Empfehlung aus dem Review: Logik herausziehen und testen
+  (siehe `.review/`).
+- „Vollständig löschbar“ (Q7) heißt: **Projekt löschen**. `tofu destroy` allein lässt
+  Reste, die Google selbst anlegt (z. B. Bucket `gcf-v2-sources-…`, Standard-Dienstkonten),
+  und der Log-Bucket `logs-eu` bleibt nach dem Löschen 7 Tage reserviert.
 
 ## Offen
 1. **Kevin prüft** den Stand, danach Commit und Push (CI läuft erst dann).

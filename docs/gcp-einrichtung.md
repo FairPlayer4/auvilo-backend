@@ -54,7 +54,33 @@ Claude zeigt dir vorher genau, was angelegt wird, und legt dann an:
 5. Firestore-Datenbank in `europe-west1`
 6. Workload Identity Federation für GitHub Actions (Deploy ohne Schlüsseldatei)
 
-Alles davon kostet im Leerlauf 0 € bzw. Cent-Beträge. Ergebnis: [stand.md](stand.md).
+Alles davon kostet im Leerlauf 0 € bzw. Cent-Beträge.
+
+**Bootstrap** (einmalig per gcloud, vor dem ersten `tofu init`; so wurde B0 angelegt):
+
+```bash
+gcloud projects create avlreminder-exp-1ef2 --name=avlreminder-exp
+```
+
+```bash
+gcloud billing projects link avlreminder-exp-1ef2 --billing-account=<RECHNUNGSKONTO>
+```
+
+```bash
+gcloud services enable storage.googleapis.com serviceusage.googleapis.com cloudresourcemanager.googleapis.com cloudbilling.googleapis.com billingbudgets.googleapis.com --project avlreminder-exp-1ef2
+```
+
+```bash
+gcloud storage buckets create gs://avlreminder-exp-1ef2-tfstate --location=europe-west1 --uniform-bucket-level-access --public-access-prevention --project avlreminder-exp-1ef2
+```
+
+```bash
+gcloud storage buckets update gs://avlreminder-exp-1ef2-tfstate --versioning
+```
+
+```bash
+gcloud auth application-default set-quota-project avlreminder-exp-1ef2
+``` Ergebnis: [stand.md](stand.md).
 
 ## Später – Schritte im Browser je Etappe
 
