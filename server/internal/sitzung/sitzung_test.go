@@ -67,6 +67,9 @@ func TestPruefeErneuerung(t *testing.T) {
 		{"erneuert mit Uhr 2 Minuten nach", aktiv, jetzt.Add(-Toleranz), signiere(privat, "geraet-1", jetzt.Add(-Toleranz)), nil},
 		{"erneuert mit Uhr 2 Minuten vor", aktiv, jetzt.Add(Toleranz), signiere(privat, "geraet-1", jetzt.Add(Toleranz)), nil},
 		{"lehnt gesperrtes Gerät ab, auch mit gültiger Signatur", gesperrt, jetzt, signiere(privat, "geraet-1", jetzt), ErrGesperrt},
+		// Ohne gültige Signatur erfährt niemand, ob das Gerät gesperrt ist.
+		{"verrät Sperre nicht bei falscher Signatur", gesperrt, jetzt, signiere(anderer, "geraet-1", jetzt), ErrSignatur},
+		{"verrät Sperre nicht bei altem Zeitpunkt", gesperrt, jetzt.Add(-Toleranz - time.Second), signiere(privat, "geraet-1", jetzt.Add(-Toleranz-time.Second)), ErrZeitpunkt},
 		{"lehnt alten Zeitpunkt ab (abgefangene Erneuerung)", aktiv, jetzt.Add(-Toleranz - time.Second), signiere(privat, "geraet-1", jetzt.Add(-Toleranz-time.Second)), ErrZeitpunkt},
 		{"lehnt Zeitpunkt in der Zukunft ab", aktiv, jetzt.Add(Toleranz + time.Second), signiere(privat, "geraet-1", jetzt.Add(Toleranz+time.Second)), ErrZeitpunkt},
 		{"lehnt Signatur eines anderen Schlüssels ab", aktiv, jetzt, signiere(anderer, "geraet-1", jetzt), ErrSignatur},

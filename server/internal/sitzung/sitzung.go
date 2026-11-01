@@ -49,11 +49,10 @@ func Hash(token string) string {
 // PruefeErneuerung prüft, ob ein Gerät eine neue Sitzung bekommt.
 //
 // KRITISCH: Nur ein nicht gesperrtes Gerät mit gültiger Signatur über seine
-// Geräte-ID und einen Zeitpunkt nahe der Serverzeit bekommt eine Sitzung.
+// Geräte-ID und einen Zeitpunkt nahe der Serverzeit bekommt eine Sitzung. Die
+// Sperre wird zuletzt geprüft: Nur wer den Geräteschlüssel hat, erfährt, dass
+// das Gerät gesperrt ist.
 func PruefeErneuerung(g speicher.Geraet, zeitpunkt time.Time, signatur []byte, jetzt time.Time) error {
-	if g.Gesperrt {
-		return ErrGesperrt
-	}
 	abstand := jetzt.Sub(zeitpunkt).Abs()
 	if abstand > Toleranz {
 		return ErrZeitpunkt
@@ -64,6 +63,9 @@ func PruefeErneuerung(g speicher.Geraet, zeitpunkt time.Time, signatur []byte, j
 	}
 	if !geraeteschluessel.PruefeSignatur(schluessel, geraeteschluessel.SitzungsNachricht(g.ID, zeitpunkt), signatur) {
 		return ErrSignatur
+	}
+	if g.Gesperrt {
+		return ErrGesperrt
 	}
 	return nil
 }
