@@ -10,8 +10,10 @@ terraform {
 
   required_providers {
     google = {
-      source  = "hashicorp/google"
-      version = ">= 6.0"
+      source = "hashicorp/google"
+      # Nur Minor-Updates automatisch; ein neues Major (9.x) kann Ressourcen
+      # umbenennen oder Standardwerte ändern und wird bewusst angehoben.
+      version = "~> 8.0"
     }
     archive = {
       source  = "hashicorp/archive"
