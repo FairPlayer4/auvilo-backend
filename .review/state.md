@@ -39,7 +39,7 @@ Vom Entwickler bestätigt am 2026-11-01.
 | Doku | `docs/`, `CLAUDE.md`, `README.md` | – | – | 2026-11-01 (Lauf 3, vollständig; Lauf 4 B2-Teile) | gut nach Fixes; anforderungen.md [E]-Markierungen veraltet |
 | Kotlin `protokoll` | `client/protokoll`, `proto/avlreminder/inhalt`, `proto/testvektoren` | b2-entwurf.md, backup.proto | `*Test.kt`, Go `testvektoren_test.go` | 2026-11-01 (Lauf 4) | gut; Umschlag ohne Kontext (A4), Formate ohne feste Vektoren (A3) |
 | Backup und Test-Client | `server/internal/dienst/schluessel.go`, Backup in `speicher`, `client/testclient`, `schluessel.proto` | b2-entwurf.md, proto-Kommentare | `schluessel_test.go`, `vertrag_test.go`, `EinrichtungTest`, `GoogleTest` | 2026-11-01 (Lauf 4) | gut; Reihenfolge Anzeigen/Hochladen offen (Frage) |
-| Kotlin-Build | `client/*.gradle.kts`, `client/gradle/`, CI-Job `kotlin` | b2-entwurf.md (CI) | CI | 2026-11-01 (Lauf 4) | gut; keine Prüfsummen für Abhängigkeiten |
+| Kotlin-Build | `client/*.gradle.kts`, `client/gradle/`, CI-Job `kotlin` | b2-entwurf.md (CI) | CI | 2026-11-01 (Lauf 4) | gut; Prüfsummen seit 2026-11-02 (B2b) |
 
 ## Bekannte Schulden und beobachtete Drift
 - 2026-11-01 (Lauf 1): E7 (Herkunft der Budget-Meldung prüfen) offen, optional.

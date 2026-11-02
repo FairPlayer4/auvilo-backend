@@ -183,7 +183,7 @@ entfernt).
 - Der Test-Client speichert die Keysets unverschlüsselt in `%APPDATA%`. Das reicht
   zum Testen und gilt nicht für die App.
 - Gradle prüft keine Prüfsummen der Abhängigkeiten (`verification-metadata.xml`).
-  Vor der App einführen.
+  Vor der App einführen (am 2026-11-02 in B2b eingeführt).
 
 ## Bewusst nicht in B2
 - Kontakte, öffentliche Personenschlüssel auf dem Server, Freigaben, Operationen,

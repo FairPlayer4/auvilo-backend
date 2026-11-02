@@ -45,6 +45,14 @@ angegeben.
 - Kotlin-Client (`client/`): `./gradlew check` baut und testet beide Module. Der
   Code aus den .proto-Dateien entsteht dabei im Build und wird nicht eingecheckt.
   Gradle-Cache auf diesem Rechner: `GRADLE_USER_HOME=E:\caches\gradle`.
+- Gradle prüft jede Abhängigkeit gegen `client/gradle/verification-metadata.xml`
+  (SHA-256). Nach einem Versionswechsel, auch in einem Dependabot-PR, die Datei neu
+  erzeugen, sonst bricht der Build ab:
+  `./gradlew --write-verification-metadata sha256 check :testclient:installDist`.
+  Danach den Diff ansehen: Es dürfen nur die geänderten Versionen dazukommen.
+  `protoc` ist ein Programm je Plattform; Gradle trägt nur die Windows-Variante ein.
+  Die Linux-Variante für die CI von Hand ergänzen (SHA-256 der Datei von Maven
+  Central, SHA-1 mit der `.sha1`-Datei dort abgleichen).
 - Test-Client gegen den lokalen Server:
   `./gradlew :testclient:run --args="--geraet pc anmelden"` (Befehle mit `--hilfe`).
   Er nutzt die `client_secret_*.json` in `%APPDATA%\avlreminder` und legt

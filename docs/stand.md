@@ -113,7 +113,6 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
    „schon eingerichtet“ ohne Rückfrage. Damit ist B2 abgeschlossen.
    Am 2026-11-02 `testanmeldung` (Go) entfernt (A6); der Kotlin-Test-Client kann
    alles, was es konnte.
-   **Bekannte Grenze:** keine Gradle-Prüfsummen; vor der App einführen.
 3. Kleinere Empfehlungen aus dem Review: E7 optional; weitere aus Lauf 2 in
    `.review/state.md`.
 4. Etappe **B2b** (vor B3): Daten-Backup für eine Person, danach Einbindung in die
