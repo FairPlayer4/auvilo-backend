@@ -146,7 +146,8 @@ Befehle des Test-Clients, angelehnt an `testanmeldung`:
 - `erneuern`, `geraete`, `sperren <id>`
 - `schluessel`: zeigt den Fingerabdruck des Personenschlüssels.
 
-Hat der Kotlin-Client denselben Umfang, kann `testanmeldung` (Go) weg.
+Hat der Kotlin-Client denselben Umfang, kann `testanmeldung` (Go) weg (am 2026-11-02
+entfernt).
 
 ## CI und Werkzeuge
 - Neuer Job **„Kotlin – client“**:

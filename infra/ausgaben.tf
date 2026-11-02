@@ -16,6 +16,6 @@ output "container_registry" {
 }
 
 output "server_url" {
-  description = "Adresse des Servers (für testanmeldung -server)"
+  description = "Adresse des Servers (für testclient --server)"
   value       = google_cloud_run_v2_service.server.uri
 }

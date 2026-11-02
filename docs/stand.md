@@ -111,7 +111,8 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
    dem Wiederherstellungsschlüssel das Backup (auch mit Kleinbuchstaben und fehlendem
    Bindestrich), gleicher Fingerabdruck wie `cloud-pc`; `cloud-pc` erneut meldet
    „schon eingerichtet“ ohne Rückfrage. Damit ist B2 abgeschlossen.
-   **Offen:** `testanmeldung` (Go) entfernen (A6).
+   Am 2026-11-02 `testanmeldung` (Go) entfernt (A6); der Kotlin-Test-Client kann
+   alles, was es konnte.
    **Bekannte Grenze:** keine Gradle-Prüfsummen; vor der App einführen.
 3. Kleinere Empfehlungen aus dem Review: E7 optional; weitere aus Lauf 2 in
    `.review/state.md`.
@@ -139,26 +140,6 @@ nur für diesen Lauf:
 cd server && FIRESTORE_EMULATOR_HOST=localhost:8086 PROJEKT=lokal GOOGLE_CLIENT_IDS=82416816442-vka4ve2no02681umqkn8b0rk37ri37qd.apps.googleusercontent.com PFEFFER=$(openssl rand -base64 32) go run ./cmd/server
 ```
 
-Als Gerät anmelden (öffnet den Browser), zweites Gerät, Geräte auflisten:
-
-```bash
-cd server && go run ./cmd/testanmeldung anmelden
-```
-
-```bash
-cd server && go run ./cmd/testanmeldung -geraet handy anmelden
-```
-
-```bash
-cd server && go run ./cmd/testanmeldung geraete
-```
-
-Gegen den Server in der Cloud (Adresse aus `tofu output server_url`):
-
-```bash
-cd server && go run ./cmd/testanmeldung -server "$(cd ../infra && tofu output -raw server_url)" -geraet cloud anmelden
-```
-
 Test-Client (Kotlin, B2) bauen, dann als Gerät anmelden und Schlüssel einrichten
 bzw. aus dem Backup holen (weitere Befehle mit `--hilfe`):
 
@@ -168,6 +149,13 @@ cd client && ./gradlew :testclient:installDist
 
 ```bash
 ./client/testclient/build/install/testclient/bin/testclient --geraet pc anmelden
+```
+
+Gegen den Server in der Cloud (Adresse aus `tofu output server_url`; Gerätenamen
+nicht mit lokalen Tests mischen, die Konten unterscheiden sich):
+
+```bash
+./client/testclient/build/install/testclient/bin/testclient --server "$(cd infra && tofu output -raw server_url)" --geraet cloud-pc anmelden
 ```
 
 Kill-Switch von Hand auslösen (sperrt alle Cloud-Run-Dienste!):

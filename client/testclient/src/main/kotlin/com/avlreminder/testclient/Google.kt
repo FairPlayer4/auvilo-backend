@@ -20,8 +20,7 @@ import java.util.Base64
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.TimeUnit
 
-// Anmeldung bei Google wie in einer Desktop-App ("Loopback-Flow"), wie im
-// Go-Werkzeug testanmeldung:
+// Anmeldung bei Google wie in einer Desktop-App ("Loopback-Flow"):
 //  1. Das Programm lauscht auf 127.0.0.1 an einem freien Port.
 //  2. Der Browser öffnet die Google-Anmeldung; danach leitet Google mit einem
 //     Code auf 127.0.0.1 zurück.

@@ -86,7 +86,7 @@ variable "github_repo_id" {
 }
 
 # Client-IDs sind nicht geheim (sie stehen in jeder App). Heute nur der
-# Desktop-Client für das Werkzeug testanmeldung; der Android-Client kommt mit
+# Desktop-Client für den Kotlin-Test-Client; der Android-Client kommt mit
 # der App-Anbindung, der Desktop-Client fliegt dann raus (Review Lauf 2).
 variable "google_client_ids" {
   description = "OAuth-Client-IDs, deren Google-ID-Tokens der Server annimmt"

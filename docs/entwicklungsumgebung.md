@@ -47,6 +47,5 @@ angegeben.
   Gradle-Cache auf diesem Rechner: `GRADLE_USER_HOME=E:\caches\gradle`.
 - Test-Client gegen den lokalen Server:
   `./gradlew :testclient:run --args="--geraet pc anmelden"` (Befehle mit `--hilfe`).
-  Er nutzt dieselbe `client_secret_*.json` in `%APPDATA%\avlreminder` wie
-  `testanmeldung` und legt Geräteschlüssel und Schlüssel in
-  `%APPDATA%\avlreminder\testclient` ab.
+  Er nutzt die `client_secret_*.json` in `%APPDATA%\avlreminder` und legt
+  Geräteschlüssel und Schlüssel in `%APPDATA%\avlreminder\testclient` ab.
