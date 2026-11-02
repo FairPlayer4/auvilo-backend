@@ -58,6 +58,20 @@ jobs:
           done
           cat "$RUNNER_TEMP/emulator.log"
           exit 1
+      # Nachbau von Cloud Storage für die Ablage der Datensicherungen
+      # (Vertragstests). Image fest mit Prüfsumme, wie die Actions oben.
+      - name: fake-gcs-server starten
+        if: matrix.modul == 'server'
+        run: |
+          docker run -d --name fakegcs -p 4443:4443 \
+            fsouza/fake-gcs-server:1.56.1@sha256:797ce226d62f947c009dc40246b30cfb456b8473d8241407f9d6f2c04e4d69ef \
+            -scheme http -port 4443 -backend memory
+          for i in $(seq 30); do
+            curl -sf http://localhost:4443/storage/v1/b > /dev/null && exit 0
+            sleep 1
+          done
+          docker logs fakegcs
+          exit 1
       - name: Formatierung
         run: test -z "$(gofmt -l .)" || (gofmt -l . && exit 1)
       - name: go vet
@@ -66,6 +80,7 @@ jobs:
       - name: Tests mit Race-Detector
         env:
           FIRESTORE_EMULATOR_HOST: ${{ matrix.modul == 'server' && 'localhost:8086' || '' }}
+          STORAGE_EMULATOR_HOST: ${{ matrix.modul == 'server' && 'localhost:4443' || '' }}
           EMULATOR_PFLICHT: ${{ matrix.modul == 'server' && '1' || '' }}
         run: go test -race -cover ./...
       - name: golangci-lint

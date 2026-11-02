@@ -17,6 +17,7 @@ import (
 	v1 "github.com/FairPlayer4/avlreminder-backend/server/gen/avlreminder/v1"
 	"github.com/FairPlayer4/avlreminder-backend/server/gen/avlreminder/v1/avlreminderv1connect"
 	"github.com/FairPlayer4/avlreminder-backend/server/internal/anmeldung"
+	"github.com/FairPlayer4/avlreminder-backend/server/internal/datensicherung"
 	"github.com/FairPlayer4/avlreminder-backend/server/internal/geraeteschluessel"
 	"github.com/FairPlayer4/avlreminder-backend/server/internal/sitzung"
 	"github.com/FairPlayer4/avlreminder-backend/server/internal/speicher"
@@ -33,23 +34,30 @@ type AnmeldePruefer interface {
 
 // Konfiguration für NeuerHandler.
 type Konfiguration struct {
-	Pruefer  AnmeldePruefer
-	Speicher speicher.Speicher
-	Pfeffer  []byte           // geheimer Wert für die Kennung (HMAC der Google-Konto-ID)
-	Jetzt    func() time.Time // nil = time.Now
+	Pruefer     AnmeldePruefer
+	Speicher    speicher.Speicher
+	Sicherungen datensicherung.Ablage
+	Pfeffer     []byte           // geheimer Wert für die Kennung (HMAC der Google-Konto-ID)
+	Jetzt       func() time.Time // nil = time.Now
+	// Höchstens so viele Aufrufe des Datensicherungs-Dienstes gleichzeitig;
+	// 0 = StandardGleichzeitigeSicherungen.
+	GleichzeitigeSicherungen int
 }
 
 // NeuerHandler liefert den HTTP-Handler mit allen Diensten. Vor jedem Aufruf
 // läuft der Sitzungs-Interceptor; offen sind nur Anmelden und SitzungErneuern.
 func NeuerHandler(k Konfiguration) (http.Handler, error) {
-	if k.Pruefer == nil || k.Speicher == nil {
-		return nil, errors.New("Prüfer und Speicher sind Pflicht")
+	if k.Pruefer == nil || k.Speicher == nil || k.Sicherungen == nil {
+		return nil, errors.New("Prüfer, Speicher und Sicherungen sind Pflicht")
 	}
 	if len(k.Pfeffer) < 32 {
 		return nil, errors.New("Pfeffer muss mindestens 32 Bytes lang sein")
 	}
 	if k.Jetzt == nil {
 		k.Jetzt = time.Now
+	}
+	if k.GleichzeitigeSicherungen <= 0 {
+		k.GleichzeitigeSicherungen = StandardGleichzeitigeSicherungen
 	}
 	d := &dienste{k: k}
 
@@ -67,6 +75,12 @@ func NeuerHandler(k Konfiguration) (http.Handler, error) {
 	mux.Handle(avlreminderv1connect.NewAnmeldeDienstHandler(d, optionen...))
 	mux.Handle(avlreminderv1connect.NewGeraeteDienstHandler(d, optionen...))
 	mux.Handle(avlreminderv1connect.NewSchluesselDienstHandler(d, optionen...))
+
+	// Datensicherungen sind bis zu 8 MiB groß: eigene, größere Grenze für die
+	// Anfrage (die spätere Option gilt), dafür nur wenige gleichzeitig.
+	pfad, sicherungen := avlreminderv1connect.NewDatensicherungDienstHandler(d,
+		append(optionen, connect.WithReadMaxBytes(MaxSicherungsanfrage))...)
+	mux.Handle(pfad, begrenze(k.GleichzeitigeSicherungen, sicherungen))
 	return mux, nil
 }
 
@@ -77,7 +91,8 @@ func beiPanik(ctx context.Context, spec connect.Spec, _ http.Header, p any) erro
 	return connect.NewError(connect.CodeInternal, errors.New("interner Fehler"))
 }
 
-// dienste setzt alle Connect-Dienste um (Schlüssel-Dienst in schluessel.go).
+// dienste setzt alle Connect-Dienste um (Schlüssel-Dienst in schluessel.go,
+// Datensicherung in datensicherung.go).
 type dienste struct {
 	k Konfiguration
 }

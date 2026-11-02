@@ -40,6 +40,13 @@ angegeben.
   `gcloud emulators firestore start --host-port=localhost:8086`, dann
   `FIRESTORE_EMULATOR_HOST=localhost:8086 go test ./...` in `server/`. Ohne die
   Variable werden die Firestore-Fälle übersprungen; in der CI sind sie Pflicht.
+- Nachbau von Cloud Storage für die Datensicherungen (Docker Desktop muss laufen):
+  `docker run -d --rm --name fakegcs -p 4443:4443 fsouza/fake-gcs-server:1.56.1 -scheme http -port 4443 -backend memory`,
+  dann zusätzlich `STORAGE_EMULATOR_HOST=localhost:4443`. `-backend memory` ist
+  nötig, weil nur dort die Versionierung nachgebildet ist. Für den lokalen Server
+  den Bucket einmal anlegen:
+  `curl -X POST "http://localhost:4443/storage/v1/b?project=lokal" -H "Content-Type: application/json" -d '{"name":"lokal","versioning":{"enabled":true}}'`.
+  Stoppen mit `docker stop fakegcs` (Inhalt ist dann weg).
 - Netzwerkzugriffe (winget, `go install`, `gcloud`, `git push`) laufen in Claude Code
   außerhalb der Sandbox.
 - Kotlin-Client (`client/`): `./gradlew check` baut und testet beide Module. Der

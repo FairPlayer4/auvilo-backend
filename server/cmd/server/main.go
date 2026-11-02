@@ -2,9 +2,11 @@
 // mit Firestore und beantwortet Connect-Anfragen. Auf Cloud Run setzt OpenTofu
 // die Variablen (infra/server.tf).
 //
-// Lokal mit Firestore-Emulator:
+// Lokal mit Firestore-Emulator und fake-gcs-server (darin vorher den Bucket
+// "lokal" anlegen, siehe docs/entwicklungsumgebung.md):
 //
-//	FIRESTORE_EMULATOR_HOST=localhost:8086 PROJEKT=lokal \
+//	FIRESTORE_EMULATOR_HOST=localhost:8086 STORAGE_EMULATOR_HOST=localhost:4443 \
+//	PROJEKT=lokal SICHERUNG_BUCKET=lokal \
 //	GOOGLE_CLIENT_IDS=<client-id> PFEFFER=<base64, ≥ 32 Bytes> go run ./cmd/server
 package main
 
@@ -27,6 +29,7 @@ import (
 	"github.com/coreos/go-oidc/v3/oidc"
 
 	"github.com/FairPlayer4/avlreminder-backend/server/internal/anmeldung"
+	"github.com/FairPlayer4/avlreminder-backend/server/internal/datensicherung"
 	"github.com/FairPlayer4/avlreminder-backend/server/internal/dienst"
 	"github.com/FairPlayer4/avlreminder-backend/server/internal/speicher"
 )
@@ -53,25 +56,30 @@ func cloudLoggingFelder(_ []string, a slog.Attr) slog.Attr {
 
 // konfiguration aus den Umgebungsvariablen.
 type konfiguration struct {
-	projekt       string   // PROJEKT
-	clientIDs     []string // GOOGLE_CLIENT_IDS, durch Komma getrennt
-	pfefferSecret string   // PFEFFER_SECRET: Secret-Manager-Version (Betrieb)
-	pfeffer       []byte   // PFEFFER: base64 (nur lokal)
-	port          string   // PORT, setzt Cloud Run; sonst 8080
+	projekt         string   // PROJEKT
+	sicherungBucket string   // SICHERUNG_BUCKET: Bucket für die Datensicherungen
+	clientIDs       []string // GOOGLE_CLIENT_IDS, durch Komma getrennt
+	pfefferSecret   string   // PFEFFER_SECRET: Secret-Manager-Version (Betrieb)
+	pfeffer         []byte   // PFEFFER: base64 (nur lokal)
+	port            string   // PORT, setzt Cloud Run; sonst 8080
 }
 
 // leseKonfiguration ist von os.Getenv getrennt, damit sie testbar ist.
 func leseKonfiguration(getenv func(string) string) (konfiguration, error) {
 	k := konfiguration{
-		projekt:       getenv("PROJEKT"),
-		pfefferSecret: getenv("PFEFFER_SECRET"),
-		port:          getenv("PORT"),
+		projekt:         getenv("PROJEKT"),
+		sicherungBucket: getenv("SICHERUNG_BUCKET"),
+		pfefferSecret:   getenv("PFEFFER_SECRET"),
+		port:            getenv("PORT"),
 	}
 	if k.port == "" {
 		k.port = "8080"
 	}
 	if k.projekt == "" {
 		return k, errors.New("PROJEKT fehlt")
+	}
+	if k.sicherungBucket == "" {
+		return k, errors.New("SICHERUNG_BUCKET fehlt")
 	}
 	for _, id := range strings.Split(getenv("GOOGLE_CLIENT_IDS"), ",") {
 		if id = strings.TrimSpace(id); id != "" {
@@ -120,6 +128,12 @@ func starte() error {
 	}
 	defer func() { _ = fs.Close() }() // Fehler beim Schließen am Ende ist egal
 
+	gcs, err := datensicherung.NeuerClient(ctx)
+	if err != nil {
+		return fmt.Errorf("Cloud Storage: %w", err)
+	}
+	defer func() { _ = gcs.Close() }()
+
 	// Die Schlüssel von Google werden bei Bedarf geladen und zwischengespeichert.
 	// Eigener HTTP-Client mit Zeitlimit: Ein hängender Abruf würde sonst alle
 	// folgenden Anmeldungen blockieren (http.DefaultClient wartet unbegrenzt).
@@ -129,9 +143,10 @@ func starte() error {
 		return err
 	}
 	handler, err := dienst.NeuerHandler(dienst.Konfiguration{
-		Pruefer:  pruefer,
-		Speicher: speicher.NeuerFirestore(fs),
-		Pfeffer:  k.pfeffer,
+		Pruefer:     pruefer,
+		Speicher:    speicher.NeuerFirestore(fs),
+		Sicherungen: datensicherung.NeuesCloudStorage(gcs, k.sicherungBucket),
+		Pfeffer:     k.pfeffer,
 	})
 	if err != nil {
 		return err

@@ -116,8 +116,16 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
 3. Kleinere Empfehlungen aus dem Review: E7 optional; weitere aus Lauf 2 in
    `.review/state.md`.
 4. Etappe **B2b** (vor B3): Daten-Backup für eine Person, danach Einbindung in die
-   App. Entwurf: [b2b-entwurf.md](b2b-entwurf.md), bestätigt am 2026-11-02. Beginnt
-   nach dem Cloud-Test von B2.
+   App. Entwurf: [b2b-entwurf.md](b2b-entwurf.md), bestätigt am 2026-11-02.
+   **Erledigt (2026-11-02):** Schritte 1–3 der Reihenfolge – `docs/formate.md` mit
+   festen Testvektoren, Gradle-Prüfsummen, `Datensicherung` und `Sicherungsablauf`
+   in `protokoll`, `DatensicherungDienst` im Server mit Ablage in Cloud Storage
+   (getestet gegen `fake-gcs-server`, auch in der CI). Der Server braucht jetzt
+   `SICHERUNG_BUCKET`; vor dem nächsten Deploy muss der Bucket per OpenTofu stehen.
+   **Für den Infrastruktur-Schritt:** Soft Delete des Buckets auf 0 Tage (sonst
+   bleiben gelöschte Sicherungen 7 Tage liegen, DSGVO); Zeitlimit von Cloud Run
+   und Server (30 s) für 8 MiB über langsames Mobilfunknetz prüfen.
+   **Weiter mit:** Schritt 4, Modul `verbindung` und Befehle im Test-Client.
 5. Für den B3-Entwurf aus Lauf 4: A2 (Mitgliedschaft: Server-Liste oder signiertes
    Log), A4 (Umschläge an Kontext binden, Keyset-Typen prüfen), A5 (Speicher und
    Dienste aufteilen; Anfang in B2b). A3 (Formate festschreiben) kommt in B2b.
