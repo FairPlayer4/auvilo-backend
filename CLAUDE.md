@@ -34,6 +34,23 @@ Kommunikation auf **Deutsch, mit ß**.
 - Keine echten Inhalte aus Kevins App, keine Schlüssel oder Secrets ins Repo.
 - GCP-Ressourcen, die Geld kosten, erst nach Kevins Go anlegen.
 
+## Geheimnisse und Sicherheitsphase
+- Was Claude liest (Terminal, Dateien, Befehlsausgaben), geht in den Gesprächsverlauf
+  (Anthropic und lokal `~/.claude/projects`). Claude liest, druckt und ruft daher
+  **nie** ab: Pfeffer, OAuth-Client-Secret, private Geräteschlüssel (`geraet-*.pem`),
+  Sitzungs-Token (`sitzung-*.json`), Google-ID-Tokens und Auth-Codes, Passwörter,
+  2FA-Codes, Dienstkonto-Schlüssel, echte App-Inhalte und Daten von Testern.
+  Unbedenklich: Fingerabdrücke, Geräte-IDs, Konto-Pseudonyme, Chiffrate, Client-IDs.
+- **Testphase (jetzt):** Wiederherstellungsschlüssel und Keysets von Testkonten ohne
+  echte Daten darf Claude sehen. Vor echten Daten wird alles zurückgesetzt
+  ([b2b-entwurf.md](docs/b2b-entwurf.md), „Vor echten Daten“).
+- **Sicherheitsphase:** beginnt mit dem ersten Schritt, bei dem echte Daten oder
+  Schlüssel für echte Daten entstehen (erste Einrichtung der App-Variante gegen die
+  Cloud, Daten von Testern). Claude kündigt sie **vorher ausdrücklich** an (Nachricht
+  mit „Beginn der Sicherheitsphase“ und Eintrag in `docs/stand.md`). Ab dann sieht
+  Claude auch keine Wiederherstellungsschlüssel und Keysets mehr; Kevin führt solche
+  Schritte selbst in einem sicheren Kontext aus.
+
 ## GCP
 - Projekt `avlreminder-exp-1ef2`, Region `europe-west1`, Infrastruktur in `infra/` (OpenTofu).
 - Änderungen an der Infrastruktur nur über OpenTofu; vor `tofu apply` den Plan

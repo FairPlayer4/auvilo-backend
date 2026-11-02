@@ -125,6 +125,22 @@ falschem Tresorschlüssel, kleinerer Zähler, verändertes Chiffrat, zu groß.
    mit Keystore-Schlüssel verschlüsselt, Anmeldung über den Credential Manager,
    WorkManager, Anzeige „letzte Sicherung“, eigene App-Variante).
 
+## Vor echten Daten (Beginn der Sicherheitsphase)
+Bis hierher sind alle Schlüssel Testschlüssel: Sie lagen im Klartext in `%APPDATA%`,
+und ihre Wiederherstellungsschlüssel standen zum Teil in Terminal-Ausgaben, die Claude
+gelesen hat. Bevor die App-Variante echte Daten sichert:
+1. Schlüssel-Backup und Datensicherung des Testkontos auf dem Server löschen. Dafür
+   bekommt `SchluesselDienst` in B2b einen Aufruf `BackupLoeschen` und der Test-Client
+   den Befehl `schluessel-loeschen`.
+2. Die Dateien in `%APPDATA%\avlreminder\testclient` löschen.
+3. Die App erzeugt auf dem Gerät **neue** Schlüssel und einen neuen
+   Wiederherstellungsschlüssel. Den sieht nur Kevin, auf Papier; kein Terminal, kein
+   Screenshot, kein Gespräch mit Claude.
+
+Claude kündigt diesen Schritt vorher ausdrücklich an (siehe `CLAUDE.md`,
+„Geheimnisse und Sicherheitsphase“). Das Rotieren der Schlüssel selbst kommt erst in
+B4; bis dahin heißt „rotieren“ hier: zurücksetzen und neu erzeugen.
+
 ## Bekannte Grenzen (bewusst)
 - **Ein sicherndes Gerät.** Zwei Geräte mit verschiedenen Daten führt erst B3
   zusammen.

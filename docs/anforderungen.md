@@ -360,3 +360,4 @@ tragen die Tests die Spezifikation. Anleitung zum Review: [go-review.md](go-revi
 | 2026-11-02 | B2b: Ohne Synchronisation ein sicherndes Gerät; ein anderes übernimmt nur nach Rückfrage. Höchstens 8 MiB je Sicherung, Übertragung über den Server, Löschen von Anfang an |
 | 2026-11-02 | B2b: Formate maßgeblich in `docs/formate.md` mit festen Testvektoren (A3); Gradle-Prüfsummen; Modul `verbindung`; Einbindung per Composite Build |
 | 2026-11-02 | B2b: Testen nur Kevin und wenige Bekannte im internen Test-Track, eigene App-Variante; Testerinformation statt Datenschutzerklärung bis B6 |
+| 2026-11-02 | Testphase: Claude darf Wiederherstellungsschlüssel von Testkonten sehen. Vor echten Daten werden Schlüssel-Backup, Datensicherung und Testdateien gelöscht und neu erzeugt; ab dann (Sicherheitsphase, von Claude vorher angekündigt) sieht Claude keine Schlüssel mehr. Liste verbotener Geheimnisse in `CLAUDE.md` |
