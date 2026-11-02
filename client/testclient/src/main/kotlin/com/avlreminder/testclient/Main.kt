@@ -39,6 +39,9 @@ Schalter:
 fun main(args: Array<String>) {
     try {
         runBlocking { ausfuehren(args.toList()) }
+        // OkHttp hält seine Threads nach der letzten Anfrage noch eine Minute offen;
+        // ohne exitProcess würde die JVM so lange warten.
+        exitProcess(0)
     } catch (e: Bedienfehler) {
         System.err.println("Fehler: ${e.message}")
         exitProcess(1)

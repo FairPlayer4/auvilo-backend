@@ -105,8 +105,13 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
    Review-Lauf 4 am 2026-11-01: [.review/runs/2026-11-01-4.md](../.review/runs/2026-11-01-4.md),
    Fixes in develop. Am 2026-11-02 umgesetzt: Einrichtung liegt in `protokoll` (A1),
    Wiederherstellungsschlüssel wird vor dem Hochladen gezeigt und bestätigt.
-   **Offen:** Deploy und Test in der Cloud (der Test-Client fragt jetzt nach „ja“).
-   Danach kann `testanmeldung` (Go) weg (A6).
+   Deploy am 2026-11-02 (PR #6). **In der Cloud getestet** am 2026-11-02 (echte
+   Google-Anmeldung): `cloud-pc` richtet neue Schlüssel ein (erst nach „ja“);
+   `cloud-tablet` bricht nach drei falschen Eingaben ab; `cloud-handy` übernimmt mit
+   dem Wiederherstellungsschlüssel das Backup (auch mit Kleinbuchstaben und fehlendem
+   Bindestrich), gleicher Fingerabdruck wie `cloud-pc`; `cloud-pc` erneut meldet
+   „schon eingerichtet“ ohne Rückfrage. Damit ist B2 abgeschlossen.
+   **Offen:** `testanmeldung` (Go) entfernen (A6).
    **Bekannte Grenze:** keine Gradle-Prüfsummen; vor der App einführen.
 3. Kleinere Empfehlungen aus dem Review: E7 optional; weitere aus Lauf 2 in
    `.review/state.md`.
