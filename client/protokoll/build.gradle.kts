@@ -43,6 +43,8 @@ protobuf {
 tasks.test {
     val testvektoren = rootDir.resolve("../proto/testvektoren")
     systemProperty("testvektoren", testvektoren.absolutePath)
+    // Nur zum einmaligen Erzeugen neuer Vektoren (InhaltTestvektorenTest).
+    systemProperty("testvektoren.erzeugen", providers.gradleProperty("testvektorenErzeugen").getOrElse("nein"))
     // Damit Gradle den Test neu ausführt, wenn sich nur die Vektoren ändern.
     inputs.dir(testvektoren).withPathSensitivity(PathSensitivity.RELATIVE)
 }

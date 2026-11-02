@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+// Formate, die nur Clients lesen (siehe backup.proto).
+package avlreminder.inhalt.v1;
+
+option java_multiple_files = true;
+option java_package = "com.avlreminder.protokoll.inhalt.v1";
+
+// Inhalt einer Datensicherung (Etappe B2b), bevor sie mit dem Tresorschlüssel
+// verschlüsselt wird. Maßgebliche Beschreibung: docs/formate.md.
+message Datensicherung {
+  // Steigt mit jeder Sicherung des Kontos um mindestens 1. Ein Gerät merkt sich
+  // den höchsten Wert, den es kennt; liefert der Server einen kleineren, ist die
+  // Sicherung älter als eine, die das Gerät schon gesehen hat.
+  int64 zaehler = 1;
+  // Zeitpunkt der Sicherung (Sekunden seit 1970, UTC), zur Anzeige.
+  int64 erstellt_unix = 2;
+  // Gerät, das gesichert hat (Geräte-ID wie in anmeldung.proto).
+  string geraet_id = 3;
+  // Schema-Version der App-Daten in der Nutzlast (bei der App: Room-Version).
+  // Eine App spielt nur Sicherungen ein, deren Version sie kennt.
+  int32 schema_version = 4;
+  // Die gesicherten Daten selbst; für dieses Format undurchsichtige Bytes.
+  bytes nutzlast = 5;
+}

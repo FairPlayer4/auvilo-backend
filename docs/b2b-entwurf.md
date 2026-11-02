@@ -152,6 +152,11 @@ B4; bis dahin heißt „rotieren“ hier: zurücksetzen und neu erzeugen.
 - **Format der Nutzlast ist die Room-Datenbank.** Eine App-Version kann nur Sicherungen
   mit gleicher oder älterer Schema-Version einspielen. Eine neuere Sicherung lehnt sie
   ab und bittet um ein Update.
+- **Höchstens 8 MiB je Sicherung, ein Platz je Konto.** Gemessen (synthetische DB,
+  Schema 7, gzip): etwa 0,7 MiB je Jahr bei normaler, 1,7 MiB bei sehr starker Nutzung.
+  Die App warnt ab etwa 75 %. Ausweg, falls das nicht reicht: Grenze bis knapp 32 MiB
+  anheben (Cloud Run), darüber direkter Upload in den Bucket mit signierter Adresse,
+  sehr groß ein Format v2 mit Streaming AEAD. Nichts davon bricht vorhandene Sicherungen.
 
 ## Bewusst nicht in B2b
 - Synchronisation, Freigaben, Konfliktauflösung (B3)

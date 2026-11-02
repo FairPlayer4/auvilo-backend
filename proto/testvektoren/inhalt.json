@@ -1,0 +1,26 @@
+{
+    "beschreibung": "Feste Testvektoren für die Client-Formate (docs/formate.md). Einmal erzeugt; InhaltTestvektorenTest prüft, dass der Code sie weiter lesen kann. Wegwerf-Schlüssel, keine echten Daten. Nie neu erzeugen: Ändert sich ein Format, kommt eine neue Formatversion mit eigenen Vektoren dazu.",
+    "konto_id": "testkonto-0123456789abcdef",
+    "wiederherstellungsschluessel": "EVP0-J73Z-5X7R-GV2Q-KZA9-NTSH-G71V-7SYQ-CAKA-2C6T-4SKS-CNFY-DHF0-7BQV",
+    "schluessel_backup_base64": "8c1AjPLb2Fc4eCMRaSoRf3pcsu3v1QVMPEzGxP8RulGmVNFu3WnWS2hDH7BEUa7rcoPCJT6JOQFZbcsjxnSGF36iJfohaA1GlUN9u60eOaMpzbGDymGYOItXi53agBwHkYa1AcWCBFg9x3bm/b3cFpXSGHQTOKVUifmu6pA0dVH+3b/arRc1NEaCfoIAockB3rO83SJ7hRbdli+JN7Vy2F8DuLQh6IUzYhboawaVM1dKSutzEFqUdm9rjks0J2AXAondN0G6+77YQLVHZM1yXbtt0Ay+wAKmLPjXizeyVy3YJZLnwmme3txY0yJLSCvHl6NZbdaeTy1sG9LJpH05gGblLf/D/oIxW/RJslEiJMDT3D8Q5AaFxWoM0gw1Qo0M70Zfug+TBK7gPyYMWL5QJ9onMc6Zsia3isV5tfN166lq9VthqPL7N1cq32s2jj5t0WtqKPeAYD/BW5dRBQh/7tZhdWsmrDnM98/gQ0Km9v+8rNpNS7NCY51U5gnjEew4O1OfaTBHq4lkyrwL4YLaIQtw/C9oeuBQASzHzrry6Ns3qM7DZFz0wJa1QO9f/mK25BDTuEP3nrmgKnLvdd7oLpPc2hms5664Y6tLcgWjRBf3waC71UOvPqspmzidbB2M",
+    "fingerabdruck": "GWZ6-0KJR-A05K-KY4M-DWZZ-T27G-H4",
+    "datensicherung": {
+        "chiffrat_base64": "AXnntGJNH1gRJRVbUxlNA8e/Y7l3wNg3uh7RwZDKRbnjeKQC+56lNTAq8K2dBFgO/Ino8zWUB9YhHk3EhOiqcns4PNeu7ujIJcJmU/kOX5rCOYJwYnMHCiTIRerwyVYG72fvxs2rjBdgaW6N3IkUXzaFeF/LMMY=",
+        "zaehler": 42,
+        "erstellt_unix": 1793000000,
+        "geraet_id": "d0e5518e666349cb0a3637c6b536b1cd",
+        "schema_version": 5,
+        "nutzlast_text": "Testdaten für die Sicherung"
+    },
+    "umschlag": {
+        "umschlag_base64": "AU6DGFaqMBn3pHocURH2Os0kz9hTNVHEg35ScoLTNXvTM03fbNO4MxjqN57dKOz8ZHD9cvqpsqTrL7xu09WCeVj4QuwcXW6T4waLOcVUHdf1qh8QdmiBoox5zWhf/zZ2wCtRmu1aAaIn+7o8VHn+9jxezTE8FQMaHmsfLRzzxo+OHhMu7fbzfy+ZG4Tk7E1gZGDa+xxN3BG/6XJsRkAFs8r3NVtO+0j7oE7e4A==",
+        "probe_base64": "AZ/3klHPDnjjnoXfil0/r6G1SKJRMTnZg2QHBen+vT4Akfw7L9Clou6RhDgTtobEkMc=",
+        "probe_zugehoerig": "freigabe-1",
+        "probe_klartext": "Probe"
+    },
+    "signatur": {
+        "zweck": "OPERATION",
+        "daten_text": "Operation zum Testen",
+        "signatur_base64": "Ac9j4GWZqhNLUOyPzLBBUYQqaW8j1i0OHe7uOsovwquFmy2IksO1ivBbsKROkUqnWyQcaHs6m1jrcNCUIobjAJczj2MI"
+    }
+}
