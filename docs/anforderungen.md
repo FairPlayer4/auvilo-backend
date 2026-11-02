@@ -290,6 +290,7 @@ tragen die Tests die Spezifikation. Anleitung zum Review: [go-review.md](go-revi
 | B0 | GCP-Projekt, Budget + Kill-Switch, OpenTofu-Grundgerüst, CI |
 | B1 | Go-Server auf Cloud Run, Google-Login, Sitzungs-Token, Geräteregistrierung |
 | B2 | Kotlin-Protokoll-Modul: Schlüsselmodell, Verpacken/Entpacken, Signaturen; Test-Client mit Wiederherstellungsschlüssel |
+| B2b | Daten-Backup für eine Person (Tresorschlüssel, Cloud Storage EU, ältere Fassungen), Formate festschreiben, `client/` bereit für die App; danach Einbindung als Backup in eine interne App-Variante ([b2b-entwurf.md](b2b-entwurf.md)) |
 | B3 | Kontakte per QR (im Test-Client als Text), Freigaben, Append-only-Log, Konfliktauflösung |
 | B4 | FCM-Push, Snapshots, Ablaufzeiten, Person entfernen + faule Rotation, Konto löschen |
 | B5 | KI-Proxy (Text) mit Vertex AI EU, Freigabe-Ablauf im Test-Client, Kontingente |
@@ -351,4 +352,11 @@ tragen die Tests die Spezifikation. Anleitung zum Review: [go-review.md](go-revi
 | 2026-11-02 | Abläufe, die auch die App braucht (z. B. Einrichtung), liegen in `protokoll` hinter Schnittstellen (Server, lokale Ablage); `testclient` enthält nur CLI, Connect-Anbindung und Dateiablage (Review A1) |
 | 2026-11-02 | Tests prüfen Verhalten, nicht die geprüfte Konstante selbst (kein Test, der nur `VERSUCHE == 3` nachspricht) |
 | 2026-11-02 | Gradle-Prüfsummen (`verification-metadata.xml`) noch nicht; bekannte Grenze, vor der App einführen |
-| 2026-11-02 | Review A2 (Mitgliedschaft: Server-Liste oder signiertes Log) und A3 (Client-Formate maßgeblich beschreiben, feste Vektoren) im B3-Entwurf klären |
+| 2026-11-02 | Review A2 (Mitgliedschaft: Server-Liste oder signiertes Log) im B3-Entwurf klären; A3 (Client-Formate maßgeblich beschreiben, feste Vektoren) wird in B2b vorgezogen |
+| 2026-11-02 | Etappe B2b vor B3 eingeschoben: Das Backend kommt früh als verschlüsseltes Backup in die App (interne Variante), für echte Tests von B1/B2. Kein verlässliches Backup (Kill-Switch); das lokale Backup bleibt. Entwurf: [b2b-entwurf.md](b2b-entwurf.md) |
+| 2026-11-02 | B2b: Daten-Backup ist eine undurchsichtige Nutzlast; die App legt ihre Room-Datenbank ab (gzip), ohne Fotos und Audio. Eigenes Datenformat erst in B3 |
+| 2026-11-02 | B2b: Sicherung mit dem Tresorschlüssel verschlüsselt; Kopf im Chiffrat mit Zähler, Zeit, Geräte-ID, Schema-Version. Kleinerer Zähler vom Server → Warnung, kein stilles Wiederherstellen |
+| 2026-11-02 | B2b: Ablage in Cloud Storage (`var.region`), ein Objekt je Konto, 3 ältere Fassungen, nach 30 Tagen gelöscht; Schreiben nur mit erwarteter Version (`ifGenerationMatch`) |
+| 2026-11-02 | B2b: Ohne Synchronisation ein sicherndes Gerät; ein anderes übernimmt nur nach Rückfrage. Höchstens 8 MiB je Sicherung, Übertragung über den Server, Löschen von Anfang an |
+| 2026-11-02 | B2b: Formate maßgeblich in `docs/formate.md` mit festen Testvektoren (A3); Gradle-Prüfsummen; Modul `verbindung`; Einbindung per Composite Build |
+| 2026-11-02 | B2b: Testen nur Kevin und wenige Bekannte im internen Test-Track, eigene App-Variante; Testerinformation statt Datenschutzerklärung bis B6 |

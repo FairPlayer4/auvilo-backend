@@ -13,6 +13,7 @@ Kommunikation auf **Deutsch, mit ß**.
 - [docs/entwicklungsumgebung.md](docs/entwicklungsumgebung.md) – installierte Werkzeuge
 - [docs/go-review.md](docs/go-review.md) – Review-Anleitung; Code und Tests danach ausrichten
 - [docs/b2-entwurf.md](docs/b2-entwurf.md) – Schlüsselmodell, Backup, Kotlin-Client (`client/`)
+- [docs/b2b-entwurf.md](docs/b2b-entwurf.md) – Daten-Backup, Vorbereitung der App-Einbindung
 
 ## Code
 - Go-Code erklärend kommentieren (Kevin kennt Go nur grob). Kevin liest vor allem

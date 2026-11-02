@@ -110,9 +110,12 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
    **Bekannte Grenze:** keine Gradle-Prüfsummen; vor der App einführen.
 3. Kleinere Empfehlungen aus dem Review: E7 optional; weitere aus Lauf 2 in
    `.review/state.md`.
-4. Für den B3-Entwurf aus Lauf 4: A2 (Mitgliedschaft: Server-Liste oder signiertes
-   Log), A3 (Client-Formate maßgeblich beschreiben, feste Vektoren), A4 (Umschläge an
-   Kontext binden, Keyset-Typen prüfen), A5 (Speicher und Dienste aufteilen).
+4. Etappe **B2b** (vor B3): Daten-Backup für eine Person, danach Einbindung in die
+   App. Entwurf: [b2b-entwurf.md](b2b-entwurf.md), bestätigt am 2026-11-02. Beginnt
+   nach dem Cloud-Test von B2.
+5. Für den B3-Entwurf aus Lauf 4: A2 (Mitgliedschaft: Server-Liste oder signiertes
+   Log), A4 (Umschläge an Kontext binden, Keyset-Typen prüfen), A5 (Speicher und
+   Dienste aufteilen; Anfang in B2b). A3 (Formate festschreiben) kommt in B2b.
 
 ## Befehle
 ```bash
