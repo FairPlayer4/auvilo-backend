@@ -11,3 +11,8 @@ lint:
 breaking:
   use:
     - FILE
+  # Java-Optionen betreffen nur den erzeugten Code im Repo (client/), nicht
+  # das, was über die Leitung geht. Nachgetragen in B2.
+  except:
+    - FILE_SAME_JAVA_MULTIPLE_FILES
+    - FILE_SAME_JAVA_PACKAGE

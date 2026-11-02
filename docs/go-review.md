@@ -46,6 +46,9 @@
       verstreuten `time.Now()`).
 - [ ] Krypto nur aus Standardbibliothek/Tink, keine selbst gebauten Verfahren;
       Vergleiche von Geheimnissen mit `subtle.ConstantTimeCompare`.
+- [ ] Prüfen die Tests das Verhalten und nicht nur die Konstante selbst? Ein Test
+      `VERSUCHE == 3` wird mit der Konstante zusammen geändert und schützt nichts;
+      besser: „nach drei Fehlversuchen ist Schluss, nichts gespeichert“.
 
 ## 4. Werkzeuge – laufen in der CI, lokal genauso
 

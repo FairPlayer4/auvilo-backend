@@ -4,6 +4,9 @@ package avlreminder.v1;
 
 import "google/protobuf/timestamp.proto";
 
+option java_multiple_files = true;
+option java_package = "com.avlreminder.schnittstelle.v1";
+
 // Anmeldung eines Geräts und Verlängerung seiner Sitzung.
 // Beide Aufrufe brauchen keine Sitzung (sie stellen eine aus).
 //
@@ -15,9 +18,9 @@ import "google/protobuf/timestamp.proto";
 //                     ein neuer Geräteschlüssel ergibt ein neues Gerät.
 //   invalid_argument  nur SitzungErneuern: geraet_id ist kein 32-stelliges
 //                     Hex oder zeitpunkt fehlt.
+//   resource_exhausted Anfrage größer als 64 KiB (gilt für alle Dienste).
 //   unavailable       vorübergehend; später wiederholen.
 //   internal          Fehler im Server.
-// Anfragen über 64 KiB weist der Server ab.
 service AnmeldeDienst {
   // Erstes Anmelden eines Geräts mit einem Google-ID-Token. Legt beim ersten Mal
   // das Konto an. Derselbe Geräteschlüssel ergibt immer dasselbe Gerät.

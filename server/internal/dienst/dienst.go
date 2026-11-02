@@ -66,6 +66,7 @@ func NeuerHandler(k Konfiguration) (http.Handler, error) {
 	mux := http.NewServeMux()
 	mux.Handle(avlreminderv1connect.NewAnmeldeDienstHandler(d, optionen...))
 	mux.Handle(avlreminderv1connect.NewGeraeteDienstHandler(d, optionen...))
+	mux.Handle(avlreminderv1connect.NewSchluesselDienstHandler(d, optionen...))
 	return mux, nil
 }
 
@@ -76,7 +77,7 @@ func beiPanik(ctx context.Context, spec connect.Spec, _ http.Header, p any) erro
 	return connect.NewError(connect.CodeInternal, errors.New("interner Fehler"))
 }
 
-// dienste setzt beide Connect-Dienste um.
+// dienste setzt alle Connect-Dienste um (Schlüssel-Dienst in schluessel.go).
 type dienste struct {
 	k Konfiguration
 }

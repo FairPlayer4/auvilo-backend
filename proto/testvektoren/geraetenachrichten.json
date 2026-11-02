@@ -1,0 +1,16 @@
+{
+  "beschreibung": "Gemeinsame Testvektoren für Gerätenachrichten: Kotlin (client/protokoll, GeraetenachrichtenTest) und Go (server/internal/geraeteschluessel, TestTestvektoren) müssen beide genau diese Werte ergeben bzw. annehmen. Der Schlüssel ist ein Wegwerf-Schlüssel nur für diesen Test, der private Teil existiert nicht mehr. Das ID-Token ist erfunden.",
+  "geraeteschluessel_der_base64": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEi8wt1IzYYMRZsNuRlFI89IaG/2xQzkQrVUEUiBLbWJc9hy1i4npKiaI8ctSndyAin3TzpvohIJHwllhRVzI3nQ==",
+  "geraet_id": "d0e5518e666349cb0a3637c6b536b1cd",
+  "nonce": "0OVRjmZjScsKNjfGtTaxzSMmcFPfeRoLbuxXkwhWHZk",
+  "anmelden": {
+    "id_token": "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ0ZXN0In0.c2lnbmF0dXI",
+    "nachricht_hex": "61766c72656d696e6465722f616e6d656c64656e2f76310a65794a68624763694f694a53557a49314e694a392e65794a7a645749694f694a305a584e30496e302e63326c6e626d4630645849",
+    "signatur_base64": "MEUCIEhRDcNuh+xpQYweGbgIIn12pJmevlpMsHBy7cKnISloAiEAvIUxTEk84SONr+9hAUZSLV1lUro3DUMS6tCQUk/2wII="
+  },
+  "sitzung": {
+    "zeitpunkt_unix": 1793491200,
+    "nachricht_hex": "61766c72656d696e6465722f7369747a756e672f76310a64306535353138653636363334396362306133363337633662353336623163640a31373933343931323030",
+    "signatur_base64": "MEUCIBYadJ1qUUvde84Vj1YwIY3P/OpitpaKZQydZL76ehM8AiEAtll4ZnaY0XuwGTv6mg5afc0aFwOjs2lFlzAG1iS2l88="
+  }
+}

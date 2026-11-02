@@ -27,7 +27,10 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
   Adresse: `tofu output server_url`.
 - Secret `pfeffer` (nur europe-west1, feste Version 1, Wert nicht im Zustand).
   Schutz auch außerhalb von OpenTofu: Zerstörte Versionen bleiben 30 Tage
-  wiederherstellbar (`version_destroy_ttl`, angewendet 2026-11-01).
+  wiederherstellbar (`version_destroy_ttl`, angewendet 2026-11-01). Das gilt für
+  einzelne Versionen; gegen das Löschen des ganzen Secrets (Console, `gcloud
+  secrets delete`) schützt es nach unserem Verständnis nicht, `prevent_destroy`
+  wirkt nur in OpenTofu.
 - Firestore-TTL auf `sitzungen.laeuft_ab` (aktiv)
 - Deploy aus GitHub Actions (`.github/workflows/deploy.yml`) bei Merge nach `main`,
   wenn sich `server/**` oder der Workflow ändert (sonst von Hand starten). Beim
@@ -88,8 +91,28 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
    Google-Anmeldung, Erneuern, Auflisten, eigenes Gerät sperren (danach Sitzung
    ungültig, Erneuern abgelehnt). Logs enthalten Geräte-ID und Grund, kein Token.
    Damit ist B1 abgeschlossen.
-2. Kleinere Empfehlungen aus dem Review: E7 optional; weitere aus Lauf 2 in
+2. Etappe **B2** (begonnen 2026-11-01): Schlüsselmodell und Schlüssel-Backup.
+   Entwurf: [b2-entwurf.md](b2-entwurf.md), bestätigt. **Lokal fertig:**
+   Kotlin-Client `client/` (Gradle) mit Modul `protokoll` (Tink: Personen-, Tresor-
+   und Wiederherstellungsschlüssel, Backup, Umschlag, Signatur) und Test-Client
+   `testclient`; gemeinsame Testvektoren mit Go (`proto/testvektoren`); Server-Dienst
+   `SchluesselDienst` (Firestore-Sammlung `backups`, Version per Transaktion);
+   CI-Job „Kotlin – client“, Dependabot für Gradle.
+   Am 2026-11-01 lokal von Ende zu Ende getestet (echte Google-Anmeldung): Gerät
+   `pc` richtet neue Schlüssel ein; Gerät `tablet` bricht nach drei falschen
+   Eingaben ab, ohne etwas zu speichern; Gerät `handy` übernimmt mit dem richtigen
+   Wiederherstellungsschlüssel das Backup (gleicher Fingerabdruck wie `pc`).
+   Review-Lauf 4 am 2026-11-01: [.review/runs/2026-11-01-4.md](../.review/runs/2026-11-01-4.md),
+   Fixes in develop. Am 2026-11-02 umgesetzt: Einrichtung liegt in `protokoll` (A1),
+   Wiederherstellungsschlüssel wird vor dem Hochladen gezeigt und bestätigt.
+   **Offen:** Deploy und Test in der Cloud (der Test-Client fragt jetzt nach „ja“).
+   Danach kann `testanmeldung` (Go) weg (A6).
+   **Bekannte Grenze:** keine Gradle-Prüfsummen; vor der App einführen.
+3. Kleinere Empfehlungen aus dem Review: E7 optional; weitere aus Lauf 2 in
    `.review/state.md`.
+4. Für den B3-Entwurf aus Lauf 4: A2 (Mitgliedschaft: Server-Liste oder signiertes
+   Log), A3 (Client-Formate maßgeblich beschreiben, feste Vektoren), A4 (Umschläge an
+   Kontext binden, Keyset-Typen prüfen), A5 (Speicher und Dienste aufteilen).
 
 ## Befehle
 ```bash
@@ -126,6 +149,17 @@ Gegen den Server in der Cloud (Adresse aus `tofu output server_url`):
 
 ```bash
 cd server && go run ./cmd/testanmeldung -server "$(cd ../infra && tofu output -raw server_url)" -geraet cloud anmelden
+```
+
+Test-Client (Kotlin, B2) bauen, dann als Gerät anmelden und Schlüssel einrichten
+bzw. aus dem Backup holen (weitere Befehle mit `--hilfe`):
+
+```bash
+cd client && ./gradlew :testclient:installDist
+```
+
+```bash
+./client/testclient/build/install/testclient/bin/testclient --geraet pc anmelden
 ```
 
 Kill-Switch von Hand auslösen (sperrt alle Cloud-Run-Dienste!):

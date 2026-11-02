@@ -279,6 +279,97 @@ func pruefeVertrag(t *testing.T, neu func(t *testing.T) Speicher) {
 		}
 	})
 
+	// --- Backup (B2) ---------------------------------------------------------
+
+	backupPruefen := func(t *testing.T, s Speicher, kontoID, chiffrat string, version int64) {
+		t.Helper()
+		b, err := s.BackupHolen(ctx, kontoID)
+		muss(t, err)
+		if string(b.Chiffrat) != chiffrat || b.Version != version {
+			t.Errorf("Backup = %q Version %d, erwartet %q Version %d", b.Chiffrat, b.Version, chiffrat, version)
+		}
+	}
+
+	t.Run("erstes Backup bekommt Version 1", func(t *testing.T) {
+		s := neu(t)
+		v, err := s.BackupSpeichern(ctx, "konto-a", []byte("backup-1"), 0, t0)
+		muss(t, err)
+		if v != 1 {
+			t.Errorf("Version = %d, erwartet 1", v)
+		}
+		backupPruefen(t, s, "konto-a", "backup-1", 1)
+		b, _ := s.BackupHolen(ctx, "konto-a")
+		if !b.Geaendert.Equal(t0) {
+			t.Errorf("Geändert = %v, erwartet %v", b.Geaendert, t0)
+		}
+	})
+
+	t.Run("Backup mit passender Version ersetzt das alte", func(t *testing.T) {
+		s := neu(t)
+		_, err := s.BackupSpeichern(ctx, "konto-a", []byte("backup-1"), 0, t0)
+		muss(t, err)
+		v, err := s.BackupSpeichern(ctx, "konto-a", []byte("backup-2"), 1, t0.Add(time.Minute))
+		muss(t, err)
+		if v != 2 {
+			t.Errorf("Version = %d, erwartet 2", v)
+		}
+		backupPruefen(t, s, "konto-a", "backup-2", 2)
+	})
+
+	// KRITISCH: Zu jeder Erlaubnis oben die Ablehnung: Mit falscher Version
+	// wird nichts geschrieben.
+	versionsFaelle := []struct {
+		name      string
+		vorher    int // so viele Backups vorher gespeichert (0 = keins)
+		erwartet  int64
+		verbleibt string // Chiffrat, das danach gespeichert sein muss ("" = keins)
+	}{
+		{"lehnt erstes Backup mit erwarteter Version 1 ab", 0, 1, ""},
+		{"lehnt Version 0 ab, wenn es schon ein Backup gibt", 1, 0, "backup-1"},
+		{"lehnt veraltete Version ab", 2, 1, "backup-2"},
+		{"lehnt Version aus der Zukunft ab", 1, 2, "backup-1"},
+	}
+	for _, fall := range versionsFaelle {
+		t.Run(fall.name, func(t *testing.T) {
+			s := neu(t)
+			for i := range fall.vorher {
+				_, err := s.BackupSpeichern(ctx, "konto-a", []byte(fmt.Sprintf("backup-%d", i+1)), int64(i), t0)
+				muss(t, err)
+			}
+			_, err := s.BackupSpeichern(ctx, "konto-a", []byte("fremd"), fall.erwartet, t0)
+			if !errors.Is(err, ErrVersionVeraltet) {
+				t.Fatalf("Fehler = %v, erwartet ErrVersionVeraltet", err)
+			}
+			if fall.verbleibt == "" {
+				if _, err := s.BackupHolen(ctx, "konto-a"); !errors.Is(err, ErrNichtGefunden) {
+					t.Errorf("Holen: Fehler = %v, erwartet ErrNichtGefunden", err)
+				}
+				return
+			}
+			backupPruefen(t, s, "konto-a", fall.verbleibt, int64(fall.vorher))
+		})
+	}
+
+	t.Run("Holen ohne Backup meldet nicht gefunden", func(t *testing.T) {
+		s := neu(t)
+		if _, err := s.BackupHolen(ctx, "konto-a"); !errors.Is(err, ErrNichtGefunden) {
+			t.Errorf("Fehler = %v, erwartet ErrNichtGefunden", err)
+		}
+	})
+
+	t.Run("Backups verschiedener Konten sind getrennt", func(t *testing.T) {
+		s := neu(t)
+		_, err := s.BackupSpeichern(ctx, "konto-a", []byte("backup-a"), 0, t0)
+		muss(t, err)
+		_, err = s.BackupSpeichern(ctx, "konto-b", []byte("backup-b"), 0, t0)
+		muss(t, err)
+		backupPruefen(t, s, "konto-a", "backup-a", 1)
+		backupPruefen(t, s, "konto-b", "backup-b", 1)
+		if _, err := s.BackupHolen(ctx, "konto-c"); !errors.Is(err, ErrNichtGefunden) {
+			t.Errorf("Konto ohne Backup: Fehler = %v", err)
+		}
+	})
+
 	// Gleichzeitigkeit: Die folgenden Fälle starten mehrere Aufrufe zur selben
 	// Zeit (Goroutinen = leichtgewichtige Threads). Ein Rennen tritt nicht in
 	// jedem Durchlauf auf; deshalb mehrere Runden mit je frischem Speicher.
@@ -393,6 +484,42 @@ func pruefeVertrag(t *testing.T, neu func(t *testing.T) Speicher) {
 			if len(liste) != erfolgreich {
 				t.Errorf("Runde %d: %d Geräte im Konto, erwartet %d", runde, len(liste), erfolgreich)
 			}
+		}
+	})
+	// KRITISCH: Speichern mehrere Geräte gleichzeitig mit derselben erwarteten
+	// Version, gewinnt genau eins. Die anderen bekommen ErrVersionVeraltet (oder
+	// einen anderen Fehler), und gespeichert ist das Backup des Gewinners.
+	t.Run("gleichzeitiges Speichern derselben Version: genau einer gewinnt", func(t *testing.T) {
+		for runde := range gleichzeitigRunden {
+			s := neu(t)
+			_, err := s.BackupSpeichern(ctx, "konto-a", []byte("backup-0"), 0, t0)
+			muss(t, err)
+
+			fehler := make([]error, gleichzeitigAufrufe)
+			var wg sync.WaitGroup
+			for i := range gleichzeitigAufrufe {
+				wg.Go(func() {
+					_, fehler[i] = s.BackupSpeichern(ctx, "konto-a", []byte(fmt.Sprintf("geraet-%d", i)), 1, t0)
+				})
+			}
+			wg.Wait()
+
+			gewinner := -1
+			for i, f := range fehler {
+				switch {
+				case f == nil:
+					if gewinner >= 0 {
+						t.Fatalf("Runde %d: Aufruf %d und %d haben beide gespeichert", runde, gewinner, i)
+					}
+					gewinner = i
+				case !errors.Is(f, ErrVersionVeraltet):
+					t.Logf("Runde %d, Aufruf %d: %v", runde, i, f)
+				}
+			}
+			if gewinner < 0 {
+				t.Fatalf("Runde %d: kein Aufruf gelungen – das Rennen hat nicht stattgefunden", runde)
+			}
+			backupPruefen(t, s, "konto-a", fmt.Sprintf("geraet-%d", gewinner), 2)
 		}
 	})
 }

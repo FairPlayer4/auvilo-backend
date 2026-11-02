@@ -12,11 +12,18 @@ Kommunikation auf **Deutsch, mit ß**.
 - [docs/gcp-einrichtung.md](docs/gcp-einrichtung.md) – was Kevin in GCP vorab tun muss
 - [docs/entwicklungsumgebung.md](docs/entwicklungsumgebung.md) – installierte Werkzeuge
 - [docs/go-review.md](docs/go-review.md) – Review-Anleitung; Code und Tests danach ausrichten
+- [docs/b2-entwurf.md](docs/b2-entwurf.md) – Schlüsselmodell, Backup, Kotlin-Client (`client/`)
 
 ## Code
 - Go-Code erklärend kommentieren (Kevin kennt Go nur grob). Kevin liest vor allem
   Tests und Code mit `// KRITISCH:` – Tests sind die Spezifikation (tabellengetrieben,
   deutsche Testfallnamen, zu jeder Erlaubnis ein Ablehnungsfall).
+- Kotlin (`client/`) gilt dasselbe: JUnit-6-Tests mit deutschen Namen, parametrisiert,
+  `// KRITISCH:`; Compiler-Warnungen sind Fehler. Der Code aus `proto/` entsteht im
+  Gradle-Build. `protokoll` bleibt ohne Netz und ohne Android, damit es in die App passt.
+- Abläufe, die auch die App braucht, gehören nach `protokoll` (Server und lokale Ablage
+  als Schnittstellen); `testclient` ist nur CLI, Connect-Anbindung und Dateiablage.
+- Tests prüfen Verhalten, nicht die geprüfte Konstante selbst (kein `VERSUCHE == 3`).
 
 ## Zusammenarbeit
 - Kevin entwickelt die Anforderungen iterativ mit Claude: Feedback und Rückfragen geben,

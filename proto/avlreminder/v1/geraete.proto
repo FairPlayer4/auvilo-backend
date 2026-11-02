@@ -4,6 +4,9 @@ package avlreminder.v1;
 
 import "google/protobuf/timestamp.proto";
 
+option java_multiple_files = true;
+option java_package = "com.avlreminder.schnittstelle.v1";
+
 // Die eigenen Geräte verwalten. Alle Aufrufe brauchen eine Sitzung und wirken
 // nur auf das eigene Konto.
 //
@@ -11,6 +14,7 @@ import "google/protobuf/timestamp.proto";
 //   unauthenticated Sitzung fehlt, ist ungültig, abgelaufen oder gehört zu
 //                   einem inzwischen gesperrten Gerät.
 //   not_found       GeraetSperren: kein Gerät dieses Kontos mit dieser ID.
+//   resource_exhausted Anfrage größer als 64 KiB.
 //   unavailable     vorübergehend; später wiederholen.
 //   internal        Fehler im Server.
 service GeraeteDienst {
