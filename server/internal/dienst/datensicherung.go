@@ -20,7 +20,8 @@ const MaxSicherungsanfrage = datensicherung.MaxChiffrat + 1<<10
 // StandardGleichzeitigeSicherungen ist die Zahl der Aufrufe des
 // Datensicherungs-Dienstes, die höchstens gleichzeitig laufen. Cloud Run gibt dem Server 256 MiB und bis zu 80
 // Anfragen gleichzeitig; 80 Sicherungen à 8 MiB passen da nicht hinein. Vier
-// brauchen höchstens etwa 70 MiB (Anfrage, entpackte Nachricht, Upload).
+// brauchen gemessen etwa 95 MiB (Anfrage, entpackte Nachricht, Upload); dazu
+// kommt der Grundbedarf des Servers.
 const StandardGleichzeitigeSicherungen = 4
 
 var _ avlreminderv1connect.DatensicherungDienstHandler = (*dienste)(nil)
