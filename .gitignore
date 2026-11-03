@@ -24,9 +24,11 @@ crash.log
 *.pem
 credentials*.json
 service-account*.json
-# Google-OAuth-Client und Sitzungen des Werkzeugs testanmeldung (liegen sonst in %APPDATA%)
+# Google-OAuth-Client, Sitzungen, Schlüssel und Sicherungsstand des Test-Clients (liegen sonst in %APPDATA%)
 client_secret*.json
 sitzung-*.json
+schluessel-*.json
+stand-*.json
 
 # IDE
 .idea/

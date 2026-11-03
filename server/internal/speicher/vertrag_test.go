@@ -357,6 +357,29 @@ func pruefeVertrag(t *testing.T, neu func(t *testing.T) Speicher) {
 		}
 	})
 
+	t.Run("nach dem Löschen ist das Backup weg, ein neues beginnt mit Version 1", func(t *testing.T) {
+		s := neu(t)
+		_, err := s.BackupSpeichern(ctx, "konto-a", []byte("backup-1"), 0, t0)
+		muss(t, err)
+		_, err = s.BackupSpeichern(ctx, "konto-b", []byte("backup-b"), 0, t0)
+		muss(t, err)
+		muss(t, s.BackupLoeschen(ctx, "konto-a"))
+		if _, err := s.BackupHolen(ctx, "konto-a"); !errors.Is(err, ErrNichtGefunden) {
+			t.Errorf("Holen nach dem Löschen: Fehler = %v, erwartet ErrNichtGefunden", err)
+		}
+		// KRITISCH: Gelöscht wird nur das Backup dieses Kontos.
+		backupPruefen(t, s, "konto-b", "backup-b", 1)
+		v, err := s.BackupSpeichern(ctx, "konto-a", []byte("neu"), 0, t0)
+		muss(t, err)
+		if v != 1 {
+			t.Errorf("Version = %d, erwartet 1", v)
+		}
+	})
+
+	t.Run("Löschen ohne Backup ist kein Fehler", func(t *testing.T) {
+		muss(t, neu(t).BackupLoeschen(ctx, "konto-a"))
+	})
+
 	t.Run("Backups verschiedener Konten sind getrennt", func(t *testing.T) {
 		s := neu(t)
 		_, err := s.BackupSpeichern(ctx, "konto-a", []byte("backup-a"), 0, t0)

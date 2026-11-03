@@ -40,13 +40,31 @@ angegeben.
   `gcloud emulators firestore start --host-port=localhost:8086`, dann
   `FIRESTORE_EMULATOR_HOST=localhost:8086 go test ./...` in `server/`. Ohne die
   Variable werden die Firestore-Fälle übersprungen; in der CI sind sie Pflicht.
+- Nachbau von Cloud Storage für die Datensicherungen (Docker Desktop muss laufen):
+  `docker run -d --rm --name fakegcs -p 4443:4443 fsouza/fake-gcs-server:1.56.1 -scheme http -port 4443 -backend memory`,
+  dann zusätzlich `STORAGE_EMULATOR_HOST=localhost:4443`. `-backend memory` ist
+  nötig, weil nur dort die Versionierung nachgebildet ist. Für den lokalen Server
+  den Bucket einmal anlegen:
+  `curl -X POST "http://localhost:4443/storage/v1/b?project=lokal" -H "Content-Type: application/json" -d '{"name":"lokal","versioning":{"enabled":true}}'`.
+  Stoppen mit `docker stop fakegcs` (Inhalt ist dann weg).
 - Netzwerkzugriffe (winget, `go install`, `gcloud`, `git push`) laufen in Claude Code
   außerhalb der Sandbox.
-- Kotlin-Client (`client/`): `./gradlew check` baut und testet beide Module. Der
+- Kotlin-Client (`client/`): `./gradlew check` baut und testet alle Module (`protokoll`, `verbindung`, `testclient`). Der
   Code aus den .proto-Dateien entsteht dabei im Build und wird nicht eingecheckt.
   Gradle-Cache auf diesem Rechner: `GRADLE_USER_HOME=E:\caches\gradle`.
+- Gradle prüft jede Abhängigkeit gegen `client/gradle/verification-metadata.xml`
+  (SHA-256). Nach einem Versionswechsel, auch in einem Dependabot-PR, die Datei neu
+  erzeugen, sonst bricht der Build ab:
+  `./gradlew --write-verification-metadata sha256 check :testclient:installDist`,
+  und zwar mit leerem `GRADLE_USER_HOME` (sonst fehlen Dateien, die schon im Cache
+  liegen, und erst die CI merkt es). Danach den Diff ansehen: Es dürfen nur die geänderten Versionen dazukommen.
+  `protoc` ist ein Programm je Plattform; Gradle trägt nur die Windows-Variante ein.
+  Die Linux-Variante für die CI von Hand ergänzen (SHA-256 der Datei von Maven
+  Central, SHA-1 mit der `.sha1`-Datei dort abgleichen).
 - Test-Client gegen den lokalen Server:
   `./gradlew :testclient:run --args="--geraet pc anmelden"` (Befehle mit `--hilfe`).
-  Er nutzt dieselbe `client_secret_*.json` in `%APPDATA%\avlreminder` wie
-  `testanmeldung` und legt Geräteschlüssel und Schlüssel in
-  `%APPDATA%\avlreminder\testclient` ab.
+  Er nutzt die `client_secret_*.json` in `%APPDATA%\avlreminder` und legt
+  Geräteschlüssel und Schlüssel in `%APPDATA%\avlreminder\testclient` ab.
+  Für die Datensicherung braucht der lokale Server zusätzlich
+  `STORAGE_EMULATOR_HOST=localhost:4443` und `SICHERUNG_BUCKET=lokal` (Bucket wie
+  oben anlegen).

@@ -10,6 +10,9 @@ internal object Zweck {
     /** Schlüssel-Backup, verschlüsselt mit dem Wiederherstellungsschlüssel; dahinter die Konto-ID. */
     const val BACKUP = "avlreminder/backup/v1\n"
 
+    /** Datensicherung, verschlüsselt mit dem Tresorschlüssel; dahinter die Konto-ID. */
+    const val DATENSICHERUNG = "avlreminder/datensicherung/v1\n"
+
     /** Ein Schlüssel, verpackt für den Personenschlüssel eines anderen. */
     const val UMSCHLAG = "avlreminder/umschlag/v1\n"
 }

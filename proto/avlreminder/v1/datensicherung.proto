@@ -1,0 +1,65 @@
+syntax = "proto3";
+
+package avlreminder.v1;
+
+option java_multiple_files = true;
+option java_package = "com.avlreminder.schnittstelle.v1";
+
+// Ablage für die verschlüsselte Datensicherung eines Kontos (Etappe B2b).
+// Alle Aufrufe brauchen eine Sitzung und wirken nur auf das eigene Konto.
+// Jedes Konto hat genau eine Sicherung; der Server hält zusätzlich wenige ältere
+// Fassungen als Rückfallebene (docs/b2b-entwurf.md).
+//
+// Der Server kann die Sicherung nicht lesen: Sie ist mit dem Tresorschlüssel
+// verschlüsselt (Format: proto/avlreminder/inhalt/v1/datensicherung.proto,
+// docs/formate.md). Der Server prüft nur Größe und Version.
+//
+// Fehlercodes (Connect):
+//   unauthenticated     Sitzung fehlt, ist ungültig oder abgelaufen.
+//   invalid_argument    SicherungSpeichern: chiffrat leer oder erwartete_version
+//                       negativ.
+//   failed_precondition SicherungSpeichern: erwartete_version passt nicht – ein
+//                       anderes Gerät war schneller. Neu holen, nicht überschreiben.
+//   not_found           SicherungHolen: Für das Konto gibt es keine Sicherung.
+//   resource_exhausted  SicherungSpeichern: Sicherung größer als 8 MiB. Nur in
+//                       diesem Fall; die App meldet "Sicherung zu groß".
+//   unavailable         vorübergehend (auch: gerade zu viele Sicherungen
+//                       gleichzeitig); später wiederholen.
+//   internal            Fehler im Server.
+service DatensicherungDienst {
+  // Speichert die Sicherung, aber nur, wenn die gespeicherte Version gleich
+  // erwartete_version ist (0 = es gibt noch keine). So überschreibt ein Gerät
+  // nie unbemerkt eine neuere Sicherung.
+  rpc SicherungSpeichern(SicherungSpeichernRequest) returns (SicherungSpeichernResponse);
+
+  // Liefert die neueste Fassung.
+  rpc SicherungHolen(SicherungHolenRequest) returns (SicherungHolenResponse);
+
+  // Löscht die Sicherung mit allen älteren Fassungen. Gibt es keine, ist das
+  // kein Fehler.
+  rpc SicherungLoeschen(SicherungLoeschenRequest) returns (SicherungLoeschenResponse);
+}
+
+message SicherungSpeichernRequest {
+  // Verschlüsselte Sicherung, höchstens 8 MiB.
+  bytes chiffrat = 1;
+  // Version, die das Gerät zuletzt gesehen hat; 0, wenn es noch keine gibt.
+  int64 erwartete_version = 2;
+}
+
+message SicherungSpeichernResponse {
+  // Neue Version. Sie ist größer als die alte, springt aber: Nicht mit
+  // erwartete_version + 1 rechnen, sondern diesen Wert merken.
+  int64 version = 1;
+}
+
+message SicherungHolenRequest {}
+
+message SicherungHolenResponse {
+  bytes chiffrat = 1;
+  int64 version = 2;
+}
+
+message SicherungLoeschenRequest {}
+
+message SicherungLoeschenResponse {}

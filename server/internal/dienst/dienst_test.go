@@ -14,13 +14,15 @@ import (
 	v1 "github.com/FairPlayer4/avlreminder-backend/server/gen/avlreminder/v1"
 	"github.com/FairPlayer4/avlreminder-backend/server/gen/avlreminder/v1/avlreminderv1connect"
 	"github.com/FairPlayer4/avlreminder-backend/server/internal/anmeldung"
+	"github.com/FairPlayer4/avlreminder-backend/server/internal/datensicherung"
 	"github.com/FairPlayer4/avlreminder-backend/server/internal/geraeteschluessel"
 	"github.com/FairPlayer4/avlreminder-backend/server/internal/speicher"
 	"github.com/FairPlayer4/avlreminder-backend/server/internal/testhilfe"
 )
 
 // Diese Tests laufen über echtes HTTP gegen den vollständigen Handler – so, wie
-// später ein Client den Server anspricht. Nur Google und Firestore sind ersetzt.
+// später ein Client den Server anspricht. Nur Google, Firestore und Cloud Storage
+// sind ersetzt.
 
 const clientID = "test-client.apps.googleusercontent.com"
 
@@ -31,11 +33,19 @@ type testServer struct {
 	anmelde  avlreminderv1connect.AnmeldeDienstClient
 	geraete  avlreminderv1connect.GeraeteDienstClient
 	backup   avlreminderv1connect.SchluesselDienstClient
+	sicherer avlreminderv1connect.DatensicherungDienstClient
 	speicher *speicher.Arbeitsspeicher
 	jetzt    time.Time // die Uhr des Servers; Tests stellen sie vor
 }
 
 func neuerTestServer(t *testing.T) *testServer {
+	t.Helper()
+	return neuerTestServerMit(t, datensicherung.NeuerArbeitsspeicher(), 0)
+}
+
+// neuerTestServerMit erlaubt eine eigene Ablage für Sicherungen und eine eigene
+// Grenze für gleichzeitige Sicherungen (0 = Standard).
+func neuerTestServerMit(t *testing.T, sicherungen datensicherung.Ablage, gleichzeitig int) *testServer {
 	t.Helper()
 	ts := &testServer{google: testhilfe.NeuesGoogle(t, clientID), speicher: speicher.NeuerArbeitsspeicher(), jetzt: start}
 	uhr := func() time.Time { return ts.jetzt }
@@ -44,10 +54,12 @@ func neuerTestServer(t *testing.T) *testServer {
 		t.Fatal(err)
 	}
 	h, err := NeuerHandler(Konfiguration{
-		Pruefer:  pruefer,
-		Speicher: ts.speicher,
-		Pfeffer:  []byte("0123456789abcdef0123456789abcdef"),
-		Jetzt:    uhr,
+		Pruefer:                  pruefer,
+		Speicher:                 ts.speicher,
+		Sicherungen:              sicherungen,
+		Pfeffer:                  []byte("0123456789abcdef0123456789abcdef"),
+		Jetzt:                    uhr,
+		GleichzeitigeSicherungen: gleichzeitig,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -57,6 +69,7 @@ func neuerTestServer(t *testing.T) *testServer {
 	ts.anmelde = avlreminderv1connect.NewAnmeldeDienstClient(http.DefaultClient, srv.URL)
 	ts.geraete = avlreminderv1connect.NewGeraeteDienstClient(http.DefaultClient, srv.URL)
 	ts.backup = avlreminderv1connect.NewSchluesselDienstClient(http.DefaultClient, srv.URL)
+	ts.sicherer = avlreminderv1connect.NewDatensicherungDienstClient(http.DefaultClient, srv.URL)
 	return ts
 }
 
@@ -168,7 +181,7 @@ func TestAnmeldenLehntUngueltigeAnfragenAb(t *testing.T) {
 
 	t.Run("lehnt veraltetes Token ab", func(t *testing.T) {
 		req := ts.anmeldeAnfrage(t, "google-kevin", handy)
-		ts.jetzt = start.Add(anmeldung.MaxAlter + time.Second)
+		ts.jetzt = start.Add(5*time.Minute + time.Second) // ID-Token gilt 5 Minuten (b1-entwurf.md)
 		defer func() { ts.jetzt = start }()
 		_, err := ts.anmelde.Anmelden(context.Background(), connect.NewRequest(req))
 		erwarteCode(t, err, connect.CodeUnauthenticated)
@@ -329,10 +342,37 @@ func TestGeraeteListeZeigtNurEigeneGeraete(t *testing.T) {
 	}
 }
 
-func TestNeuerHandlerVerlangtLangenPfeffer(t *testing.T) {
-	_, err := NeuerHandler(Konfiguration{Pruefer: &anmeldung.Pruefer{}, Speicher: speicher.NeuerArbeitsspeicher(), Pfeffer: []byte("kurz")})
-	if err == nil {
-		t.Error("kurzer Pfeffer angenommen, erwartet Fehler")
+func TestNeuerHandlerPrueftDieKonfiguration(t *testing.T) {
+	gut := func() Konfiguration {
+		return Konfiguration{
+			Pruefer:     &anmeldung.Pruefer{},
+			Speicher:    speicher.NeuerArbeitsspeicher(),
+			Sicherungen: datensicherung.NeuerArbeitsspeicher(),
+			Pfeffer:     []byte("0123456789abcdef0123456789abcdef"),
+		}
+	}
+	t.Run("nimmt vollständige Konfiguration an", func(t *testing.T) {
+		if _, err := NeuerHandler(gut()); err != nil {
+			t.Fatal(err)
+		}
+	})
+	faelle := []struct {
+		name    string
+		aendern func(k *Konfiguration)
+	}{
+		{"lehnt kurzen Pfeffer ab", func(k *Konfiguration) { k.Pfeffer = []byte("kurz") }},
+		{"lehnt fehlenden Prüfer ab", func(k *Konfiguration) { k.Pruefer = nil }},
+		{"lehnt fehlenden Speicher ab", func(k *Konfiguration) { k.Speicher = nil }},
+		{"lehnt fehlende Ablage für Sicherungen ab", func(k *Konfiguration) { k.Sicherungen = nil }},
+	}
+	for _, fall := range faelle {
+		t.Run(fall.name, func(t *testing.T) {
+			k := gut()
+			fall.aendern(&k)
+			if _, err := NeuerHandler(k); err == nil {
+				t.Error("angenommen, erwartet Fehler")
+			}
+		})
 	}
 }
 

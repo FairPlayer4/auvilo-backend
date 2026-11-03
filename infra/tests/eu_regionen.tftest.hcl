@@ -104,6 +104,100 @@ run "alle_standorte_liegen_in_der_eu" {
     condition     = google_pubsub_topic.budget.message_storage_policy[0].allowed_persistence_regions == toset([var.region])
     error_message = "Das Budget-Thema darf Nachrichten außerhalb von var.region speichern."
   }
+  assert {
+    condition     = upper(google_storage_bucket.datensicherung.location) == upper(var.region)
+    error_message = "Der Bucket der Datensicherungen liegt nicht in var.region."
+  }
+}
+
+# Eine andere EU-Region geht durch, und alles zieht mit (nicht nur die Vorgabe).
+run "nimmt_andere_eu_region_an" {
+  command = plan
+
+  variables {
+    region = "europe-west10" # Berlin
+  }
+
+  assert {
+    condition     = google_cloud_run_v2_service.server.location == "europe-west10"
+    error_message = "Der Server folgt var.region nicht."
+  }
+  assert {
+    condition     = upper(google_storage_bucket.datensicherung.location) == "EUROPE-WEST10"
+    error_message = "Der Bucket der Datensicherungen folgt var.region nicht."
+  }
+}
+
+# Datensicherungen (E-B2b-4): nie öffentlich, ältere Fassungen 7 Tage und
+# höchstens 100, Zugriff nur für das Server-Konto.
+run "datensicherung_ist_geschuetzt_und_begrenzt" {
+  command = plan
+
+  assert {
+    condition     = google_storage_bucket.datensicherung.public_access_prevention == "enforced" && google_storage_bucket.datensicherung.uniform_bucket_level_access
+    error_message = "Der Bucket der Datensicherungen könnte öffentlich werden."
+  }
+  assert {
+    condition     = google_storage_bucket.datensicherung.versioning[0].enabled
+    error_message = "Ohne Versionierung gibt es keine älteren Fassungen."
+  }
+  assert {
+    condition     = anytrue([for r in google_storage_bucket.datensicherung.lifecycle_rule : one(r.condition).days_since_noncurrent_time == 7 && one(r.action).type == "Delete"])
+    error_message = "Ältere Fassungen werden nicht nach 7 Tagen gelöscht."
+  }
+  assert {
+    # 101 neuere = die aktuelle und 100 ältere Fassungen bleiben.
+    condition     = anytrue([for r in google_storage_bucket.datensicherung.lifecycle_rule : one(r.condition).num_newer_versions == 101 && one(r.action).type == "Delete"])
+    error_message = "Es bleiben nicht höchstens 100 ältere Fassungen."
+  }
+  assert {
+    condition     = google_storage_bucket_iam_member.server_datensicherung.member == google_service_account.server.member && google_storage_bucket_iam_member.server_datensicherung.role == "roles/storage.objectUser"
+    error_message = "Der Bucket der Datensicherungen gehört nicht (nur) dem Server-Konto."
+  }
+  assert {
+    condition     = contains([for e in google_cloud_run_v2_service.server.template[0].containers[0].env : e.value if e.name == "SICHERUNG_BUCKET"], "test-projekt-datensicherung")
+    error_message = "Der Server kennt den Bucket der Datensicherungen nicht."
+  }
+}
+
+# Kosten vor Verfügbarkeit (KO1): im Leerlauf keine Instanz, höchstens 2;
+# Logs 30 Tage (P5).
+run "kosten_und_aufbewahrung" {
+  command = plan
+
+  assert {
+    condition     = google_cloud_run_v2_service.server.template[0].scaling[0].min_instance_count == 0
+    error_message = "Der Server hält im Leerlauf Instanzen vor (kostet Geld)."
+  }
+  assert {
+    condition     = google_cloud_run_v2_service.server.template[0].scaling[0].max_instance_count == 2
+    error_message = "Der Server darf mehr als 2 Instanzen starten."
+  }
+  assert {
+    condition     = google_logging_project_bucket_config.eu.retention_days == 30
+    error_message = "Logs werden nicht 30 Tage aufbewahrt."
+  }
+}
+
+# Rechte (Review Lauf 5, E2): Das Build-Konto liest keine Datensicherungen und
+# schreibt Images nur ins Repo der Funktionen.
+run "build_konto_ist_eng" {
+  command = plan
+
+  assert {
+    # Genau diese Buckets, als eigene Liste geschrieben: Jeder weitere oder
+    # breitere Eintrag (etwa alle Buckets) macht den Test rot.
+    condition = google_project_iam_member.bauen_quellen.condition[0].expression == join(" || ", [
+      "resource.name == \"projects/_/buckets/test-projekt-quellen\"",
+      "resource.name.startsWith(\"projects/_/buckets/test-projekt-quellen/\")",
+      "resource.name.startsWith(\"projects/_/buckets/gcf-v2-\")",
+    ])
+    error_message = "Das Build-Konto darf mehr Buckets lesen als den Quellen-Bucket und die von Cloud Functions."
+  }
+  assert {
+    condition     = google_artifact_registry_repository_iam_member.bauen_funktionen.repository == google_artifact_registry_repository.funktionen.name
+    error_message = "Das Build-Konto schreibt Images nicht (nur) ins Repo der Funktionen."
+  }
 }
 
 run "lehnt_region_ausserhalb_der_eu_ab" {

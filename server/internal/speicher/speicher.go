@@ -112,6 +112,10 @@ type Speicher interface {
 
 	// BackupHolen liefert das Backup des Kontos oder ErrNichtGefunden.
 	BackupHolen(ctx context.Context, kontoID string) (Backup, error)
+
+	// BackupLoeschen entfernt das Backup des Kontos. Gibt es keins, ist das
+	// kein Fehler. Danach beginnt ein neues Backup wieder mit Version 1.
+	BackupLoeschen(ctx context.Context, kontoID string) error
 }
 
 // neueKontoID erzeugt eine zufällige Konto-ID (128 Bit, hexadezimal).

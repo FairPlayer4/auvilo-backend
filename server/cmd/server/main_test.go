@@ -10,6 +10,7 @@ func TestLeseKonfiguration(t *testing.T) {
 		"PROJEKT":           "p",
 		"GOOGLE_CLIENT_IDS": "a.apps, b.apps ,",
 		"PFEFFER_SECRET":    "projects/p/secrets/pfeffer/versions/latest",
+		"SICHERUNG_BUCKET":  "b",
 	}
 	mit := func(aenderungen map[string]string) func(string) string {
 		m := map[string]string{}
@@ -27,7 +28,7 @@ func TestLeseKonfiguration(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !slices.Equal(k.clientIDs, []string{"a.apps", "b.apps"}) || k.port != "8080" {
+		if !slices.Equal(k.clientIDs, []string{"a.apps", "b.apps"}) || k.port != "8080" || k.sicherungBucket != "b" {
 			t.Errorf("Konfiguration = %+v", k)
 		}
 	})
@@ -44,6 +45,7 @@ func TestLeseKonfiguration(t *testing.T) {
 	}{
 		{"lehnt fehlendes Projekt ab", map[string]string{"PROJEKT": ""}},
 		{"lehnt fehlende Client-IDs ab", map[string]string{"GOOGLE_CLIENT_IDS": " , "}},
+		{"lehnt fehlenden Bucket für Sicherungen ab", map[string]string{"SICHERUNG_BUCKET": ""}},
 		{"lehnt fehlenden Pfeffer ab", map[string]string{"PFEFFER_SECRET": ""}},
 		{"lehnt beide Pfeffer-Quellen zugleich ab", map[string]string{"PFEFFER": "aGFsbG8="}},
 		{"lehnt Pfeffer ab, der kein base64 ist", map[string]string{"PFEFFER_SECRET": "", "PFEFFER": "%%%"}},

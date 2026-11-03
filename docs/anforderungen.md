@@ -203,9 +203,12 @@ aber nicht **was**. Wird in der Datenschutzerklärung so benannt.
   KI-Anfragen gar nicht.
 
 ### 4.5 Sicherheit
-- SE1 Nur HTTPS; Sitzungs-Tokens kurzlebig; Signaturen jeder Operation.
+- SE1 Nur HTTPS; Sitzungs-Tokens kurzlebig; Signaturen jeder Operation (gemeint sind
+  die Sync-Operationen ab B3; in B1/B2 signieren Anmelden und Erneuern, alles andere
+  trägt das Sitzungs-Token, siehe Kap. 11).
 - SE2 Secrets im Secret Manager; kein Schlüsselmaterial im Repo.
-- SE3 Dependabot, `govulncheck`, Container-Image-Scan.
+- SE3 Dependabot, `govulncheck`, Container-Image-Scan (erfüllt durch distroless,
+  `govulncheck` und Dependabot, siehe Kap. 11).
 
 ## 5. Architektur [E]
 
@@ -228,7 +231,7 @@ aber nicht **was**. Wird in der Datenschutzerklärung so benannt.
 - **Preis dafür**: zwei Sprachen. Die Grenze ist die Schnittstelle; Verträglichkeit
   sichern Tests, die der Kotlin-Test-Client gegen den Go-Server fährt.
 - **Ein Repo für alles** (Monorepo): `proto/` (Schnittstelle), `server/` (Go),
-  `client/` (Kotlin: Protokoll-Modul und Test-Client), `infra/` (OpenTofu),
+  `client/` (Kotlin: Protokoll, Verbindung zum Server, Test-Client), `infra/` (OpenTofu),
   `docs/`. Eine Änderung an der Schnittstelle ist so ein einziger Commit. [E]
 - Region: **europe-west1 (Belgien)** – meist günstigste EU-Preisstufe, niedriger
   CO₂-Wert; Unterschied zu Frankfurt praktisch nicht spürbar. [P]
@@ -290,6 +293,7 @@ tragen die Tests die Spezifikation. Anleitung zum Review: [go-review.md](go-revi
 | B0 | GCP-Projekt, Budget + Kill-Switch, OpenTofu-Grundgerüst, CI |
 | B1 | Go-Server auf Cloud Run, Google-Login, Sitzungs-Token, Geräteregistrierung |
 | B2 | Kotlin-Protokoll-Modul: Schlüsselmodell, Verpacken/Entpacken, Signaturen; Test-Client mit Wiederherstellungsschlüssel |
+| B2b | Daten-Backup für eine Person (Tresorschlüssel, Cloud Storage EU, ältere Fassungen), Formate festschreiben, `client/` bereit für die App; danach Einbindung als Backup in eine interne App-Variante ([b2b-entwurf.md](b2b-entwurf.md)) |
 | B3 | Kontakte per QR (im Test-Client als Text), Freigaben, Append-only-Log, Konfliktauflösung |
 | B4 | FCM-Push, Snapshots, Ablaufzeiten, Person entfernen + faule Rotation, Konto löschen |
 | B5 | KI-Proxy (Text) mit Vertex AI EU, Freigabe-Ablauf im Test-Client, Kontingente |
@@ -351,4 +355,24 @@ tragen die Tests die Spezifikation. Anleitung zum Review: [go-review.md](go-revi
 | 2026-11-02 | Abläufe, die auch die App braucht (z. B. Einrichtung), liegen in `protokoll` hinter Schnittstellen (Server, lokale Ablage); `testclient` enthält nur CLI, Connect-Anbindung und Dateiablage (Review A1) |
 | 2026-11-02 | Tests prüfen Verhalten, nicht die geprüfte Konstante selbst (kein Test, der nur `VERSUCHE == 3` nachspricht) |
 | 2026-11-02 | Gradle-Prüfsummen (`verification-metadata.xml`) noch nicht; bekannte Grenze, vor der App einführen |
-| 2026-11-02 | Review A2 (Mitgliedschaft: Server-Liste oder signiertes Log) und A3 (Client-Formate maßgeblich beschreiben, feste Vektoren) im B3-Entwurf klären |
+| 2026-11-02 | Review A2 (Mitgliedschaft: Server-Liste oder signiertes Log) im B3-Entwurf klären; A3 (Client-Formate maßgeblich beschreiben, feste Vektoren) wird in B2b vorgezogen |
+| 2026-11-02 | Etappe B2b vor B3 eingeschoben: Das Backend kommt früh als verschlüsseltes Backup in die App (interne Variante), für echte Tests von B1/B2. Kein verlässliches Backup (Kill-Switch); das lokale Backup bleibt. Entwurf: [b2b-entwurf.md](b2b-entwurf.md) |
+| 2026-11-02 | B2b: Daten-Backup ist eine undurchsichtige Nutzlast; die App legt ihre Room-Datenbank ab (gzip), ohne Fotos und Audio. Eigenes Datenformat erst in B3 |
+| 2026-11-02 | B2b: Sicherung mit dem Tresorschlüssel verschlüsselt; Kopf im Chiffrat mit Zähler, Zeit, Geräte-ID, Schema-Version. Kleinerer Zähler vom Server → Warnung, kein stilles Wiederherstellen |
+| 2026-11-02 | B2b: Ablage in Cloud Storage (`var.region`), ein Objekt je Konto, 3 ältere Fassungen, nach 30 Tagen gelöscht (am 2026-11-03 geändert: 7 Tage, höchstens 100); Schreiben nur mit erwarteter Version (`ifGenerationMatch`) |
+| 2026-11-02 | B2b: Ohne Synchronisation ein sicherndes Gerät; ein anderes übernimmt nur nach Rückfrage. Höchstens 8 MiB je Sicherung, Übertragung über den Server, Löschen von Anfang an |
+| 2026-11-02 | B2b: Formate maßgeblich in `docs/formate.md` mit festen Testvektoren (A3); Gradle-Prüfsummen; Modul `verbindung`; Einbindung per Composite Build |
+| 2026-11-02 | B2b: Testen nur Kevin und wenige Bekannte im internen Test-Track, eigene App-Variante; Testerinformation statt Datenschutzerklärung bis B6 |
+| 2026-11-02 | Testphase: Claude darf Wiederherstellungsschlüssel von Testkonten sehen. Vor echten Daten werden Schlüssel-Backup, Datensicherung und Testdateien gelöscht und neu erzeugt; ab dann (Sicherheitsphase, von Claude vorher angekündigt) sieht Claude keine Schlüssel mehr. Liste verbotener Geheimnisse in `CLAUDE.md` |
+| 2026-11-03 | Gestohlenes Gerät mit Google-Login kann sich nach dem Sperren neu anmelden: bekannte Grenze bis vor echten Daten; dann dürfen neue Geräte erst nach Freischaltung (QR oder Wiederherstellungsschlüssel) sperren und löschen, vorhandene Geräte erfahren von neuen ([b1-entwurf.md](b1-entwurf.md)) |
+| 2026-11-03 | Datensicherung: Sitzung wird auf HTTP-Ebene geprüft, bevor der Inhalt gelesen und ein Platz belegt wird (`sitzung.VorDemLesen`) |
+| 2026-11-03 | Schlüssel-Backup: Version beginnt nach dem Löschen wieder bei 1; Clients speichern nur mit erwarteter Version 0, Grabstein erst bei Bedarf (`schluessel.proto`) |
+| 2026-11-03 | Datensicherung: Wiederherstellen heißt übernehmen; abgelehnte Fassungen merkt sich das Gerät als gesehen (Untergrenze); Löschen behält den Zähler (`Sicherungsablauf.loeschen`) |
+| 2026-11-03 | Datensicherung: ältere Fassungen 7 Tage, höchstens 100, statt 3 Fassungen und 30 Tage ([b2b-entwurf.md](b2b-entwurf.md), E-B2b-4) |
+| 2026-11-03 | Kill-Switch: WARN (Alarm-Mail) nur bei neu gesperrten Diensten oder Trennen; ist schon alles gesperrt, INFO |
+| 2026-11-03 | Löschschutz (Firestore, Cloud Run, Bucket) wird vor echten Daten eingeschaltet ([b2b-entwurf.md](b2b-entwurf.md), „Vor echten Daten“) |
+| 2026-11-03 | SE1 „Signaturen jeder Operation“ meint die Sync-Operationen ab B3; bis dahin signieren nur Anmelden und Erneuern |
+| 2026-11-03 | SE3 Image-Scan: kein eigener Scanner. Das Server-Image ist `distroless/static` (keine Shell, kaum Pakete) mit einer Go-Datei; diese prüft `govulncheck` in der CI, das Basis-Image hält Dependabot aktuell. Ein Scanner in GCP kostet je Image, einer in der CI wäre eine weitere fremde Action |
+| 2026-11-03 | Datensicherung: Bucket ohne Soft Delete – Löschen löscht sofort (DSGVO Art. 17); vor Fehlern der App schützen die älteren Fassungen |
+| 2026-11-03 | Server: `GOMEMLIMIT=192MiB` bei 256 MiB; Parallelität bleibt 80, weil Sicherungen auf vier gleichzeitig begrenzt sind |
+| 2026-11-03 | Kill-Switch: zweiter Alarm, wenn die Funktion 23,5 h nicht aufgerufen wurde (Absenz-Bedingung, ca. 0,10 $/Monat) |

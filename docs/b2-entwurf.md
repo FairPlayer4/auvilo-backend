@@ -146,7 +146,8 @@ Befehle des Test-Clients, angelehnt an `testanmeldung`:
 - `erneuern`, `geraete`, `sperren <id>`
 - `schluessel`: zeigt den Fingerabdruck des Personenschlüssels.
 
-Hat der Kotlin-Client denselben Umfang, kann `testanmeldung` (Go) weg.
+Hat der Kotlin-Client denselben Umfang, kann `testanmeldung` (Go) weg (am 2026-11-02
+entfernt).
 
 ## CI und Werkzeuge
 - Neuer Job **„Kotlin – client“**:
@@ -169,7 +170,9 @@ Hat der Kotlin-Client denselben Umfang, kann `testanmeldung` (Go) weg.
 
 ## Bekannte Grenzen (bewusst)
 - **Gesperrtes Gerät behält die Schlüssel.** Ein gestohlenes Gerät hat Personen- und
-  Tresorschlüssel. Sperren schließt es vom Server aus (B1), aber die Schlüssel zu
+  Tresorschlüssel. Sperren schließt seinen Geräteschlüssel vom Server aus (B1); mit
+  noch angemeldetem Google-Konto kann es sich aber als neues Gerät wieder anmelden
+  (Grenze in [b1-entwurf.md](b1-entwurf.md), „Gerät sperren“). Die Schlüssel zu
   wechseln gehört zu „Person entfernen und faule Rotation“ in B4.
 - **Wiederherstellungsschlüssel verloren und kein Gerät mehr**: Private Daten sind
   weg. Das ist so gewollt (ID4). Einen neuen Wiederherstellungsschlüssel erzeugen,
@@ -182,7 +185,7 @@ Hat der Kotlin-Client denselben Umfang, kann `testanmeldung` (Go) weg.
 - Der Test-Client speichert die Keysets unverschlüsselt in `%APPDATA%`. Das reicht
   zum Testen und gilt nicht für die App.
 - Gradle prüft keine Prüfsummen der Abhängigkeiten (`verification-metadata.xml`).
-  Vor der App einführen.
+  Vor der App einführen (am 2026-11-02 in B2b eingeführt).
 
 ## Bewusst nicht in B2
 - Kontakte, öffentliche Personenschlüssel auf dem Server, Freigaben, Operationen,

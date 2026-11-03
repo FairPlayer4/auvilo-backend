@@ -13,6 +13,7 @@ Kommunikation auf **Deutsch, mit ß**.
 - [docs/entwicklungsumgebung.md](docs/entwicklungsumgebung.md) – installierte Werkzeuge
 - [docs/go-review.md](docs/go-review.md) – Review-Anleitung; Code und Tests danach ausrichten
 - [docs/b2-entwurf.md](docs/b2-entwurf.md) – Schlüsselmodell, Backup, Kotlin-Client (`client/`)
+- [docs/b2b-entwurf.md](docs/b2b-entwurf.md) – Daten-Backup, Vorbereitung der App-Einbindung
 
 ## Code
 - Go-Code erklärend kommentieren (Kevin kennt Go nur grob). Kevin liest vor allem
@@ -22,7 +23,8 @@ Kommunikation auf **Deutsch, mit ß**.
   `// KRITISCH:`; Compiler-Warnungen sind Fehler. Der Code aus `proto/` entsteht im
   Gradle-Build. `protokoll` bleibt ohne Netz und ohne Android, damit es in die App passt.
 - Abläufe, die auch die App braucht, gehören nach `protokoll` (Server und lokale Ablage
-  als Schnittstellen); `testclient` ist nur CLI, Connect-Anbindung und Dateiablage.
+  als Schnittstellen); die Connect-Anbindung (Adapter zu diesen Schnittstellen) liegt in
+  `verbindung`, `testclient` ist nur CLI und Dateiablage.
 - Tests prüfen Verhalten, nicht die geprüfte Konstante selbst (kein `VERSUCHE == 3`).
 
 ## Zusammenarbeit
@@ -32,6 +34,23 @@ Kommunikation auf **Deutsch, mit ß**.
   (Entscheidungstabelle mit Datum).
 - Keine echten Inhalte aus Kevins App, keine Schlüssel oder Secrets ins Repo.
 - GCP-Ressourcen, die Geld kosten, erst nach Kevins Go anlegen.
+
+## Geheimnisse und Sicherheitsphase
+- Was Claude liest (Terminal, Dateien, Befehlsausgaben), geht in den Gesprächsverlauf
+  (Anthropic und lokal `~/.claude/projects`). Claude liest, druckt und ruft daher
+  **nie** ab: Pfeffer, OAuth-Client-Secret, private Geräteschlüssel (`geraet-*.pem`),
+  Sitzungs-Token (`sitzung-*.json`), Google-ID-Tokens und Auth-Codes, Passwörter,
+  2FA-Codes, Dienstkonto-Schlüssel, echte App-Inhalte und Daten von Testern.
+  Unbedenklich: Fingerabdrücke, Geräte-IDs, Konto-Pseudonyme, Chiffrate, Client-IDs.
+- **Testphase (jetzt):** Wiederherstellungsschlüssel und Keysets von Testkonten ohne
+  echte Daten darf Claude sehen. Vor echten Daten wird alles zurückgesetzt
+  ([b2b-entwurf.md](docs/b2b-entwurf.md), „Vor echten Daten“).
+- **Sicherheitsphase:** beginnt mit dem ersten Schritt, bei dem echte Daten oder
+  Schlüssel für echte Daten entstehen (erste Einrichtung der App-Variante gegen die
+  Cloud, Daten von Testern). Claude kündigt sie **vorher ausdrücklich** an (Nachricht
+  mit „Beginn der Sicherheitsphase“ und Eintrag in `docs/stand.md`). Ab dann sieht
+  Claude auch keine Wiederherstellungsschlüssel und Keysets mehr; Kevin führt solche
+  Schritte selbst in einem sicheren Kontext aus.
 
 ## GCP
 - Projekt `avlreminder-exp-1ef2`, Region `europe-west1`, Infrastruktur in `infra/` (OpenTofu).

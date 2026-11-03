@@ -1,7 +1,7 @@
 // Package geraeteschluessel enthält alles rund um den Geräteschlüssel: einlesen,
 // Geräte-ID ableiten, Nonce für den Google-Login und die Texte, die ein Gerät
-// signiert. Server und Test-Werkzeug nutzen dieselben Funktionen, damit beide
-// Seiten garantiert dieselben Bytes signieren bzw. prüfen.
+// signiert. Die Kotlin-Seite (client/protokoll, Geraetenachrichten) baut dieselben
+// Bytes; gemeinsame Testvektoren in proto/testvektoren prüfen, dass beide gleich sind.
 //
 // Der Geräteschlüssel ist ein ECDSA-Schlüsselpaar auf der Kurve P-256
 // (Entscheidung in docs/anforderungen.md). Der private Teil bleibt auf dem Gerät

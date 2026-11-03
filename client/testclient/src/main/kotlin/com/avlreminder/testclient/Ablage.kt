@@ -1,9 +1,11 @@
 package com.avlreminder.testclient
 
+import com.avlreminder.protokoll.GemerkteSicherung
 import com.avlreminder.protokoll.Geraetenachrichten
 import com.avlreminder.protokoll.LokaleAblage
 import com.avlreminder.protokoll.LokalerStand
 import com.avlreminder.protokoll.Schluesselbund
+import com.avlreminder.protokoll.SicherungsStand
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.io.File
@@ -51,6 +53,10 @@ private data class GespeicherteSchluessel(
     val offenesBackup: String? = null,
 )
 
+/** Was ein Gerät sich über die Datensicherung seines Kontos merkt. */
+@Serializable
+private data class GespeicherterStand(val kontoId: String, val zaehler: Long, val version: Long, val gesehen: Long = 0)
+
 /**
  * Legt je Gerätename Dateien in [ordner] ab (standardmäßig
  * %APPDATA%\avlreminder\testclient, also außerhalb des Repos):
@@ -58,6 +64,7 @@ private data class GespeicherteSchluessel(
  *   geraet-<name>.pem         Geräteschlüssel (privat PKCS #8, öffentlich PKIX)
  *   sitzung-<name>.json       zuletzt erhaltene Sitzung
  *   schluessel-<name>.json    Personen- und Tresorschlüssel, ggf. offenes Backup
+ *   stand-<name>.json         Zähler und Version der letzten Datensicherung
  *
  * Mehrere Namen simulieren mehrere Geräte.
  */
@@ -110,6 +117,22 @@ class Ablage(private val ordner: File) {
         override fun laden() = schluessel(name, kontoId)
 
         override fun speichern(stand: LokalerStand) = speichereSchluessel(name, kontoId, stand)
+    }
+
+    /** Der Sicherungsstand eines Geräts für ein Konto, wie der [com.avlreminder.protokoll.Sicherungsablauf] ihn braucht. */
+    fun sicherungsStand(name: String, kontoId: String): SicherungsStand = object : SicherungsStand {
+        override fun laden(): GemerkteSicherung? {
+            val datei = datei("stand", name, "json")
+            if (!datei.exists()) return null
+            val s = json.decodeFromString<GespeicherterStand>(datei.readText())
+            if (s.kontoId != kontoId) {
+                throw Bedienfehler("Gerät \"$name\" hat den Sicherungsstand eines anderen Kontos - anderen Gerätenamen wählen oder $datei löschen.")
+            }
+            return GemerkteSicherung(s.zaehler, s.version, s.gesehen)
+        }
+
+        override fun speichern(stand: GemerkteSicherung) =
+            schreibe(datei("stand", name, "json"), json.encodeToString(GespeicherterStand(kontoId, stand.zaehler, stand.version, stand.gesehen)))
     }
 
     private fun datei(art: String, name: String, endung: String): File {

@@ -1,5 +1,6 @@
 // Test-Client: spielt ein Gerät gegenüber dem Server – echte Google-Anmeldung
-// im Browser, Geräteschlüssel in einer Datei, Schlüssel-Backup (B2).
+// im Browser, Geräteschlüssel in einer Datei, Schlüssel-Backup (B2),
+// Datensicherung (B2b).
 //
 //   ./gradlew :testclient:run --args="[--server URL] [--geraet NAME] anmelden"
 //
@@ -8,19 +9,38 @@
 // %APPDATA%\avlreminder – nie im Repo.
 package com.avlreminder.testclient
 
+import com.avlreminder.protokoll.AeltereSicherung
 import com.avlreminder.protokoll.Eingerichtet
 import com.avlreminder.protokoll.Einrichtung
 import com.avlreminder.protokoll.EinrichtungAbgebrochen
+import com.avlreminder.protokoll.EntschluesselnFehlgeschlagen
 import com.avlreminder.protokoll.Geraetenachrichten
+import com.avlreminder.protokoll.Gesichert
+import com.avlreminder.protokoll.NeueresSchema
+import com.avlreminder.protokoll.SicherungZuGross
+import com.avlreminder.protokoll.Sicherungsablauf
+import com.avlreminder.protokoll.Sicherungskopf
+import com.avlreminder.protokoll.VersionVeraltet
+import com.avlreminder.protokoll.Wiederhergestellt
 import com.avlreminder.schnittstelle.v1.AnmeldenRequest
 import com.avlreminder.schnittstelle.v1.GeraetSperrenRequest
 import com.avlreminder.schnittstelle.v1.GeraeteAuflistenRequest
 import com.avlreminder.schnittstelle.v1.Sitzung
 import com.avlreminder.schnittstelle.v1.SitzungErneuernRequest
+import com.avlreminder.verbindung.ServerBackupAblage
+import com.avlreminder.verbindung.ServerSicherungsAblage
+import com.avlreminder.verbindung.Serverfehler
+import com.avlreminder.verbindung.Verbindung
+import com.avlreminder.verbindung.ergebnis
+import com.avlreminder.verbindung.mitSitzung
 import com.google.protobuf.ByteString
 import com.google.protobuf.Timestamp
 import kotlinx.coroutines.runBlocking
 import java.io.File
+import java.net.URI
+import java.net.URISyntaxException
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.time.Instant
 import kotlin.system.exitProcess
 
@@ -31,6 +51,13 @@ private const val HILFE = """Befehle:
   geraete           Geräte des Kontos auflisten
   sperren <id>      Gerät sperren (eigenes Gerät = abmelden)
   schluessel        Fingerabdruck des Personenschlüssels zeigen
+  sichern <datei>   Inhalt der Datei als Datensicherung hochladen (verschlüsselt)
+  wiederherstellen <datei>
+                    neueste Datensicherung holen und in die Datei schreiben
+  sicherung-loeschen
+                    Datensicherung des Kontos mit allen Fassungen löschen
+  schluessel-loeschen
+                    Schlüssel-Backup des Kontos löschen (lokale Schlüssel bleiben)
 Schalter:
   --server URL      Adresse des Servers (Standard http://localhost:8080)
   --geraet NAME     simuliertes Gerät (mehrere Namen = mehrere Geräte; Standard pc)
@@ -39,6 +66,9 @@ Schalter:
 fun main(args: Array<String>) {
     try {
         runBlocking { ausfuehren(args.toList()) }
+        // OkHttp hält seine Threads nach der letzten Anfrage noch eine Minute offen;
+        // ohne exitProcess würde die JVM so lange warten.
+        exitProcess(0)
     } catch (e: Bedienfehler) {
         System.err.println("Fehler: ${e.message}")
         exitProcess(1)
@@ -48,6 +78,18 @@ fun main(args: Array<String>) {
     } catch (e: EinrichtungAbgebrochen) {
         System.err.println("Einrichtung abgebrochen: ${e.message}")
         exitProcess(1)
+    } catch (e: Exception) {
+        // Erwartete Meldungen des Sicherungsablaufs (protokoll) ohne Stacktrace.
+        if (e is VersionVeraltet || e is AeltereSicherung || e is NeueresSchema || e is SicherungZuGross ||
+            e is EntschluesselnFehlgeschlagen
+        ) {
+            System.err.println("Fehler: ${e.message}")
+            exitProcess(1)
+        }
+        // Alles andere ist ein Programmfehler: Stacktrace, und exitProcess, damit
+        // die JVM nicht auf die Threads von OkHttp wartet.
+        e.printStackTrace()
+        exitProcess(2)
     }
 }
 
@@ -66,6 +108,7 @@ private suspend fun ausfuehren(args: List<String>) {
             else -> rest += a
         }
     }
+    pruefeServer(server)
     val werkzeug = Werkzeug(Verbindung(server.trimEnd('/')), Ablage(File(ordner, "testclient")), ordner, name)
     when {
         rest == listOf("anmelden") -> werkzeug.anmelden()
@@ -73,10 +116,27 @@ private suspend fun ausfuehren(args: List<String>) {
         rest == listOf("geraete") -> werkzeug.geraete()
         rest.size == 2 && rest[0] == "sperren" -> werkzeug.sperren(rest[1])
         rest == listOf("schluessel") -> werkzeug.schluessel()
+        rest.size == 2 && rest[0] == "sichern" -> werkzeug.sichern(File(rest[1]))
+        rest.size == 2 && rest[0] == "wiederherstellen" -> werkzeug.wiederherstellen(File(rest[1]))
+        rest == listOf("sicherung-loeschen") -> werkzeug.sicherungLoeschen()
+        rest == listOf("schluessel-loeschen") -> werkzeug.schluesselLoeschen()
         else -> {
             println(HILFE)
             throw Bedienfehler(if (rest.isEmpty()) "Befehl fehlt" else "unbekannter Befehl: ${rest.joinToString(" ")}")
         }
+    }
+}
+
+/** Sitzungs-Token gehen nur über HTTPS hinaus; unverschlüsselt nur zum eigenen Rechner. */
+private fun pruefeServer(server: String) {
+    val uri = try {
+        URI(server)
+    } catch (_: URISyntaxException) {
+        throw Bedienfehler("--server: keine gültige Adresse")
+    }
+    val lokal = uri.host in setOf("localhost", "127.0.0.1", "[::1]")
+    if (uri.scheme != "https" && !(uri.scheme == "http" && lokal)) {
+        throw Bedienfehler("--server: nur https, http nur für localhost")
     }
 }
 
@@ -168,6 +228,80 @@ private class Werkzeug(
         if (stand.offenesBackup != null) println("Backup noch nicht hochgeladen - erneut anmelden.")
     }
 
+    suspend fun sichern(datei: File) {
+        if (!datei.isFile) throw Bedienfehler("$datei gibt es nicht")
+        // Ohne hochgeladenes Schlüssel-Backup ginge die Sicherung mit dem Gerät verloren.
+        val s = ablage.sitzung(name)
+        if (ablage.schluessel(name, s.kontoId)?.offenesBackup != null) {
+            throw Bedienfehler("Schlüssel-Backup noch nicht hochgeladen - zuerst erneut anmelden.")
+        }
+        val ergebnis = sicherungsablauf { kopf -> frage("Die Sicherung stammt von ${beschreibe(kopf)}. Überschreiben?") }
+            .sichern(datei.readBytes(), SCHEMA_VERSION)
+        when (ergebnis) {
+            is Gesichert.Ja -> println("Gesichert: Zähler ${ergebnis.zaehler}, Version ${ergebnis.version}")
+            is Gesichert.AnderesGeraet -> println("Nicht gesichert: Die Sicherung von ${beschreibe(ergebnis.kopf)} bleibt.")
+        }
+    }
+
+    suspend fun wiederherstellen(datei: File) {
+        // Beim Wiederherstellen wird nichts hochgeladen, also auch nichts überschrieben.
+        val ergebnis = sicherungsablauf { false }.wiederherstellen(
+            SCHEMA_VERSION,
+            bestaetigen = { kopf -> frage("Sicherung von ${beschreibe(kopf)} nach $datei schreiben?") },
+            anwenden = { sicherung -> schreibeDatei(datei, sicherung.nutzlast) },
+        )
+        when (ergebnis) {
+            is Wiederhergestellt.Ja -> println("Wiederhergestellt: Zähler ${ergebnis.kopf.zaehler} nach $datei")
+            Wiederhergestellt.KeineSicherung -> println("Das Konto hat keine Datensicherung.")
+            Wiederhergestellt.Abgelehnt -> println("Nichts geändert.")
+        }
+    }
+
+    suspend fun sicherungLoeschen() {
+        // Der Ablauf behält den gemerkten Zähler (siehe Sicherungsablauf.loeschen).
+        sicherungsablauf { false }.loeschen()
+        println("Datensicherung gelöscht (mit allen älteren Fassungen).")
+    }
+
+    suspend fun schluesselLoeschen() {
+        val s = ablage.sitzung(name)
+        ServerBackupAblage(verbindung, s.token).loeschen()
+        println("Schlüssel-Backup gelöscht. Die Schlüssel auf diesem Gerät bleiben.")
+    }
+
+    /** Der Ablauf für das angemeldete Gerät; braucht Sitzung und eingerichtete Schlüssel. */
+    private fun sicherungsablauf(uebernehmen: (Sicherungskopf) -> Boolean): Sicherungsablauf {
+        val s = ablage.sitzung(name)
+        val stand = ablage.schluessel(name, s.kontoId) ?: throw Bedienfehler("Auf diesem Gerät sind noch keine Schlüssel - zuerst anmelden.")
+        return Sicherungsablauf(
+            s.kontoId,
+            s.geraetId,
+            stand.bund.tresor,
+            ServerSicherungsAblage(verbindung, s.token),
+            ablage.sicherungsStand(name, s.kontoId),
+            uebernehmen,
+        )
+    }
+
+    private fun beschreibe(kopf: Sicherungskopf) =
+        "Gerät ${kopf.geraetId} (Zähler ${kopf.zaehler}, ${kopf.erstellt}, Schema ${kopf.schemaVersion})"
+
+    private fun frage(text: String): Boolean {
+        print("$text \"ja\" eingeben: ")
+        return readlnOrNull()?.trim()?.lowercase() == "ja"
+    }
+
     private fun speichereSitzung(kontoId: String, geraetId: String, sitzung: Sitzung) =
         ablage.speichereSitzung(name, GespeicherteSitzung(kontoId, geraetId, sitzung.token, sitzung.laeuftAb.seconds))
+}
+
+/** Der Test-Client sichert Dateien unverändert; ihr Format ist Schema-Version 1. */
+private const val SCHEMA_VERSION = 1
+
+/** Schreibt erst in eine Nachbardatei und benennt dann um, damit nie eine halbe Datei entsteht. */
+private fun schreibeDatei(datei: File, inhalt: ByteArray) {
+    val ziel = datei.absoluteFile
+    val tmp = File(ziel.parentFile, ziel.name + ".tmp")
+    tmp.writeBytes(inhalt)
+    Files.move(tmp.toPath(), ziel.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
 }

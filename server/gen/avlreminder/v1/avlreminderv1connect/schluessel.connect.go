@@ -39,6 +39,9 @@ const (
 	// SchluesselDienstBackupHolenProcedure is the fully-qualified name of the SchluesselDienst's
 	// BackupHolen RPC.
 	SchluesselDienstBackupHolenProcedure = "/avlreminder.v1.SchluesselDienst/BackupHolen"
+	// SchluesselDienstBackupLoeschenProcedure is the fully-qualified name of the SchluesselDienst's
+	// BackupLoeschen RPC.
+	SchluesselDienstBackupLoeschenProcedure = "/avlreminder.v1.SchluesselDienst/BackupLoeschen"
 )
 
 // SchluesselDienstClient is a client for the avlreminder.v1.SchluesselDienst service.
@@ -48,6 +51,14 @@ type SchluesselDienstClient interface {
 	// nie unbemerkt ein neueres Backup.
 	BackupSpeichern(context.Context, *connect.Request[v1.BackupSpeichernRequest]) (*connect.Response[v1.BackupSpeichernResponse], error)
 	BackupHolen(context.Context, *connect.Request[v1.BackupHolenRequest]) (*connect.Response[v1.BackupHolenResponse], error)
+	// Löscht das Backup des eigenen Kontos (Neuanfang mit neuen Schlüsseln, DSGVO
+	// Art. 17). Gibt es keins, ist das kein Fehler.
+	//
+	// Grenze: Danach beginnt die Version wieder bei 1. Ein Gerät, das sich noch
+	// Version 1 von vorher gemerkt hat, könnte ein neues Backup überschreiben. Clients
+	// speichern deshalb nur mit erwartete_version 0 (neu anlegen); wer höhere
+	// Versionen nutzen will, braucht vorher einen Grabstein auf dem Server.
+	BackupLoeschen(context.Context, *connect.Request[v1.BackupLoeschenRequest]) (*connect.Response[v1.BackupLoeschenResponse], error)
 }
 
 // NewSchluesselDienstClient constructs a client for the avlreminder.v1.SchluesselDienst service. By
@@ -73,6 +84,12 @@ func NewSchluesselDienstClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(schluesselDienstMethods.ByName("BackupHolen")),
 			connect.WithClientOptions(opts...),
 		),
+		backupLoeschen: connect.NewClient[v1.BackupLoeschenRequest, v1.BackupLoeschenResponse](
+			httpClient,
+			baseURL+SchluesselDienstBackupLoeschenProcedure,
+			connect.WithSchema(schluesselDienstMethods.ByName("BackupLoeschen")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -80,6 +97,7 @@ func NewSchluesselDienstClient(httpClient connect.HTTPClient, baseURL string, op
 type schluesselDienstClient struct {
 	backupSpeichern *connect.Client[v1.BackupSpeichernRequest, v1.BackupSpeichernResponse]
 	backupHolen     *connect.Client[v1.BackupHolenRequest, v1.BackupHolenResponse]
+	backupLoeschen  *connect.Client[v1.BackupLoeschenRequest, v1.BackupLoeschenResponse]
 }
 
 // BackupSpeichern calls avlreminder.v1.SchluesselDienst.BackupSpeichern.
@@ -92,6 +110,11 @@ func (c *schluesselDienstClient) BackupHolen(ctx context.Context, req *connect.R
 	return c.backupHolen.CallUnary(ctx, req)
 }
 
+// BackupLoeschen calls avlreminder.v1.SchluesselDienst.BackupLoeschen.
+func (c *schluesselDienstClient) BackupLoeschen(ctx context.Context, req *connect.Request[v1.BackupLoeschenRequest]) (*connect.Response[v1.BackupLoeschenResponse], error) {
+	return c.backupLoeschen.CallUnary(ctx, req)
+}
+
 // SchluesselDienstHandler is an implementation of the avlreminder.v1.SchluesselDienst service.
 type SchluesselDienstHandler interface {
 	// Speichert das Backup, aber nur, wenn die gespeicherte Version gleich
@@ -99,6 +122,14 @@ type SchluesselDienstHandler interface {
 	// nie unbemerkt ein neueres Backup.
 	BackupSpeichern(context.Context, *connect.Request[v1.BackupSpeichernRequest]) (*connect.Response[v1.BackupSpeichernResponse], error)
 	BackupHolen(context.Context, *connect.Request[v1.BackupHolenRequest]) (*connect.Response[v1.BackupHolenResponse], error)
+	// Löscht das Backup des eigenen Kontos (Neuanfang mit neuen Schlüsseln, DSGVO
+	// Art. 17). Gibt es keins, ist das kein Fehler.
+	//
+	// Grenze: Danach beginnt die Version wieder bei 1. Ein Gerät, das sich noch
+	// Version 1 von vorher gemerkt hat, könnte ein neues Backup überschreiben. Clients
+	// speichern deshalb nur mit erwartete_version 0 (neu anlegen); wer höhere
+	// Versionen nutzen will, braucht vorher einen Grabstein auf dem Server.
+	BackupLoeschen(context.Context, *connect.Request[v1.BackupLoeschenRequest]) (*connect.Response[v1.BackupLoeschenResponse], error)
 }
 
 // NewSchluesselDienstHandler builds an HTTP handler from the service implementation. It returns the
@@ -120,12 +151,20 @@ func NewSchluesselDienstHandler(svc SchluesselDienstHandler, opts ...connect.Han
 		connect.WithSchema(schluesselDienstMethods.ByName("BackupHolen")),
 		connect.WithHandlerOptions(opts...),
 	)
+	schluesselDienstBackupLoeschenHandler := connect.NewUnaryHandler(
+		SchluesselDienstBackupLoeschenProcedure,
+		svc.BackupLoeschen,
+		connect.WithSchema(schluesselDienstMethods.ByName("BackupLoeschen")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/avlreminder.v1.SchluesselDienst/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case SchluesselDienstBackupSpeichernProcedure:
 			schluesselDienstBackupSpeichernHandler.ServeHTTP(w, r)
 		case SchluesselDienstBackupHolenProcedure:
 			schluesselDienstBackupHolenHandler.ServeHTTP(w, r)
+		case SchluesselDienstBackupLoeschenProcedure:
+			schluesselDienstBackupLoeschenHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -141,4 +180,8 @@ func (UnimplementedSchluesselDienstHandler) BackupSpeichern(context.Context, *co
 
 func (UnimplementedSchluesselDienstHandler) BackupHolen(context.Context, *connect.Request[v1.BackupHolenRequest]) (*connect.Response[v1.BackupHolenResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("avlreminder.v1.SchluesselDienst.BackupHolen is not implemented"))
+}
+
+func (UnimplementedSchluesselDienstHandler) BackupLoeschen(context.Context, *connect.Request[v1.BackupLoeschenRequest]) (*connect.Response[v1.BackupLoeschenResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("avlreminder.v1.SchluesselDienst.BackupLoeschen is not implemented"))
 }

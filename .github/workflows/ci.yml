@@ -43,6 +43,13 @@ jobs:
       # (Vertragstests). Die Google Cloud CLI ist auf dem Runner schon da, aber
       # das Runner-Image entfernt Googles apt-Quelle nach der Installation wieder;
       # deshalb wird sie hier neu eingetragen.
+      # Der Emulator aus apt braucht inzwischen Java 25 (Klassendateien Version 69);
+      # das Runner-Image hat nur bis Java 21 als Vorgabe.
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        if: matrix.modul == 'server'
+        with:
+          distribution: temurin
+          java-version: 25
       - name: Firestore-Emulator starten
         if: matrix.modul == 'server'
         run: |
@@ -50,13 +57,26 @@ jobs:
           echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee /etc/apt/sources.list.d/google-cloud-sdk.list > /dev/null
           sudo apt-get update -qq
           sudo apt-get install -y -qq google-cloud-cli-firestore-emulator
-          export PATH="$JAVA_HOME_21_X64/bin:$PATH" # der Emulator braucht Java 21
           gcloud emulators firestore start --host-port=localhost:8086 > "$RUNNER_TEMP/emulator.log" 2>&1 &
           for i in $(seq 60); do
             curl -sf http://localhost:8086/ > /dev/null && exit 0
             sleep 1
           done
           cat "$RUNNER_TEMP/emulator.log"
+          exit 1
+      # Nachbau von Cloud Storage für die Ablage der Datensicherungen
+      # (Vertragstests). Image fest mit Prüfsumme, wie die Actions oben.
+      - name: fake-gcs-server starten
+        if: matrix.modul == 'server'
+        run: |
+          docker run -d --name fakegcs -p 4443:4443 \
+            fsouza/fake-gcs-server:1.56.1@sha256:797ce226d62f947c009dc40246b30cfb456b8473d8241407f9d6f2c04e4d69ef \
+            -scheme http -port 4443 -backend memory
+          for i in $(seq 30); do
+            curl -sf http://localhost:4443/storage/v1/b > /dev/null && exit 0
+            sleep 1
+          done
+          docker logs fakegcs
           exit 1
       - name: Formatierung
         run: test -z "$(gofmt -l .)" || (gofmt -l . && exit 1)
@@ -66,6 +86,7 @@ jobs:
       - name: Tests mit Race-Detector
         env:
           FIRESTORE_EMULATOR_HOST: ${{ matrix.modul == 'server' && 'localhost:8086' || '' }}
+          STORAGE_EMULATOR_HOST: ${{ matrix.modul == 'server' && 'localhost:4443' || '' }}
           EMULATOR_PFLICHT: ${{ matrix.modul == 'server' && '1' || '' }}
         run: go test -race -cover ./...
       - name: golangci-lint
@@ -79,7 +100,7 @@ jobs:
       - name: govulncheck
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
 
-  # Kotlin-Client (client/): Protokoll-Modul und Test-Client. Gradle kommt über
+  # Kotlin-Client (client/): Protokoll, Verbindung und Test-Client. Gradle kommt über
   # den Wrapper; dessen JAR wird vorher gegen die offiziellen Prüfsummen geprüft.
   # Die Tests lesen dieselben Testvektoren wie der Go-Job (proto/testvektoren).
   kotlin:

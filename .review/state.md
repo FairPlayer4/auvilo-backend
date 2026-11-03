@@ -1,11 +1,12 @@
 # Review-Gedächtnis
-Letzter Lauf: 2026-11-01 @ 4e97d0e (Fixes auf review/2026-11-01-4)   Laufzähler: 4
+Letzter Lauf: 2026-11-03 @ 3180671 (Fixes auf review/2026-11-03)   Laufzähler: 5
 
 ## Beabsichtigte Architektur
 Vom Entwickler bestätigt am 2026-11-01.
 
 - **Monorepo:** `proto/` (Schnittstelle, Protobuf/Connect mit buf), `server/` (Go),
-  `client/` (Kotlin: Protokoll-Modul und Test-Client), `infra/` (OpenTofu und
+  `client/` (Kotlin: `protokoll` ohne Netz/Android, `verbindung` mit Connect-Adaptern,
+  `testclient` nur CLI und Dateiablage), `infra/` (OpenTofu und
   Hilfsfunktionen wie `killswitch`), `docs/`. Seit B2 (Lauf 4) gibt es alle
   fünf Teile.
 - **Abhängigkeitsregeln:**
@@ -30,16 +31,17 @@ Vom Entwickler bestätigt am 2026-11-01.
 ## Bereiche
 | Bereich | Pfade | Anforderungen/Doku | Tests | Zuletzt reviewt | Zustand |
 |---|---|---|---|---|---|
-| Kill-Switch | `infra/killswitch/` | anforderungen.md KO3, stand.md | `*_test.go` | 2026-11-01 (Lauf 3) | gut; Log-Stufen jetzt getestet |
-| Infrastruktur | `infra/*.tf` | anforderungen.md 4.3, 5, 6; gcp-einrichtung.md; stand.md | `infra/tests/` (tofu test) | 2026-11-01 (Lauf 3, B1-Teile) | gut; Cloud-Run-Regeln ungeprüft, Pfeffer-Schutz nicht angewendet |
-| Server: Anmeldung/Sitzung | `server/internal/{geraeteschluessel,anmeldung,sitzung,dienst}`, `proto/` | b1-entwurf.md, proto-Kommentare, anforderungen.md Kap. 11 | `*_test.go` | 2026-11-01 (Lauf 3, Änderungen) | gut; Testlücken (Streaming, Logs) |
-| Server: Speicher/Start | `server/internal/speicher`, `server/cmd/server` | b1-entwurf.md (Daten, Betrieb) | `vertrag_test.go` (auch Emulator), `main_test.go` | 2026-11-01 (Lauf 3, Änderungen) | gut; Gleichzeitigkeit im Vertragstest |
-| Werkzeug testanmeldung | `server/cmd/testanmeldung` | b1-entwurf.md, stand.md | `main_test.go` | 2026-11-01 (Lauf 2) | ok; Google-Flow ungetestet |
+| Kill-Switch | `infra/killswitch/` | anforderungen.md KO3, stand.md | `*_test.go` | 2026-11-03 (Lauf 5) | gut; WARN-Dauertakt (Frage) |
+| Infrastruktur | `infra/*.tf`, `infra/*.sh` | anforderungen.md 4.3, 5, 6; gcp-einrichtung.md; stand.md | `infra/tests/` (tofu test), `pruefe-regionen.sh` | 2026-11-03 (Lauf 5, vollständig) | ok; Build-Konto breit, Testlücken tofu, Schritt-5-Punkte |
+| Server: Anmeldung/Sitzung | `server/internal/{geraeteschluessel,anmeldung,sitzung,dienst/dienst.go}`, `proto/` | b1-entwurf.md, proto-Kommentare, anforderungen.md Kap. 11 | `*_test.go` | 2026-11-03 (Lauf 5, vollständig) | gut; Neuanmeldung nach Sperren (Frage), Streaming ungetestet |
+| Server: Speicher/Start | `server/internal/speicher`, `server/cmd/server` | b1-entwurf.md (Daten, Betrieb) | `vertrag_test.go` (auch Emulator), `main_test.go` | 2026-11-03 (Lauf 5) | gut |
+| Server: Datensicherung | `server/internal/datensicherung`, `dienst/datensicherung.go`, `datensicherung.proto` | b2b-entwurf.md, proto-Kommentare | `vertrag_test.go` (Arbeitsspeicher, fake-gcs), `datensicherung_test.go` | 2026-11-03 (Lauf 5, neu) | gut; begrenze vor Sitzungsprüfung (Frage) |
 | CI, Deploy und Container | `.github/`, `server/Dockerfile`, `.golangci.yml`, `proto/buf*.yaml` | anforderungen.md Q4, go-review.md, stand.md | CI-Job `container` | 2026-11-01 (Lauf 4) | gut; Gradle-Cache jetzt `basic` |
 | Doku | `docs/`, `CLAUDE.md`, `README.md` | – | – | 2026-11-01 (Lauf 3, vollständig; Lauf 4 B2-Teile) | gut nach Fixes; anforderungen.md [E]-Markierungen veraltet |
-| Kotlin `protokoll` | `client/protokoll`, `proto/avlreminder/inhalt`, `proto/testvektoren` | b2-entwurf.md, backup.proto | `*Test.kt`, Go `testvektoren_test.go` | 2026-11-01 (Lauf 4) | gut; Umschlag ohne Kontext (A4), Formate ohne feste Vektoren (A3) |
-| Backup und Test-Client | `server/internal/dienst/schluessel.go`, Backup in `speicher`, `client/testclient`, `schluessel.proto` | b2-entwurf.md, proto-Kommentare | `schluessel_test.go`, `vertrag_test.go`, `EinrichtungTest`, `GoogleTest` | 2026-11-01 (Lauf 4) | gut; Reihenfolge Anzeigen/Hochladen offen (Frage) |
-| Kotlin-Build | `client/*.gradle.kts`, `client/gradle/`, CI-Job `kotlin` | b2-entwurf.md (CI) | CI | 2026-11-01 (Lauf 4) | gut; keine Prüfsummen für Abhängigkeiten |
+| Kotlin `protokoll` | `client/protokoll`, `proto/avlreminder/inhalt`, `proto/testvektoren` | b2-entwurf.md, b2b-entwurf.md, backup.proto | `*Test.kt`; Go prüft nur `geraetenachrichten.json` | 2026-11-03 (Lauf 5) | gut; gesehene Zähler, Wiederherstellen = Übernehmen (Fragen) |
+| Kotlin `verbindung` | `client/verbindung` | b2b-entwurf.md, proto-Kommentare | `AdapterTest` (Connect-Nachbau) | 2026-11-03 (Lauf 5, neu) | gut; Sitzung noch im Test-Client |
+| Backup und Test-Client | `server/internal/dienst/schluessel.go`, Backup in `speicher`, `client/testclient`, `schluessel.proto` | b2-entwurf.md, proto-Kommentare | `schluessel_test.go`, `vertrag_test.go`, `EinrichtungTest`, `GoogleTest` | 2026-11-03 (Lauf 5) | gut nach Fixes; `Ablage` ohne Tests, ABA (Frage) |
+| Kotlin-Build | `client/*.gradle.kts`, `client/gradle/`, CI-Job `kotlin` | b2-entwurf.md (CI) | CI | 2026-11-03 (Lauf 5) | gut; Prüfsummen aller Abhängigkeiten |
 
 ## Bekannte Schulden und beobachtete Drift
 - 2026-11-01 (Lauf 1): E7 (Herkunft der Budget-Meldung prüfen) offen, optional.
@@ -50,9 +52,10 @@ Vom Entwickler bestätigt am 2026-11-01.
   - Testlücken: `googleIDToken`, Streaming, Logs, Sperr-Wettlauf in `dienst`.
   - testanmeldung an den Server binden.
   - Erledigt: Gleichzeitigkeits-Vertragstest; feste Pfeffer-Version (B1).
-- **Trend (Lauf 2, 3 und 4): Ein Test hängt an der Konstante, die er prüfen soll.**
-  Dreimal gefunden und gefixt (Lauf 4: `MaxBackup`, `VERSUCHE`). Als Regel in
-  go-review.md und CLAUDE.md vorgeschlagen (Frage Lauf 4). Weiter gezielt prüfen.
+- **Trend (Lauf 2, 3, 4 und 5): Ein Test hängt an der Konstante, die er prüfen soll.**
+  Lauf 5: `sitzung.Toleranz`/`Dauer` (gefixt, Mutant 10 s blieb vorher grün). Seit
+  2026-11-02 Regel in go-review.md und CLAUDE.md; neuer Code hält sie ein, alter nicht.
+  Empfehlung E1 (Lauf 5): einmal alle Tests gezielt durchsuchen.
 - 2026-11-01 (Lauf 3), offen:
   - Skript-Check für die Cloud-Run-Regeln (Laufzeitkonten, `ignore_changes`) sowie
     tofu-Asserts für Leerlauf 0 € – spätestens mit dem 2. Dienst.
@@ -71,8 +74,22 @@ Vom Entwickler bestätigt am 2026-11-01.
     Verwender; wächst mit B3. Beim nächsten Architektur-Blick (Lauf 8) vergleichen.
   - Nach dem Merge von B2: Ausnahme `FILE_SAME_JAVA_*` in buf.yaml entfernen.
 
+- 2026-11-03 (Lauf 5), offen (Details und Empfehlungen E1–E7 in runs/2026-11-03.md):
+  - Testlücken Server (Streaming im Interceptor, Sperr-Rennen in `SitzungErneuern`,
+    Speicherfehler im Gerätedienst) – seit Lauf 2 teils bekannt, **Trend**.
+  - Schritt 5: Build-Konto einschränken, GOMEMLIMIT/Parallelität, Image-Scan (SE3),
+    Absenz-Alarm Kill-Switch, `pruefe-regionen.sh` für Listen, tofu-Testlücken.
+  - Mutant „genau 8 MiB“ im Sicherungsablauf unentdeckt.
+  - Vor App-Einbindung: Sitzung nach `verbindung`, Callbacks suspend, zweiter
+    Schlüsselbund nach Backup-Löschen.
+- Erledigt in Lauf 5: Werkzeug `testanmeldung` ist entfernt (A6).
+
 ## Offene Fragen an den Entwickler
-Keine.
+Aus Lauf 5 (runs/2026-11-03.md, je mit Vorschlag): 1 Neuanmeldung eines gestohlenen
+Geräts nach dem Sperren (major); 2 Sicherungsplätze ohne Anmeldung belegbar; 3 ABA beim
+Schlüssel-Backup nach Löschen; 4 Wiederherstellen = Übernehmen; 5 gesehene Zähler merken;
+6 Löschen der Datensicherung in `protokoll`; 7 drei Fassungen vs. Alter; 8 Kill-Switch-WARN
+im Dauertakt; 9 Löschschutz vor echten Daten; 10 Bedeutung von SE1.
 
 ## Getroffene Entscheidungen
 - 2026-11-01: Architekturbild bestätigt.
@@ -100,7 +117,7 @@ Keine.
   bestätigen lassen; umgesetzt.
 - 2026-11-02 (nach Lauf 4): Regel „Tests prüfen Verhalten, nicht die Konstante“ in
   go-review.md und CLAUDE.md.
-- 2026-11-02 (nach Lauf 4): Gradle-Prüfsummen erst vor der App (bekannte Grenze in
-  stand.md und b2-entwurf.md). Bis dahin nicht erneut als Fund melden.
+- 2026-11-02 (nach Lauf 4): Gradle-Prüfsummen erst vor der App – inzwischen umgesetzt
+  (Gradle prüft Prüfsummen aller Abhängigkeiten).
 - 2026-11-02 (nach Lauf 4): A1 umgesetzt (Einrichtung in `protokoll`); A2 und A3 werden
   im B3-Entwurf geklärt.

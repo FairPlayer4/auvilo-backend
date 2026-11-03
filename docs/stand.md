@@ -1,6 +1,6 @@
 # Stand und nächste Schritte
 
-Stand: 2026-11-01. Bei jedem größeren Schritt aktualisieren.
+Stand: 2026-11-03. Bei jedem größeren Schritt aktualisieren.
 
 ## In GCP (Projekt `avlreminder-exp-1ef2`, Region `europe-west1`)
 Etappe **B0** ist angelegt (OpenTofu, `infra/`):
@@ -105,14 +105,59 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
    Review-Lauf 4 am 2026-11-01: [.review/runs/2026-11-01-4.md](../.review/runs/2026-11-01-4.md),
    Fixes in develop. Am 2026-11-02 umgesetzt: Einrichtung liegt in `protokoll` (A1),
    Wiederherstellungsschlüssel wird vor dem Hochladen gezeigt und bestätigt.
-   **Offen:** Deploy und Test in der Cloud (der Test-Client fragt jetzt nach „ja“).
-   Danach kann `testanmeldung` (Go) weg (A6).
-   **Bekannte Grenze:** keine Gradle-Prüfsummen; vor der App einführen.
+   Deploy am 2026-11-02 (PR #6). **In der Cloud getestet** am 2026-11-02 (echte
+   Google-Anmeldung): `cloud-pc` richtet neue Schlüssel ein (erst nach „ja“);
+   `cloud-tablet` bricht nach drei falschen Eingaben ab; `cloud-handy` übernimmt mit
+   dem Wiederherstellungsschlüssel das Backup (auch mit Kleinbuchstaben und fehlendem
+   Bindestrich), gleicher Fingerabdruck wie `cloud-pc`; `cloud-pc` erneut meldet
+   „schon eingerichtet“ ohne Rückfrage. Damit ist B2 abgeschlossen.
+   Am 2026-11-02 `testanmeldung` (Go) entfernt (A6); der Kotlin-Test-Client kann
+   alles, was es konnte.
 3. Kleinere Empfehlungen aus dem Review: E7 optional; weitere aus Lauf 2 in
    `.review/state.md`.
-4. Für den B3-Entwurf aus Lauf 4: A2 (Mitgliedschaft: Server-Liste oder signiertes
-   Log), A3 (Client-Formate maßgeblich beschreiben, feste Vektoren), A4 (Umschläge an
-   Kontext binden, Keyset-Typen prüfen), A5 (Speicher und Dienste aufteilen).
+4. Etappe **B2b** (vor B3): Daten-Backup für eine Person, danach Einbindung in die
+   App. Entwurf: [b2b-entwurf.md](b2b-entwurf.md), bestätigt am 2026-11-02.
+   **Erledigt (2026-11-02):** Schritte 1–3 der Reihenfolge – `docs/formate.md` mit
+   festen Testvektoren, Gradle-Prüfsummen, `Datensicherung` und `Sicherungsablauf`
+   in `protokoll`, `DatensicherungDienst` im Server mit Ablage in Cloud Storage
+   (getestet gegen `fake-gcs-server`, auch in der CI). Der Server braucht jetzt
+   `SICHERUNG_BUCKET`; vor dem nächsten Deploy muss der Bucket per OpenTofu stehen.
+   **Für den Infrastruktur-Schritt:** Soft Delete des Buckets auf 0 Tage (sonst
+   bleiben gelöschte Sicherungen 7 Tage liegen, DSGVO); Zeitlimit von Cloud Run
+   und Server (30 s) für 8 MiB über langsames Mobilfunknetz prüfen.
+   **Am 2026-11-03 (Schritt 4):** Modul `client/verbindung`
+   (Connect-Clients und Adapter, aus `testclient` herausgelöst) mit
+   `ServerSicherungsAblage`; Adapter-Tests gegen einen Connect-Nachbau (Fehlercodes
+   je Methode). Server: `BackupLoeschen` für das Schlüssel-Backup. Test-Client:
+   `sichern`, `wiederherstellen`, `sicherung-loeschen`, `schluessel-loeschen`.
+   **Lokal von Ende zu Ende getestet** am 2026-11-03 (echte Google-Anmeldung,
+   Firestore-Emulator, fake-gcs): `b2b-pc` richtet Schlüssel ein und sichert zweimal
+   (zwei Fassungen im Bucket); `b2b-handy` übernimmt das Backup (gleicher
+   Fingerabdruck), stellt die Sicherung byte-gleich wieder her und sichert selbst.
+   `b2b-pc` mit veraltetem Stand fragt nach („stammt von Gerät …“): „nein“ lässt die
+   Sicherung des Handys stehen, „ja“ überschreibt mit höherem Zähler.
+   `sicherung-loeschen` entfernt alle Fassungen, danach legt ein Gerät mit altem
+   Stand sauber neu an; `schluessel-loeschen` entfernt das Backup (zweimal ohne
+   Fehler). Im Server-Log nur Gerät, Version und Größe.
+   **Review Lauf 5 am 2026-11-03** (`.review/runs/2026-11-03.md`), Fragen wie
+   vorgeschlagen entschieden (anforderungen.md Kap. 11): Sitzung vor den
+   Sicherungsplätzen geprüft, gesehene Zähler gemerkt, `Sicherungsablauf.loeschen`
+   behält den Zähler, Kill-Switch-Mail nur bei echtem Eingriff (wirkt nach dem
+   nächsten Deploy über `main`), Grenzen und „Vor echten Daten“ ergänzt.
+   **Schritt 5 (Infrastruktur), Konfiguration am 2026-11-03:** Bucket
+   `…-datensicherung` (`infra/datensicherung.tf`: Versionierung, ältere Fassungen
+   7 Tage/höchstens 100, ohne Soft Delete, nur Server-Konto mit `objectUser`),
+   `SICHERUNG_BUCKET` und `GOMEMLIMIT=192MiB` am Server (Parallelität bleibt 80,
+   Begründung in `server.tf`), Build-Konto liest nur Quellen und `gcf-v2-*` und
+   schreibt nur ins Repo `funktionen`, Absenz-Alarm „Kill-Switch wird nicht mehr
+   aufgerufen“ (23,5 h), `pruefe-regionen.sh` prüft Listen, neue tofu-Tests.
+   Image-Scan (SE3): kein eigener Scanner (anforderungen.md Kap. 11).
+   **Weiter mit:** `tofu apply` (nach Kevins Go), danach PR nach `main` (Deploy des
+   Servers mit Datensicherung und des Kill-Switch), Test in der Cloud mit dem
+   Test-Client, dann Schritt 6 (Review-Lauf).
+5. Für den B3-Entwurf aus Lauf 4: A2 (Mitgliedschaft: Server-Liste oder signiertes
+   Log), A4 (Umschläge an Kontext binden, Keyset-Typen prüfen), A5 (Speicher und
+   Dienste aufteilen; Anfang in B2b). A3 (Formate festschreiben) kommt in B2b.
 
 ## Befehle
 ```bash
@@ -123,32 +168,12 @@ cd infra && tofu plan
 cd infra/killswitch && go test -cover ./...
 ```
 
-Server lokal gegen den Firestore-Emulator (Emulator vorher starten, siehe
-[entwicklungsumgebung.md](entwicklungsumgebung.md)); `PFEFFER` ist ein Zufallswert
-nur für diesen Lauf:
+Server lokal gegen Firestore-Emulator und fake-gcs-server (beide vorher starten,
+Bucket `lokal` anlegen, siehe [entwicklungsumgebung.md](entwicklungsumgebung.md));
+`PFEFFER` ist ein Zufallswert nur für diesen Lauf:
 
 ```bash
-cd server && FIRESTORE_EMULATOR_HOST=localhost:8086 PROJEKT=lokal GOOGLE_CLIENT_IDS=82416816442-vka4ve2no02681umqkn8b0rk37ri37qd.apps.googleusercontent.com PFEFFER=$(openssl rand -base64 32) go run ./cmd/server
-```
-
-Als Gerät anmelden (öffnet den Browser), zweites Gerät, Geräte auflisten:
-
-```bash
-cd server && go run ./cmd/testanmeldung anmelden
-```
-
-```bash
-cd server && go run ./cmd/testanmeldung -geraet handy anmelden
-```
-
-```bash
-cd server && go run ./cmd/testanmeldung geraete
-```
-
-Gegen den Server in der Cloud (Adresse aus `tofu output server_url`):
-
-```bash
-cd server && go run ./cmd/testanmeldung -server "$(cd ../infra && tofu output -raw server_url)" -geraet cloud anmelden
+cd server && FIRESTORE_EMULATOR_HOST=localhost:8086 STORAGE_EMULATOR_HOST=localhost:4443 SICHERUNG_BUCKET=lokal PROJEKT=lokal GOOGLE_CLIENT_IDS=82416816442-vka4ve2no02681umqkn8b0rk37ri37qd.apps.googleusercontent.com PFEFFER=$(openssl rand -base64 32) go run ./cmd/server
 ```
 
 Test-Client (Kotlin, B2) bauen, dann als Gerät anmelden und Schlüssel einrichten
@@ -160,6 +185,13 @@ cd client && ./gradlew :testclient:installDist
 
 ```bash
 ./client/testclient/build/install/testclient/bin/testclient --geraet pc anmelden
+```
+
+Gegen den Server in der Cloud (Adresse aus `tofu output server_url`; Gerätenamen
+nicht mit lokalen Tests mischen, die Konten unterscheiden sich):
+
+```bash
+./client/testclient/build/install/testclient/bin/testclient --server "$(cd infra && tofu output -raw server_url)" --geraet cloud-pc anmelden
 ```
 
 Kill-Switch von Hand auslösen (sperrt alle Cloud-Run-Dienste!):

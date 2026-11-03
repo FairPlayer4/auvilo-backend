@@ -209,6 +209,78 @@ func (x *BackupHolenResponse) GetVersion() int64 {
 	return 0
 }
 
+type BackupLoeschenRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BackupLoeschenRequest) Reset() {
+	*x = BackupLoeschenRequest{}
+	mi := &file_avlreminder_v1_schluessel_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BackupLoeschenRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BackupLoeschenRequest) ProtoMessage() {}
+
+func (x *BackupLoeschenRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_avlreminder_v1_schluessel_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BackupLoeschenRequest.ProtoReflect.Descriptor instead.
+func (*BackupLoeschenRequest) Descriptor() ([]byte, []int) {
+	return file_avlreminder_v1_schluessel_proto_rawDescGZIP(), []int{4}
+}
+
+type BackupLoeschenResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BackupLoeschenResponse) Reset() {
+	*x = BackupLoeschenResponse{}
+	mi := &file_avlreminder_v1_schluessel_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BackupLoeschenResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BackupLoeschenResponse) ProtoMessage() {}
+
+func (x *BackupLoeschenResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_avlreminder_v1_schluessel_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BackupLoeschenResponse.ProtoReflect.Descriptor instead.
+func (*BackupLoeschenResponse) Descriptor() ([]byte, []int) {
+	return file_avlreminder_v1_schluessel_proto_rawDescGZIP(), []int{5}
+}
+
 var File_avlreminder_v1_schluessel_proto protoreflect.FileDescriptor
 
 const file_avlreminder_v1_schluessel_proto_rawDesc = "" +
@@ -222,10 +294,13 @@ const file_avlreminder_v1_schluessel_proto_rawDesc = "" +
 	"\x12BackupHolenRequest\"K\n" +
 	"\x13BackupHolenResponse\x12\x1a\n" +
 	"\bchiffrat\x18\x01 \x01(\fR\bchiffrat\x12\x18\n" +
-	"\aversion\x18\x02 \x01(\x03R\aversion2\xce\x01\n" +
+	"\aversion\x18\x02 \x01(\x03R\aversion\"\x17\n" +
+	"\x15BackupLoeschenRequest\"\x18\n" +
+	"\x16BackupLoeschenResponse2\xaf\x02\n" +
 	"\x10SchluesselDienst\x12b\n" +
 	"\x0fBackupSpeichern\x12&.avlreminder.v1.BackupSpeichernRequest\x1a'.avlreminder.v1.BackupSpeichernResponse\x12V\n" +
-	"\vBackupHolen\x12\".avlreminder.v1.BackupHolenRequest\x1a#.avlreminder.v1.BackupHolenResponseB\xd2\x01\n" +
+	"\vBackupHolen\x12\".avlreminder.v1.BackupHolenRequest\x1a#.avlreminder.v1.BackupHolenResponse\x12_\n" +
+	"\x0eBackupLoeschen\x12%.avlreminder.v1.BackupLoeschenRequest\x1a&.avlreminder.v1.BackupLoeschenResponseB\xd2\x01\n" +
 	"\x12com.avlreminder.v1B\x0fSchluesselProtoP\x01ZRgithub.com/FairPlayer4/avlreminder-backend/server/gen/avlreminder/v1;avlreminderv1\xa2\x02\x03AXX\xaa\x02\x0eAvlreminder.V1\xca\x02\x0eAvlreminder\\V1\xe2\x02\x1aAvlreminder\\V1\\GPBMetadata\xea\x02\x0fAvlreminder::V1b\x06proto3"
 
 var (
@@ -240,20 +315,24 @@ func file_avlreminder_v1_schluessel_proto_rawDescGZIP() []byte {
 	return file_avlreminder_v1_schluessel_proto_rawDescData
 }
 
-var file_avlreminder_v1_schluessel_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_avlreminder_v1_schluessel_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_avlreminder_v1_schluessel_proto_goTypes = []any{
 	(*BackupSpeichernRequest)(nil),  // 0: avlreminder.v1.BackupSpeichernRequest
 	(*BackupSpeichernResponse)(nil), // 1: avlreminder.v1.BackupSpeichernResponse
 	(*BackupHolenRequest)(nil),      // 2: avlreminder.v1.BackupHolenRequest
 	(*BackupHolenResponse)(nil),     // 3: avlreminder.v1.BackupHolenResponse
+	(*BackupLoeschenRequest)(nil),   // 4: avlreminder.v1.BackupLoeschenRequest
+	(*BackupLoeschenResponse)(nil),  // 5: avlreminder.v1.BackupLoeschenResponse
 }
 var file_avlreminder_v1_schluessel_proto_depIdxs = []int32{
 	0, // 0: avlreminder.v1.SchluesselDienst.BackupSpeichern:input_type -> avlreminder.v1.BackupSpeichernRequest
 	2, // 1: avlreminder.v1.SchluesselDienst.BackupHolen:input_type -> avlreminder.v1.BackupHolenRequest
-	1, // 2: avlreminder.v1.SchluesselDienst.BackupSpeichern:output_type -> avlreminder.v1.BackupSpeichernResponse
-	3, // 3: avlreminder.v1.SchluesselDienst.BackupHolen:output_type -> avlreminder.v1.BackupHolenResponse
-	2, // [2:4] is the sub-list for method output_type
-	0, // [0:2] is the sub-list for method input_type
+	4, // 2: avlreminder.v1.SchluesselDienst.BackupLoeschen:input_type -> avlreminder.v1.BackupLoeschenRequest
+	1, // 3: avlreminder.v1.SchluesselDienst.BackupSpeichern:output_type -> avlreminder.v1.BackupSpeichernResponse
+	3, // 4: avlreminder.v1.SchluesselDienst.BackupHolen:output_type -> avlreminder.v1.BackupHolenResponse
+	5, // 5: avlreminder.v1.SchluesselDienst.BackupLoeschen:output_type -> avlreminder.v1.BackupLoeschenResponse
+	3, // [3:6] is the sub-list for method output_type
+	0, // [0:3] is the sub-list for method input_type
 	0, // [0:0] is the sub-list for extension type_name
 	0, // [0:0] is the sub-list for extension extendee
 	0, // [0:0] is the sub-list for field type_name
@@ -270,7 +349,7 @@ func file_avlreminder_v1_schluessel_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_avlreminder_v1_schluessel_proto_rawDesc), len(file_avlreminder_v1_schluessel_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   4,
+			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

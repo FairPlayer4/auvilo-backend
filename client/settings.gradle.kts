@@ -1,6 +1,7 @@
 // Kotlin-Teil des Backends (Etappe B2, docs/b2-entwurf.md):
 //  - protokoll:  Schlüssel, Verpacken/Entpacken, Signaturen. Reines Kotlin ohne
 //                Android und ohne Netz – soll später unverändert in die App.
+//  - verbindung: Connect-Clients und Adapter zum Server (Netz, aber kein Android).
 //  - testclient: Kommandozeile, die ein Gerät gegenüber dem Server spielt.
 //
 // Bauen und testen (im Ordner client/): ./gradlew check
@@ -24,4 +25,4 @@ dependencyResolutionManagement {
     }
 }
 
-include("protokoll", "testclient")
+include("protokoll", "verbindung", "testclient")
