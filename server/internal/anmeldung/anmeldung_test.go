@@ -59,7 +59,7 @@ func neueUmgebung(t *testing.T) *umgebung {
 // ansprueche sind die Felder eines gültigen ID-Tokens; Testfälle ändern einzelne.
 func (u *umgebung) ansprueche() map[string]any {
 	return map[string]any{
-		"iss":   GoogleAussteller,
+		"iss":   "https://accounts.google.com", // eigene Zahl statt GoogleAussteller
 		"aud":   unsereID,
 		"sub":   googleSub,
 		"iat":   jetzt.Add(-time.Minute).Unix(),

@@ -202,6 +202,26 @@ class SicherungsablaufTest {
         assertEquals(1, g.server.gespeichert)
     }
 
+    // KRITISCH: Die Grenze liegt genau bei 8 MiB Chiffrat (docs/formate.md): genau
+    // 8 MiB gehen hoch, ein Byte mehr nicht. Der Aufschlag von Kopf und Verschlüsselung
+    // wird gemessen, weil er von Tink und vom Kopf abhängt.
+    @Test
+    fun `nimmt genau 8 MiB Chiffrat an, ein Byte mehr nicht`() {
+        val achtMiB = 8 * 1024 * 1024
+        val probe = Geraet(FalscheAblage())
+        val probeLaenge = achtMiB - 4096 // gleiche Längenkodierung wie an der Grenze
+        probe.sichern("x".repeat(probeLaenge))
+        val aufschlag = probe.server.sicherung!!.chiffrat.size - probeLaenge
+
+        val genau = Geraet(FalscheAblage())
+        genau.sichern("x".repeat(achtMiB - aufschlag))
+        assertEquals(achtMiB, genau.server.sicherung!!.chiffrat.size)
+
+        val darueber = Geraet(FalscheAblage())
+        assertThrows<SicherungZuGross> { darueber.sichern("x".repeat(achtMiB - aufschlag + 1)) }
+        assertEquals(0, darueber.server.gespeichert)
+    }
+
     @Test
     fun `lehnt eine Sicherung über der Größengrenze ab, ohne hochzuladen`() {
         val g = Geraet(FalscheAblage())

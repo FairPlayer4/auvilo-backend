@@ -181,7 +181,7 @@ func TestAnmeldenLehntUngueltigeAnfragenAb(t *testing.T) {
 
 	t.Run("lehnt veraltetes Token ab", func(t *testing.T) {
 		req := ts.anmeldeAnfrage(t, "google-kevin", handy)
-		ts.jetzt = start.Add(anmeldung.MaxAlter + time.Second)
+		ts.jetzt = start.Add(5*time.Minute + time.Second) // ID-Token gilt 5 Minuten (b1-entwurf.md)
 		defer func() { ts.jetzt = start }()
 		_, err := ts.anmelde.Anmelden(context.Background(), connect.NewRequest(req))
 		erwarteCode(t, err, connect.CodeUnauthenticated)
