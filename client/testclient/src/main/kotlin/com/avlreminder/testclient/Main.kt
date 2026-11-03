@@ -13,6 +13,7 @@ import com.avlreminder.protokoll.AeltereSicherung
 import com.avlreminder.protokoll.Eingerichtet
 import com.avlreminder.protokoll.Einrichtung
 import com.avlreminder.protokoll.EinrichtungAbgebrochen
+import com.avlreminder.protokoll.EntschluesselnFehlgeschlagen
 import com.avlreminder.protokoll.Geraetenachrichten
 import com.avlreminder.protokoll.Gesichert
 import com.avlreminder.protokoll.NeueresSchema
@@ -76,10 +77,17 @@ fun main(args: Array<String>) {
         System.err.println("Einrichtung abgebrochen: ${e.message}")
         exitProcess(1)
     } catch (e: Exception) {
-        // Erwartete Meldungen des Sicherungsablaufs (protokoll); alles andere mit Stacktrace.
-        if (e !is VersionVeraltet && e !is AeltereSicherung && e !is NeueresSchema && e !is SicherungZuGross) throw e
-        System.err.println("Fehler: ${e.message}")
-        exitProcess(1)
+        // Erwartete Meldungen des Sicherungsablaufs (protokoll) ohne Stacktrace.
+        if (e is VersionVeraltet || e is AeltereSicherung || e is NeueresSchema || e is SicherungZuGross ||
+            e is EntschluesselnFehlgeschlagen
+        ) {
+            System.err.println("Fehler: ${e.message}")
+            exitProcess(1)
+        }
+        // Alles andere ist ein Programmfehler: Stacktrace, und exitProcess, damit
+        // die JVM nicht auf die Threads von OkHttp wartet.
+        e.printStackTrace()
+        exitProcess(2)
     }
 }
 
