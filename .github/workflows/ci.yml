@@ -94,7 +94,7 @@ jobs:
       - name: govulncheck
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
 
-  # Kotlin-Client (client/): Protokoll-Modul und Test-Client. Gradle kommt über
+  # Kotlin-Client (client/): Protokoll, Verbindung und Test-Client. Gradle kommt über
   # den Wrapper; dessen JAR wird vorher gegen die offiziellen Prüfsummen geprüft.
   # Die Tests lesen dieselben Testvektoren wie der Go-Job (proto/testvektoren).
   kotlin:

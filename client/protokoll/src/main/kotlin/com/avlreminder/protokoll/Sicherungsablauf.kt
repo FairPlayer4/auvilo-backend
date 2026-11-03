@@ -10,7 +10,10 @@ interface SicherungsAblage {
     /** Die neueste Sicherung des Kontos, oder null, wenn es keine gibt. */
     suspend fun holen(): GeholteSicherung?
 
-    /** Speichert die Sicherung; wirft [VersionVeraltet], wenn [erwartet] nicht mehr stimmt (0 = noch keine). */
+    /**
+     * Speichert die Sicherung; wirft [VersionVeraltet], wenn [erwartet] nicht mehr
+     * stimmt (0 = noch keine), und [SicherungZuGross], wenn der Server sie ablehnt.
+     */
     suspend fun speichern(chiffrat: ByteArray, erwartet: Long): Long
 
     /** Löscht die Sicherung mit allen älteren Fassungen. */
@@ -36,6 +39,14 @@ interface SicherungsStand {
 /** Die Sicherung auf dem Server ist älter als eine, die dieses Gerät schon kennt. */
 class AeltereSicherung(gemerkt: Long, geliefert: Long) :
     Exception("Der Server liefert eine ältere Sicherung (Zähler $geliefert, dieses Gerät kennt schon $gemerkt) - nichts geändert")
+
+/**
+ * Die Sicherung ist größer als erlaubt ([Datensicherung.MAX_CHIFFRAT]). Kommt vom
+ * Ablauf selbst, bevor etwas hochgeladen wird, oder vom Server, falls dessen Grenze
+ * kleiner ist; die App meldet in beiden Fällen "Sicherung zu groß".
+ */
+class SicherungZuGross(groesse: Int?) :
+    Exception("Sicherung zu groß" + (groesse?.let { ": $it Bytes" } ?: "") + " - nichts hochgeladen")
 
 /** Ergebnis von [Sicherungsablauf.sichern]. */
 sealed interface Gesichert {
@@ -94,9 +105,7 @@ class Sicherungsablauf(
                 tresor,
                 kontoId,
             )
-            require(chiffrat.size <= Datensicherung.MAX_CHIFFRAT) {
-                "Sicherung zu groß: ${chiffrat.size} Bytes, erlaubt ${Datensicherung.MAX_CHIFFRAT}"
-            }
+            if (chiffrat.size > Datensicherung.MAX_CHIFFRAT) throw SicherungZuGross(chiffrat.size)
             try {
                 val version = server.speichern(chiffrat, erwartet)
                 stand.speichern(GemerkteSicherung(zaehler, version))

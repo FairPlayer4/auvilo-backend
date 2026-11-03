@@ -125,7 +125,21 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
    **Für den Infrastruktur-Schritt:** Soft Delete des Buckets auf 0 Tage (sonst
    bleiben gelöschte Sicherungen 7 Tage liegen, DSGVO); Zeitlimit von Cloud Run
    und Server (30 s) für 8 MiB über langsames Mobilfunknetz prüfen.
-   **Weiter mit:** Schritt 4, Modul `verbindung` und Befehle im Test-Client.
+   **Am 2026-11-03 (Schritt 4, noch nicht committet):** Modul `client/verbindung`
+   (Connect-Clients und Adapter, aus `testclient` herausgelöst) mit
+   `ServerSicherungsAblage`; Adapter-Tests gegen einen Connect-Nachbau (Fehlercodes
+   je Methode). Server: `BackupLoeschen` für das Schlüssel-Backup. Test-Client:
+   `sichern`, `wiederherstellen`, `sicherung-loeschen`, `schluessel-loeschen`.
+   **Lokal von Ende zu Ende getestet** am 2026-11-03 (echte Google-Anmeldung,
+   Firestore-Emulator, fake-gcs): `b2b-pc` richtet Schlüssel ein und sichert zweimal
+   (zwei Fassungen im Bucket); `b2b-handy` übernimmt das Backup (gleicher
+   Fingerabdruck), stellt die Sicherung byte-gleich wieder her und sichert selbst.
+   `b2b-pc` mit veraltetem Stand fragt nach („stammt von Gerät …“): „nein“ lässt die
+   Sicherung des Handys stehen, „ja“ überschreibt mit höherem Zähler.
+   `sicherung-loeschen` entfernt alle Fassungen, danach legt ein Gerät mit altem
+   Stand sauber neu an; `schluessel-loeschen` entfernt das Backup (zweimal ohne
+   Fehler). Im Server-Log nur Gerät, Version und Größe.
+   **Weiter mit:** Commit, dann Schritt 5 (Infrastruktur, nach Kevins Go).
 5. Für den B3-Entwurf aus Lauf 4: A2 (Mitgliedschaft: Server-Liste oder signiertes
    Log), A4 (Umschläge an Kontext binden, Keyset-Typen prüfen), A5 (Speicher und
    Dienste aufteilen; Anfang in B2b). A3 (Formate festschreiben) kommt in B2b.
@@ -139,12 +153,12 @@ cd infra && tofu plan
 cd infra/killswitch && go test -cover ./...
 ```
 
-Server lokal gegen den Firestore-Emulator (Emulator vorher starten, siehe
-[entwicklungsumgebung.md](entwicklungsumgebung.md)); `PFEFFER` ist ein Zufallswert
-nur für diesen Lauf:
+Server lokal gegen Firestore-Emulator und fake-gcs-server (beide vorher starten,
+Bucket `lokal` anlegen, siehe [entwicklungsumgebung.md](entwicklungsumgebung.md));
+`PFEFFER` ist ein Zufallswert nur für diesen Lauf:
 
 ```bash
-cd server && FIRESTORE_EMULATOR_HOST=localhost:8086 PROJEKT=lokal GOOGLE_CLIENT_IDS=82416816442-vka4ve2no02681umqkn8b0rk37ri37qd.apps.googleusercontent.com PFEFFER=$(openssl rand -base64 32) go run ./cmd/server
+cd server && FIRESTORE_EMULATOR_HOST=localhost:8086 STORAGE_EMULATOR_HOST=localhost:4443 SICHERUNG_BUCKET=lokal PROJEKT=lokal GOOGLE_CLIENT_IDS=82416816442-vka4ve2no02681umqkn8b0rk37ri37qd.apps.googleusercontent.com PFEFFER=$(openssl rand -base64 32) go run ./cmd/server
 ```
 
 Test-Client (Kotlin, B2) bauen, dann als Gerät anmelden und Schlüssel einrichten

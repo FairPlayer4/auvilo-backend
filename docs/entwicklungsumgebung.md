@@ -49,7 +49,7 @@ angegeben.
   Stoppen mit `docker stop fakegcs` (Inhalt ist dann weg).
 - Netzwerkzugriffe (winget, `go install`, `gcloud`, `git push`) laufen in Claude Code
   außerhalb der Sandbox.
-- Kotlin-Client (`client/`): `./gradlew check` baut und testet beide Module. Der
+- Kotlin-Client (`client/`): `./gradlew check` baut und testet alle Module (`protokoll`, `verbindung`, `testclient`). Der
   Code aus den .proto-Dateien entsteht dabei im Build und wird nicht eingecheckt.
   Gradle-Cache auf diesem Rechner: `GRADLE_USER_HOME=E:\caches\gradle`.
 - Gradle prüft jede Abhängigkeit gegen `client/gradle/verification-metadata.xml`
@@ -65,3 +65,6 @@ angegeben.
   `./gradlew :testclient:run --args="--geraet pc anmelden"` (Befehle mit `--hilfe`).
   Er nutzt die `client_secret_*.json` in `%APPDATA%\avlreminder` und legt
   Geräteschlüssel und Schlüssel in `%APPDATA%\avlreminder\testclient` ab.
+  Für die Datensicherung braucht der lokale Server zusätzlich
+  `STORAGE_EMULATOR_HOST=localhost:4443` und `SICHERUNG_BUCKET=lokal` (Bucket wie
+  oben anlegen).

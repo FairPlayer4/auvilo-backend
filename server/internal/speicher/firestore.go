@@ -330,6 +330,15 @@ func (f *Firestore) BackupHolen(ctx context.Context, kontoID string) (Backup, er
 	return Backup{Chiffrat: bd.Chiffrat, Version: bd.Version, Geaendert: bd.Geaendert.UTC()}, nil
 }
 
+// BackupLoeschen erfüllt Speicher.BackupLoeschen. Firestore meldet beim Löschen
+// eines fehlenden Dokuments keinen Fehler.
+func (f *Firestore) BackupLoeschen(ctx context.Context, kontoID string) error {
+	if _, err := f.c.Collection(sammlungBackups).Doc(kontoID).Delete(ctx); err != nil {
+		return fmt.Errorf("Backup löschen: %w", err)
+	}
+	return nil
+}
+
 func geraetAus(snap *firestore.DocumentSnapshot) (Geraet, error) {
 	var gd geraetDok
 	if err := snap.DataTo(&gd); err != nil {

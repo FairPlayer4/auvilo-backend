@@ -29,6 +29,10 @@ service SchluesselDienst {
   rpc BackupSpeichern(BackupSpeichernRequest) returns (BackupSpeichernResponse);
 
   rpc BackupHolen(BackupHolenRequest) returns (BackupHolenResponse);
+
+  // Löscht das Backup des eigenen Kontos (Neuanfang mit neuen Schlüsseln, DSGVO
+  // Art. 17). Gibt es keins, ist das kein Fehler.
+  rpc BackupLoeschen(BackupLoeschenRequest) returns (BackupLoeschenResponse);
 }
 
 message BackupSpeichernRequest {
@@ -50,3 +54,7 @@ message BackupHolenResponse {
   bytes chiffrat = 1;
   int64 version = 2;
 }
+
+message BackupLoeschenRequest {}
+
+message BackupLoeschenResponse {}

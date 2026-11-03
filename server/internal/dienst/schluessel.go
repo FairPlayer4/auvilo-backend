@@ -58,3 +58,16 @@ func (d *dienste) BackupHolen(ctx context.Context, _ *connect.Request[v1.BackupH
 	}
 	return connect.NewResponse(&v1.BackupHolenResponse{Chiffrat: b.Chiffrat, Version: b.Version}), nil
 }
+
+// BackupLoeschen löscht das Backup des eigenen Kontos.
+func (d *dienste) BackupLoeschen(ctx context.Context, _ *connect.Request[v1.BackupLoeschenRequest]) (*connect.Response[v1.BackupLoeschenResponse], error) {
+	id, err := identitaet(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err := d.k.Speicher.BackupLoeschen(ctx, id.KontoID); err != nil {
+		return nil, speicherFehler(ctx, err)
+	}
+	slog.InfoContext(ctx, "Backup gelöscht", "geraet", id.GeraetID)
+	return connect.NewResponse(&v1.BackupLoeschenResponse{}), nil
+}

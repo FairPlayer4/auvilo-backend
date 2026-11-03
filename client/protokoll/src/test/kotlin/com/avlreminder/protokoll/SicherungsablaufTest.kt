@@ -192,10 +192,20 @@ class SicherungsablaufTest {
     }
 
     @Test
+    fun `lädt eine Sicherung knapp unter der Größengrenze hoch`() {
+        val g = Geraet(FalscheAblage())
+        // 1 KiB Luft für Kopf, Nonce, Tag und Tink-Präfix.
+        g.sichern("x".repeat(8 * 1024 * 1024 - 1024))
+        assertEquals(1, g.server.gespeichert)
+    }
+
+    @Test
     fun `lehnt eine Sicherung über der Größengrenze ab, ohne hochzuladen`() {
         val g = Geraet(FalscheAblage())
-        val zuGross = "x".repeat(Datensicherung.MAX_CHIFFRAT)
-        assertThrows<IllegalArgumentException> { g.sichern(zuGross) }
+        // Eigene Zahl (8 MiB aus docs/formate.md) statt MAX_CHIFFRAT: Sonst bliebe
+        // der Test grün, wenn jemand die Konstante ändert.
+        val zuGross = "x".repeat(8 * 1024 * 1024)
+        assertThrows<SicherungZuGross> { g.sichern(zuGross) }
         assertEquals(0, g.server.gespeichert)
     }
 

@@ -23,7 +23,8 @@ Kommunikation auf **Deutsch, mit ß**.
   `// KRITISCH:`; Compiler-Warnungen sind Fehler. Der Code aus `proto/` entsteht im
   Gradle-Build. `protokoll` bleibt ohne Netz und ohne Android, damit es in die App passt.
 - Abläufe, die auch die App braucht, gehören nach `protokoll` (Server und lokale Ablage
-  als Schnittstellen); `testclient` ist nur CLI, Connect-Anbindung und Dateiablage.
+  als Schnittstellen); die Connect-Anbindung (Adapter zu diesen Schnittstellen) liegt in
+  `verbindung`, `testclient` ist nur CLI und Dateiablage.
 - Tests prüfen Verhalten, nicht die geprüfte Konstante selbst (kein `VERSUCHE == 3`).
 
 ## Zusammenarbeit

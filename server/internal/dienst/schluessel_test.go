@@ -27,6 +27,11 @@ func (ts *testServer) backupHolen(token string) (*v1.BackupHolenResponse, error)
 	return res.Msg, nil
 }
 
+func (ts *testServer) backupLoeschen(token string) error {
+	_, err := ts.backup.BackupLoeschen(context.Background(), mitSitzung(&v1.BackupLoeschenRequest{}, token))
+	return err
+}
+
 // Ablauf aus docs/b2-entwurf.md: Das erste Gerät legt das Backup an, das
 // zweite Gerät desselben Kontos holt es.
 func TestZweitesGeraetHoltDasBackupDesErsten(t *testing.T) {
@@ -142,6 +147,48 @@ func TestBackupGehoertNurZumEigenenKonto(t *testing.T) {
 	})
 }
 
+// Neuanfang vor echten Daten (docs/b2b-entwurf.md): Backup löschen, danach legt
+// ein Gerät ein neues mit Version 0 an.
+func TestBackupLoeschen(t *testing.T) {
+	ts := neuerTestServer(t)
+	kevin := ts.anmelden(t, "google-kevin", testhilfe.NeuesGeraet(t)).Sitzung.Token
+	andere := ts.anmelden(t, "google-andere", testhilfe.NeuesGeraet(t)).Sitzung.Token
+	if _, err := ts.backupSpeichern(kevin, []byte("alt"), 0); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ts.backupSpeichern(andere, []byte("anderes-backup"), 0); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ts.backupLoeschen(kevin); err != nil {
+		t.Fatal(err)
+	}
+	t.Run("danach ist es weg", func(t *testing.T) {
+		_, err := ts.backupHolen(kevin)
+		erwarteCode(t, err, connect.CodeNotFound)
+	})
+	// KRITISCH: Gelöscht wird nur das Backup des eigenen Kontos.
+	t.Run("das Backup des anderen Kontos bleibt", func(t *testing.T) {
+		geholt, err := ts.backupHolen(andere)
+		if err != nil || string(geholt.Chiffrat) != "anderes-backup" {
+			t.Errorf("anderes Backup = %v, Fehler %v", geholt, err)
+		}
+	})
+	t.Run("ein neues beginnt wieder mit Version 0", func(t *testing.T) {
+		if _, err := ts.backupSpeichern(kevin, []byte("neu"), 0); err != nil {
+			t.Fatal(err)
+		}
+	})
+	t.Run("erneutes Löschen ist kein Fehler", func(t *testing.T) {
+		if err := ts.backupLoeschen(andere); err != nil {
+			t.Fatal(err)
+		}
+		if err := ts.backupLoeschen(andere); err != nil {
+			t.Fatal(err)
+		}
+	})
+}
+
 func TestBackupVerlangtGueltigeSitzung(t *testing.T) {
 	ts := neuerTestServer(t)
 	handy, laptop := testhilfe.NeuesGeraet(t), testhilfe.NeuesGeraet(t)
@@ -171,5 +218,12 @@ func TestBackupVerlangtGueltigeSitzung(t *testing.T) {
 			_, err := ts.backupHolen(fall.token)
 			erwarteCode(t, err, connect.CodeUnauthenticated)
 		})
+		t.Run("Löschen lehnt ab "+fall.name, func(t *testing.T) {
+			erwarteCode(t, ts.backupLoeschen(fall.token), connect.CodeUnauthenticated)
+		})
+	}
+	// Abgelehnte Aufrufe haben nichts verändert.
+	if _, err := ts.backupHolen(laptopSitzung); err != nil {
+		t.Errorf("Backup nach abgelehnten Aufrufen: %v", err)
 	}
 }

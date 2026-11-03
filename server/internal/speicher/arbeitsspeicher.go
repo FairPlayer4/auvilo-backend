@@ -151,6 +151,13 @@ func (a *Arbeitsspeicher) BackupHolen(_ context.Context, kontoID string) (Backup
 	return b, nil
 }
 
+func (a *Arbeitsspeicher) BackupLoeschen(_ context.Context, kontoID string) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	delete(a.backups, kontoID)
+	return nil
+}
+
 // sortiereGeraete sortiert nach Erstellung, bei Gleichstand nach ID – so ist
 // die Reihenfolge in beiden Umsetzungen gleich.
 func sortiereGeraete(liste []Geraet) {

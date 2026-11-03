@@ -228,7 +228,7 @@ aber nicht **was**. Wird in der Datenschutzerklärung so benannt.
 - **Preis dafür**: zwei Sprachen. Die Grenze ist die Schnittstelle; Verträglichkeit
   sichern Tests, die der Kotlin-Test-Client gegen den Go-Server fährt.
 - **Ein Repo für alles** (Monorepo): `proto/` (Schnittstelle), `server/` (Go),
-  `client/` (Kotlin: Protokoll-Modul und Test-Client), `infra/` (OpenTofu),
+  `client/` (Kotlin: Protokoll, Verbindung zum Server, Test-Client), `infra/` (OpenTofu),
   `docs/`. Eine Änderung an der Schnittstelle ist so ein einziger Commit. [E]
 - Region: **europe-west1 (Belgien)** – meist günstigste EU-Preisstufe, niedriger
   CO₂-Wert; Unterschied zu Frankfurt praktisch nicht spürbar. [P]
