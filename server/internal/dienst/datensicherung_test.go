@@ -5,6 +5,7 @@ import (
 	"context"
 	"log/slog"
 	"testing"
+	"time"
 
 	"connectrpc.com/connect"
 
@@ -252,10 +253,29 @@ func TestZuVieleSicherungenGleichzeitigWerdenAbgewiesen(t *testing.T) {
 		<-ablage.angekommen
 	}
 
-	t.Run("weitere Sicherung bekommt sofort unavailable", func(t *testing.T) {
-		_, err := ts.sicherungSpeichern(tokens[2], []byte("sicherung"), 0)
-		erwarteCode(t, err, connect.CodeUnavailable)
+	ok := t.Run("weitere Sicherung bekommt sofort unavailable", func(t *testing.T) {
+		fertig := make(chan error, 1)
+		go func() {
+			_, err := ts.sicherungSpeichern(tokens[2], []byte("sicherung"), 0)
+			fertig <- err
+		}()
+		// Greift die Grenze nicht, käme die Anfrage in der Ablage an und bliebe dort
+		// hängen; der select macht daraus einen roten Test statt eines hängenden.
+		// close gibt dann alle wartenden Sicherungen frei.
+		select {
+		case err := <-fertig:
+			erwarteCode(t, err, connect.CodeUnavailable)
+		case <-ablage.angekommen:
+			close(ablage.frei)
+			t.Fatal("die weitere Sicherung kam bis zur Ablage durch")
+		case <-time.After(10 * time.Second):
+			close(ablage.frei)
+			t.Fatal("keine Antwort nach 10 s")
+		}
 	})
+	if !ok {
+		return // die Ablage ist schon freigegeben, der Rest des Tests sagt nichts mehr
+	}
 	t.Run("andere Dienste laufen weiter", func(t *testing.T) {
 		if _, err := ts.geraete.GeraeteAuflisten(context.Background(), mitSitzung(&v1.GeraeteAuflistenRequest{}, tokens[2])); err != nil {
 			t.Fatal(err)
