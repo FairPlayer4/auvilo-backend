@@ -251,6 +251,13 @@ class SicherungsablaufTest {
     }
 
     @Test
+    fun `spielt dieselbe Fassung erneut ein, die das Gerät schon kennt`() {
+        val server = FalscheAblage().apply { vonGeraet("tablet", zaehler = 4) }
+        val stand = FalscherStand(GemerkteSicherung(zaehler = 4, version = server.sicherung!!.version))
+        assertInstanceOf(Wiederhergestellt.Ja::class.java, wiederherstellen(server, stand))
+    }
+
+    @Test
     fun `ohne Sicherung meldet es das und wendet nichts an`() {
         val angewendet = mutableListOf<Sicherung>()
         assertEquals(Wiederhergestellt.KeineSicherung, wiederherstellen(FalscheAblage(), angewendet = angewendet))
