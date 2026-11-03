@@ -10,7 +10,8 @@ Etappe **B0** ist angelegt (OpenTofu, `infra/`):
   25/50/90/100 % und bei Prognose 100 %
 - **Kill-Switch** (Cloud Function `killswitch`, Go): ab 100 % werden alle
   Cloud-Run-Dienste auf „nur intern“ gestellt, ab 150 % wird das Projekt vom
-  Rechnungskonto getrennt
+  Rechnungskonto getrennt. Er wird per `tofu apply` aus dem **lokalen** Stand gebaut,
+  nicht über `main`: nur von einem geprüften, committeten Stand anwenden.
 - **Alarm per E-Mail**, wenn der Kill-Switch eingreift (WARNING) oder scheitert
   (ERROR): Log-Alarmregel in Cloud Monitoring (`infra/alarm.tf`), ca. 0,10 $/Monat.
   Empfänger in `infra/werte.auto.tfvars` (`alarm_email`). Getestet am 2026-11-01:
@@ -54,7 +55,8 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
   greift erst das Trennen ab 150 %. Kommen solche dazu, den Kill-Switch erweitern.
   Ebenso kostet Speicher (Bucket der Datensicherungen) nach der Sperre weiter, bis
   zum Trennen; die Lebenszyklusregeln greifen erst verzögert. Ein Upload-Limit je
-  Konto und Zeit im Server käme vor B6.
+  Konto und Zeit im Server kommt vor echten Daten
+  ([b2b-entwurf.md](b2b-entwurf.md), „Vor echten Daten“).
 - **Bekannte Grenze (Absenz-Alarm):** schlägt erst an, nachdem der Kill-Switch
   einmal aufgerufen wurde. Nach einem Neuaufbau einmal eine Meldung unter der
   Schwelle schicken (`gcloud pubsub topics publish budget-meldungen
@@ -69,7 +71,7 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
 - **Bekannte Grenze (Kill-Switch):** Er darf Dienste ändern und dabei die
   eingetragenen Laufzeitkonten benutzen (actAs, nötig fürs Sperren). Eine
   kompromittierte Abhängigkeit im Kill-Switch könnte so ein fremdes Image als
-  Konto `server` starten (Firestore, Pfeffer). Vor echten Daten (B6) prüfen, ob
+  Konto `server` starten (Firestore, Pfeffer). Vor echten Daten (nicht erst B6) prüfen, ob
   das Sperren ohne actAs geht (Review Lauf 3).
 - Go-Tests: Entscheidung, Ausführung, Verarbeitung und Sperr-Logik (`sperren.go`)
   sind getestet. `gcp.go` enthält nur noch die Cloud-Aufrufe und wird durch den
@@ -149,8 +151,8 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
    **Review Lauf 5 am 2026-11-03** (`.review/runs/2026-11-03.md`), Fragen wie
    vorgeschlagen entschieden (anforderungen.md Kap. 11): Sitzung vor den
    Sicherungsplätzen geprüft, gesehene Zähler gemerkt, `Sicherungsablauf.loeschen`
-   behält den Zähler, Kill-Switch-Mail nur bei echtem Eingriff (wirkt nach dem
-   nächsten Deploy über `main`), Grenzen und „Vor echten Daten“ ergänzt.
+   behält den Zähler, Kill-Switch-Mail nur bei echtem Eingriff (aktiv seit
+   `tofu apply` in Schritt 5), Grenzen und „Vor echten Daten“ ergänzt.
    **Schritt 5 (Infrastruktur), Konfiguration am 2026-11-03:** Bucket
    `…-datensicherung` (`infra/datensicherung.tf`: Versionierung, ältere Fassungen
    7 Tage/höchstens 100, ohne Soft Delete, nur Server-Konto mit `objectUser`),
@@ -214,6 +216,12 @@ Kill-Switch von Hand auslösen (sperrt alle Cloud-Run-Dienste!):
 
 ```bash
 gcloud pubsub topics publish budget-meldungen --message='{"costAmount":21,"budgetAmount":20}'
+```
+
+Nach einer Sperre wieder öffnen (erst, wenn die Ursache geklärt ist):
+
+```bash
+gcloud run services update server --region=europe-west1 --ingress=all
 ```
 
 Logs lesen (liegen im EU-Bucket, nicht im Standard-Bucket):

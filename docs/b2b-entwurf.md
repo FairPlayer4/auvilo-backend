@@ -109,7 +109,7 @@ kennen, sie als ältere Sicherung ab.
   Den Test gegen Cloud Storage lokal mit `fake-gcs-server` (Docker), falls dieser
   `ifGenerationMatch` korrekt nachbildet; sonst gegen einen eigenen Test-Bucket in
   der CI. Das klären wir im ersten Schritt.
-- Logs: Konto-Pseudonym, Größe, Version, Ergebnis. Nie Inhalt.
+- Logs: Geräte-ID, Größe, Version, Ergebnis. Nie Inhalt.
 - Kosten: bei einer Person und wenigen Testern praktisch null (Speicher im
   Megabyte-Bereich, wenige Tausend Operationen im Monat).
 
@@ -158,6 +158,13 @@ gelesen hat. Bevor die App-Variante echte Daten sichert:
    nach Freischaltung (QR oder Wiederherstellungsschlüssel) andere Geräte sperren und
    Backup oder Datensicherung löschen darf, und dass vorhandene Geräte von jedem neuen
    Gerät erfahren (Grenze in [b1-entwurf.md](b1-entwurf.md), „Gerät sperren“).
+6. **Pfeffer schützen:** Die Konto-ID ist ein HMAC der Google-Konto-ID mit dem
+   Pfeffer. Geht er verloren, findet kein Gerät Schlüssel-Backup und Datensicherung
+   wieder. Vor echten Daten entscheiden, wie der Pfeffer gegen Löschen geschützt und
+   gesichert wird.
+7. **Kosten und Rechte:** Upload-Limit je Konto und Zeit im Server; prüfen, ob der
+   Kill-Switch ohne actAs auf die Laufzeitkonten sperren kann (Grenzen in
+   [stand.md](stand.md)).
 
 Claude kündigt diesen Schritt vorher ausdrücklich an (siehe `CLAUDE.md`,
 „Geheimnisse und Sicherheitsphase“). Das Rotieren der Schlüssel selbst kommt erst in

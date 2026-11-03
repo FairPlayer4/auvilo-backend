@@ -6,6 +6,6 @@ Lernprojekt, vorerst nicht mit der App verbunden.
 
 ## Status
 
-Etappen B0 (Grundlagen) und B1 (Server, Anmeldung, Deploy) abgeschlossen; aktueller
+Etappen B0 bis B2 abgeschlossen, B2b (Daten-Backup) in Arbeit; aktueller
 Stand in [`docs/stand.md`](docs/stand.md), Anforderungen in
 [`docs/anforderungen.md`](docs/anforderungen.md).

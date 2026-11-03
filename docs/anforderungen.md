@@ -218,6 +218,7 @@ aber nicht **was**. Wird in der Datenschutzerklärung so benannt.
 | Protokoll + Test-Client | **Kotlin** (JVM-CLI) | Krypto und Konfliktauflösung laufen nur auf dem Client; das Modul wandert später in die App |
 | Schnittstelle | **Protobuf** mit **Connect** (connectrpc.com), Schemas mit `buf` verwaltet | sprachneutral, typsicher in Go und Kotlin, läuft über normales HTTP und kann zum Debuggen auch JSON sprechen |
 | Daten | **Firestore** (Native Mode, EU-Region) | Gratis-Kontingent, kein Grundpreis, Gültigkeitsdauer (TTL) für Ablaufzeiten |
+| Datensicherungen | **Cloud Storage** (EU-Region, versioniert) | ein Chiffrat je Konto bis 8 MiB, ältere Fassungen als Rückfallebene (B2b) |
 | Push | Firebase Cloud Messaging | kostenlos, inhaltslos |
 | KI | Vertex AI (EU-Endpunkt) | Bezahlung pro Aufruf |
 | Secrets | Secret Manager | |
@@ -276,11 +277,11 @@ tragen die Tests die Spezifikation. Anleitung zum Review: [go-review.md](go-revi
 - Q6 Ende-zu-Ende: Test-Client simuliert mehrere Personen/Geräte gegen lokale und
   Cloud-Instanz.
 - Q7 Umgebung mit einem Befehl aufbauen und **vollständig wieder löschen**.
-- Q8 Dokumentation auf Deutsch (`docs/anforderungen.md`, `design.md`, `stand.md`).
+- Q8 Dokumentation auf Deutsch (`docs/anforderungen.md`, Entwürfe je Etappe, `stand.md`).
 
 ## 8. Nicht-Ziele (vorerst)
 
-- Anbindung an die App
+- Anbindung an die App über das Daten-Backup (B2b) hinaus
 - Dateien/Fotos/Audio in der Cloud (Idee 3.6), KI für Medien
 - Weboberfläche (außer der Pflichtseite zum Löschen, später)
 - Ferneinladung, Rechte pro Mitglied, öffentliche Registrierung
@@ -340,7 +341,7 @@ tragen die Tests die Spezifikation. Anleitung zum Review: [go-review.md](go-revi
 | 2026-11-01 | B1: Geräteschlüssel ECDSA P-256 (Android Keystore inkl. StrongBox); Personen- und Freigabeschlüssel bleiben wie in 4.1 |
 | 2026-11-01 | B1: Sitzungs-Token zufällig, 1 Stunde gültig, auf dem Server nur als Hash; Sperren wirkt sofort |
 | 2026-11-01 | B1: Google-Konto-ID nur als HMAC mit geheimem Pfeffer (Secret Manager) gespeichert |
-| 2026-11-01 | B1: Test mit Go-Werkzeug `testanmeldung`; Kotlin-Test-Client ab B2 |
+| 2026-11-01 | B1: Test mit Go-Werkzeug `testanmeldung`; Kotlin-Test-Client ab B2 (ersetzt: seit B2 testet der Kotlin-Test-Client) |
 | 2026-11-01 | Namen in Schnittstelle und Code deutsch, ohne Umlaute |
 | 2026-11-01 | Abgefangene Anfragen dürfen sich im Zeitfenster wiederholen (Anmelden ca. 5 min, Erneuern ±2 min); keine Merkliste benutzter Signaturen. Schutz: TLS, kurze Fenster, Sitzung 1 h (Test `TestWiederholteAnfrageImZeitfensterGiltBewusst`) |
 | 2026-11-01 | Geräte-IDs (pseudonym) dürfen in Logs stehen, zur Fehlersuche und Missbrauchsabwehr (Art. 6 Abs. 1 f). Einzeln löschen geht in Cloud Logging nicht; stattdessen: Konto löschen trennt sofort die Zuordnung (Firestore), Logs laufen nach 30 Tagen ab (P5). In die Datenschutzerklärung (P4); vor B6 von jemandem mit Datenschutzerfahrung prüfen lassen |
@@ -354,7 +355,7 @@ tragen die Tests die Spezifikation. Anleitung zum Review: [go-review.md](go-revi
 | 2026-11-02 | B2: Wiederherstellungsschlüssel wird angezeigt und bestätigt, bevor etwas gespeichert oder hochgeladen wird; danach lokal ablegen (mit offenem Backup), dann hochladen. Scheitert das Hochladen, setzt der nächste Lauf fort (Review-Lauf 4) |
 | 2026-11-02 | Abläufe, die auch die App braucht (z. B. Einrichtung), liegen in `protokoll` hinter Schnittstellen (Server, lokale Ablage); `testclient` enthält nur CLI, Connect-Anbindung und Dateiablage (Review A1) |
 | 2026-11-02 | Tests prüfen Verhalten, nicht die geprüfte Konstante selbst (kein Test, der nur `VERSUCHE == 3` nachspricht) |
-| 2026-11-02 | Gradle-Prüfsummen (`verification-metadata.xml`) noch nicht; bekannte Grenze, vor der App einführen |
+| 2026-11-02 | Gradle-Prüfsummen (`verification-metadata.xml`) noch nicht; bekannte Grenze, vor der App einführen (ersetzt am selben Tag: in B2b eingeführt) |
 | 2026-11-02 | Review A2 (Mitgliedschaft: Server-Liste oder signiertes Log) im B3-Entwurf klären; A3 (Client-Formate maßgeblich beschreiben, feste Vektoren) wird in B2b vorgezogen |
 | 2026-11-02 | Etappe B2b vor B3 eingeschoben: Das Backend kommt früh als verschlüsseltes Backup in die App (interne Variante), für echte Tests von B1/B2. Kein verlässliches Backup (Kill-Switch); das lokale Backup bleibt. Entwurf: [b2b-entwurf.md](b2b-entwurf.md) |
 | 2026-11-02 | B2b: Daten-Backup ist eine undurchsichtige Nutzlast; die App legt ihre Room-Datenbank ab (gzip), ohne Fotos und Audio. Eigenes Datenformat erst in B3 |
