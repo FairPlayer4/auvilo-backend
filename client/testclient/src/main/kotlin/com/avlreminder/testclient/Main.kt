@@ -37,6 +37,8 @@ import com.google.protobuf.ByteString
 import com.google.protobuf.Timestamp
 import kotlinx.coroutines.runBlocking
 import java.io.File
+import java.net.URI
+import java.net.URISyntaxException
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.time.Instant
@@ -106,6 +108,7 @@ private suspend fun ausfuehren(args: List<String>) {
             else -> rest += a
         }
     }
+    pruefeServer(server)
     val werkzeug = Werkzeug(Verbindung(server.trimEnd('/')), Ablage(File(ordner, "testclient")), ordner, name)
     when {
         rest == listOf("anmelden") -> werkzeug.anmelden()
@@ -121,6 +124,19 @@ private suspend fun ausfuehren(args: List<String>) {
             println(HILFE)
             throw Bedienfehler(if (rest.isEmpty()) "Befehl fehlt" else "unbekannter Befehl: ${rest.joinToString(" ")}")
         }
+    }
+}
+
+/** Sitzungs-Token gehen nur über HTTPS hinaus; unverschlüsselt nur zum eigenen Rechner. */
+private fun pruefeServer(server: String) {
+    val uri = try {
+        URI(server)
+    } catch (_: URISyntaxException) {
+        throw Bedienfehler("--server: keine gültige Adresse")
+    }
+    val lokal = uri.host in setOf("localhost", "127.0.0.1", "[::1]")
+    if (uri.scheme != "https" && !(uri.scheme == "http" && lokal)) {
+        throw Bedienfehler("--server: nur https, http nur für localhost")
     }
 }
 
