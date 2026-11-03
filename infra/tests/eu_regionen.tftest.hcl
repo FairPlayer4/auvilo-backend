@@ -45,6 +45,35 @@ mock_provider "google" {
   }
 }
 
+# Eigene Werte für die Konten und Repos, um die es in den Rechte-Tests geht. Mit
+# den gemeinsamen Vorgaben oben hätten alle Konten dieselbe Adresse, und ein Test
+# „gehört nur dem Server-Konto“ bliebe auch mit dem falschen Konto grün.
+override_resource {
+  target = google_service_account.server
+  values = {
+    email  = "server@test-projekt.iam.gserviceaccount.com"
+    member = "serviceAccount:server@test-projekt.iam.gserviceaccount.com"
+    name   = "projects/test-projekt/serviceAccounts/server@test-projekt.iam.gserviceaccount.com"
+    id     = "projects/test-projekt/serviceAccounts/server@test-projekt.iam.gserviceaccount.com"
+  }
+}
+override_resource {
+  target = google_service_account.bauen
+  values = {
+    email  = "funktionen-bauen@test-projekt.iam.gserviceaccount.com"
+    member = "serviceAccount:funktionen-bauen@test-projekt.iam.gserviceaccount.com"
+    name   = "projects/test-projekt/serviceAccounts/funktionen-bauen@test-projekt.iam.gserviceaccount.com"
+    id     = "projects/test-projekt/serviceAccounts/funktionen-bauen@test-projekt.iam.gserviceaccount.com"
+  }
+}
+override_resource {
+  target = google_artifact_registry_repository.funktionen
+  values = {
+    id   = "projects/test-projekt/locations/europe-west1/repositories/funktionen"
+    name = "funktionen"
+  }
+}
+
 mock_provider "random" {}
 
 mock_provider "archive" {
@@ -142,16 +171,27 @@ run "datensicherung_ist_geschuetzt_und_begrenzt" {
     error_message = "Ohne Versionierung gibt es keine älteren Fassungen."
   }
   assert {
-    condition     = anytrue([for r in google_storage_bucket.datensicherung.lifecycle_rule : one(r.condition).days_since_noncurrent_time == 7 && one(r.action).type == "Delete"])
+    # Genau zwei Regeln, jede mit nur einer Grenze: Eine zusätzliche Regel (etwa
+    # nach Alter) könnte die aktuelle Sicherung löschen, und zwei Grenzen in einer
+    # Regel griffen erst, wenn beide zugleich erfüllt sind.
+    condition     = length(google_storage_bucket.datensicherung.lifecycle_rule) == 2 && alltrue([for r in google_storage_bucket.datensicherung.lifecycle_rule : one(r.action).type == "Delete" && coalesce(one(r.condition).age, 0) == 0])
+    error_message = "Der Bucket hat andere Lebenszyklusregeln als die zwei für ältere Fassungen."
+  }
+  assert {
+    condition     = anytrue([for r in google_storage_bucket.datensicherung.lifecycle_rule : one(r.condition).days_since_noncurrent_time == 7 && coalesce(one(r.condition).num_newer_versions, 0) == 0])
     error_message = "Ältere Fassungen werden nicht nach 7 Tagen gelöscht."
   }
   assert {
     # 101 neuere = die aktuelle und 100 ältere Fassungen bleiben.
-    condition     = anytrue([for r in google_storage_bucket.datensicherung.lifecycle_rule : one(r.condition).num_newer_versions == 101 && one(r.action).type == "Delete"])
+    condition     = anytrue([for r in google_storage_bucket.datensicherung.lifecycle_rule : one(r.condition).num_newer_versions == 101 && coalesce(one(r.condition).days_since_noncurrent_time, 0) == 0])
     error_message = "Es bleiben nicht höchstens 100 ältere Fassungen."
   }
   assert {
-    condition     = google_storage_bucket_iam_member.server_datensicherung.member == google_service_account.server.member && google_storage_bucket_iam_member.server_datensicherung.role == "roles/storage.objectUser"
+    condition     = google_storage_bucket.datensicherung.soft_delete_policy[0].retention_duration_seconds == 0
+    error_message = "Gelöschte Sicherungen bleiben im Soft Delete liegen (DSGVO Art. 17)."
+  }
+  assert {
+    condition     = google_storage_bucket_iam_member.server_datensicherung.member == "serviceAccount:server@test-projekt.iam.gserviceaccount.com" && google_storage_bucket_iam_member.server_datensicherung.role == "roles/storage.objectUser"
     error_message = "Der Bucket der Datensicherungen gehört nicht (nur) dem Server-Konto."
   }
   assert {
@@ -195,8 +235,12 @@ run "build_konto_ist_eng" {
     error_message = "Das Build-Konto darf mehr Buckets lesen als den Quellen-Bucket und die von Cloud Functions."
   }
   assert {
-    condition     = google_artifact_registry_repository_iam_member.bauen_funktionen.repository == google_artifact_registry_repository.funktionen.name
+    condition     = google_artifact_registry_repository_iam_member.bauen_funktionen.repository == "funktionen" && google_artifact_registry_repository_iam_member.bauen_funktionen.member == "serviceAccount:funktionen-bauen@test-projekt.iam.gserviceaccount.com"
     error_message = "Das Build-Konto schreibt Images nicht (nur) ins Repo der Funktionen."
+  }
+  assert {
+    condition     = google_project_iam_member.bauen_quellen.member == "serviceAccount:funktionen-bauen@test-projekt.iam.gserviceaccount.com"
+    error_message = "Das Leserecht auf die Quellen hat ein anderes Konto als das Build-Konto."
   }
 }
 
@@ -239,4 +283,23 @@ run "lehnt_sperren_ueber_trennen_ab" {
   }
 
   expect_failures = [var.schwelle_trennen]
+}
+
+# Fällt der Kill-Switch still aus, kommt eine Mail (Absenz-Bedingung auf seine
+# Aufrufe, summiert über Revisionen).
+run "alarm_bei_stillem_kill_switch" {
+  command = plan
+
+  assert {
+    condition     = length(google_monitoring_alert_policy.killswitch_still.conditions[0].condition_absent) == 1
+    error_message = "Es gibt keinen Alarm, wenn der Kill-Switch nicht mehr aufgerufen wird."
+  }
+  assert {
+    condition     = strcontains(google_monitoring_alert_policy.killswitch_still.conditions[0].condition_absent[0].filter, "resource.labels.service_name=\"killswitch\"")
+    error_message = "Der Absenz-Alarm beobachtet nicht den Kill-Switch."
+  }
+  assert {
+    condition     = google_monitoring_alert_policy.killswitch_still.conditions[0].condition_absent[0].aggregations[0].cross_series_reducer == "REDUCE_SUM"
+    error_message = "Ohne Summe über Revisionen meldet der Alarm nach jedem Deploy fälschlich Stille."
+  }
 }
