@@ -206,6 +206,11 @@ private class Werkzeug(
 
     suspend fun sichern(datei: File) {
         if (!datei.isFile) throw Bedienfehler("$datei gibt es nicht")
+        // Ohne hochgeladenes Schlüssel-Backup ginge die Sicherung mit dem Gerät verloren.
+        val s = ablage.sitzung(name)
+        if (ablage.schluessel(name, s.kontoId)?.offenesBackup != null) {
+            throw Bedienfehler("Schlüssel-Backup noch nicht hochgeladen - zuerst erneut anmelden.")
+        }
         val ergebnis = sicherungsablauf { kopf -> frage("Die Sicherung stammt von ${beschreibe(kopf)}. Überschreiben?") }
             .sichern(datei.readBytes(), SCHEMA_VERSION)
         when (ergebnis) {
