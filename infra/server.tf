@@ -6,8 +6,9 @@
 
 # --- Dienstkonto -------------------------------------------------------------
 
-# Unter diesem Konto läuft der Server. Es darf nur Firestore benutzen und genau
-# ein Secret (den Pfeffer) lesen.
+# Unter diesem Konto läuft der Server. Es darf nur Firestore benutzen, genau
+# ein Secret (den Pfeffer) lesen und im Bucket der Datensicherungen schreiben
+# (datensicherung.tf).
 resource "google_service_account" "server" {
   account_id   = "server"
   display_name = "Server (Cloud Run)"
@@ -104,8 +105,11 @@ resource "google_cloud_run_v2_service" "server" {
   deletion_protection = false # Lernprojekt: muss vollständig löschbar sein
 
   template {
-    service_account                  = google_service_account.server.email
-    timeout                          = "30s"
+    service_account = google_service_account.server.email
+    timeout         = "30s"
+    # 80 Anfragen gleichzeitig passen in 256 MiB: Normale Anfragen haben
+    # höchstens 64 KiB, Datensicherungen (bis 8 MiB) lässt der Server nur vier
+    # gleichzeitig zu (dienst.StandardGleichzeitigeSicherungen, ~95 MiB).
     max_instance_request_concurrency = 80
 
     # Kosten vor Verfügbarkeit: 0 Instanzen im Leerlauf (Kaltstart ca. 1 s),
@@ -142,6 +146,17 @@ resource "google_cloud_run_v2_service" "server" {
         name  = "PFEFFER_SECRET"
         value = google_secret_manager_secret_version.pfeffer.name
       }
+      env {
+        name  = "SICHERUNG_BUCKET"
+        value = google_storage_bucket.datensicherung.name
+      }
+      env {
+        # Weiche Grenze für Go: Ab hier räumt der Garbage Collector häufiger auf,
+        # statt dass Cloud Run die Instanz bei 256 MiB beendet. Gut 25 % Luft für
+        # das, was Go nicht zählt (Stacks des Laufzeitsystems, Puffer).
+        name  = "GOMEMLIMIT"
+        value = "192MiB"
+      }
     }
   }
 
@@ -159,6 +174,7 @@ resource "google_cloud_run_v2_service" "server" {
   depends_on = [
     google_project_iam_member.server_firestore,
     google_secret_manager_secret_iam_member.server_pfeffer,
+    google_storage_bucket_iam_member.server_datensicherung,
   ]
 }
 

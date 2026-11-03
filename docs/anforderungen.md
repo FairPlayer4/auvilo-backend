@@ -207,7 +207,8 @@ aber nicht **was**. Wird in der Datenschutzerklärung so benannt.
   die Sync-Operationen ab B3; in B1/B2 signieren Anmelden und Erneuern, alles andere
   trägt das Sitzungs-Token, siehe Kap. 11).
 - SE2 Secrets im Secret Manager; kein Schlüsselmaterial im Repo.
-- SE3 Dependabot, `govulncheck`, Container-Image-Scan.
+- SE3 Dependabot, `govulncheck`, Container-Image-Scan (erfüllt durch distroless,
+  `govulncheck` und Dependabot, siehe Kap. 11).
 
 ## 5. Architektur [E]
 
@@ -371,3 +372,7 @@ tragen die Tests die Spezifikation. Anleitung zum Review: [go-review.md](go-revi
 | 2026-11-03 | Kill-Switch: WARN (Alarm-Mail) nur bei neu gesperrten Diensten oder Trennen; ist schon alles gesperrt, INFO |
 | 2026-11-03 | Löschschutz (Firestore, Cloud Run, Bucket) wird vor echten Daten eingeschaltet ([b2b-entwurf.md](b2b-entwurf.md), „Vor echten Daten“) |
 | 2026-11-03 | SE1 „Signaturen jeder Operation“ meint die Sync-Operationen ab B3; bis dahin signieren nur Anmelden und Erneuern |
+| 2026-11-03 | SE3 Image-Scan: kein eigener Scanner. Das Server-Image ist `distroless/static` (keine Shell, kaum Pakete) mit einer Go-Datei; diese prüft `govulncheck` in der CI, das Basis-Image hält Dependabot aktuell. Ein Scanner in GCP kostet je Image, einer in der CI wäre eine weitere fremde Action |
+| 2026-11-03 | Datensicherung: Bucket ohne Soft Delete – Löschen löscht sofort (DSGVO Art. 17); vor Fehlern der App schützen die älteren Fassungen |
+| 2026-11-03 | Server: `GOMEMLIMIT=192MiB` bei 256 MiB; Parallelität bleibt 80, weil Sicherungen auf vier gleichzeitig begrenzt sind |
+| 2026-11-03 | Kill-Switch: zweiter Alarm, wenn die Funktion 23,5 h nicht aufgerufen wurde (Absenz-Bedingung, ca. 0,10 $/Monat) |

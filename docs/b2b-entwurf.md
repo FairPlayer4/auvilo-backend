@@ -99,8 +99,8 @@ also weiter. Finge sie bei 1 an, lehnten andere Geräte, die einen höheren Zäh
 kennen, sie als ältere Sicherung ab.
 
 ## Server und Infrastruktur
-- `infra/`: Bucket (`var.region`, Versionierung, Lebenszyklus,
-  `public_access_prevention = "enforced"`, `uniform_bucket_level_access`),
+- `infra/` (`datensicherung.tf`): Bucket (`var.region`, Versionierung, Lebenszyklus,
+  ohne Soft Delete, `public_access_prevention = "enforced"`, `uniform_bucket_level_access`),
   `roles/storage.objectUser` nur für das Dienstkonto des Servers und nur auf diesem
   Bucket. Kein neuer Cloud-Run-Dienst. `tofu test` und `pruefe-regionen.sh` prüfen
   die Region mit.

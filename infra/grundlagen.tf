@@ -18,6 +18,7 @@ locals {
     "pubsub.googleapis.com",
     "run.googleapis.com",
     "secretmanager.googleapis.com",
+    "storage.googleapis.com",
     "sts.googleapis.com",
   ]
 }

@@ -111,14 +111,6 @@ locals {
     compute_standard = "${data.google_project.projekt.number}-compute@developer.gserviceaccount.com"
     server           = google_service_account.server.email
   }
-  # Von Google dokumentierte Minimalmenge für ein eigenes Build-Konto. Die
-  # breite Rolle roles/cloudbuild.builds.builder ist bewusst nicht dabei: Sie
-  # erlaubt u. a. Nachrichten auf das Budget-Thema (gefälschte Meldungen).
-  bauen_rollen = [
-    "roles/logging.logWriter",
-    "roles/artifactregistry.writer",
-    "roles/storage.objectViewer",
-  ]
 }
 
 resource "google_project_iam_member" "killswitch" {
@@ -133,6 +125,7 @@ resource "google_service_account_iam_member" "killswitch_act_as" {
   service_account_id = "projects/${var.projekt}/serviceAccounts/${each.value}"
   role               = "roles/iam.serviceAccountUser"
   member             = google_service_account.killswitch.member
+  depends_on         = [google_project_service.apis] # das Compute-Standardkonto entsteht mit der Run-API
 }
 
 # Ohne Organisation gibt Google den Standardkonten automatisch die Rolle
@@ -140,6 +133,9 @@ resource "google_service_account_iam_member" "killswitch_act_as" {
 # ändern. Die Bindungen werden hier entfernt; Dienste und Funktionen laufen
 # mit eigenen, schmalen Konten.
 resource "google_project_iam_member_remove" "standardkonten_ohne_editor" {
+  # Die Standardkonten entstehen erst mit den APIs (Neuaufbau des Projekts).
+  depends_on = [google_project_service.apis]
+
   for_each = toset([
     "serviceAccount:${data.google_project.projekt.number}-compute@developer.gserviceaccount.com",
     "serviceAccount:${var.projekt}@appspot.gserviceaccount.com",
@@ -149,11 +145,46 @@ resource "google_project_iam_member_remove" "standardkonten_ohne_editor" {
   member  = each.value
 }
 
-resource "google_project_iam_member" "bauen" {
-  for_each = toset(local.bauen_rollen)
-  project  = var.projekt
-  role     = each.value
-  member   = google_service_account.bauen.member
+# Rechte des Build-Kontos: die von Google dokumentierte Minimalmenge
+# (Logs schreiben, Quellen lesen, Image schreiben), aber so eng wie möglich.
+# Die breite Rolle roles/cloudbuild.builds.builder ist bewusst nicht dabei: Sie
+# erlaubt u. a. Nachrichten auf das Budget-Thema (gefälschte Meldungen).
+resource "google_project_iam_member" "bauen_logs" {
+  project = var.projekt
+  role    = "roles/logging.logWriter"
+  member  = google_service_account.bauen.member
+}
+
+locals {
+  quellen_bucket = "projects/_/buckets/${google_storage_bucket.quellen.name}"
+}
+
+# KRITISCH: Lesen nur in unserem Quellen-Bucket und in den Buckets, in die Cloud
+# Functions die Quellen beim Deploy kopiert ("gcf-v2-…", legt Google an) –
+# nicht im Bucket der Datensicherungen. Lesbare Chiffrate wären zwar ohne
+# Schlüssel wertlos, aber das Build-Konto führt fremden Code aus (Go-Module).
+resource "google_project_iam_member" "bauen_quellen" {
+  project = var.projekt
+  role    = "roles/storage.objectViewer"
+  member  = google_service_account.bauen.member
+
+  condition {
+    title       = "nur-quellen"
+    description = "Nur der Quellen-Bucket und die Buckets von Cloud Functions"
+    expression = join(" || ", [
+      "resource.name == \"${local.quellen_bucket}\"",
+      "resource.name.startsWith(\"${local.quellen_bucket}/\")",
+      "resource.name.startsWith(\"projects/_/buckets/gcf-v2-\")",
+    ])
+  }
+}
+
+# Images nur ins Repo "funktionen" (nicht "container", aus dem der Server läuft).
+resource "google_artifact_registry_repository_iam_member" "bauen_funktionen" {
+  location   = google_artifact_registry_repository.funktionen.location
+  repository = google_artifact_registry_repository.funktionen.name
+  role       = "roles/artifactregistry.writer"
+  member     = google_service_account.bauen.member
 }
 
 # --- Quellcode der Funktion --------------------------------------------------
@@ -243,7 +274,9 @@ resource "google_cloudfunctions2_function" "killswitch" {
   }
 
   depends_on = [
-    google_project_iam_member.bauen,
+    google_project_iam_member.bauen_logs,
+    google_project_iam_member.bauen_quellen,
+    google_artifact_registry_repository_iam_member.bauen_funktionen,
     google_project_iam_member.killswitch,
   ]
 }
@@ -268,4 +301,11 @@ moved {
 moved {
   from = google_project_iam_member.killswitch["roles/eventarc.eventReceiver"]
   to   = google_project_iam_member.killswitch["eventarc"]
+}
+
+# Die Log-Rolle des Build-Kontos ist dieselbe Bindung wie vorher, nur unter
+# eigenem Namen; die beiden anderen Rollen sind jetzt enger (oben).
+moved {
+  from = google_project_iam_member.bauen["roles/logging.logWriter"]
+  to   = google_project_iam_member.bauen_logs
 }

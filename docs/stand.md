@@ -1,6 +1,6 @@
 # Stand und nächste Schritte
 
-Stand: 2026-11-01. Bei jedem größeren Schritt aktualisieren.
+Stand: 2026-11-03. Bei jedem größeren Schritt aktualisieren.
 
 ## In GCP (Projekt `avlreminder-exp-1ef2`, Region `europe-west1`)
 Etappe **B0** ist angelegt (OpenTofu, `infra/`):
@@ -144,10 +144,17 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
    Sicherungsplätzen geprüft, gesehene Zähler gemerkt, `Sicherungsablauf.loeschen`
    behält den Zähler, Kill-Switch-Mail nur bei echtem Eingriff (wirkt nach dem
    nächsten Deploy über `main`), Grenzen und „Vor echten Daten“ ergänzt.
-   **Weiter mit:** Schritt 5 (Infrastruktur, nach Kevins Go): Bucket mit Fassungen
-   7 Tage/höchstens 100, `SICHERUNG_BUCKET`, GOMEMLIMIT und Parallelität,
-   Build-Konto einschränken, Image-Scan (SE3), Absenz-Alarm Kill-Switch,
-   `pruefe-regionen.sh` für Listen, tofu-Testlücken (Empfehlungen E2–E4 aus Lauf 5).
+   **Schritt 5 (Infrastruktur), Konfiguration am 2026-11-03:** Bucket
+   `…-datensicherung` (`infra/datensicherung.tf`: Versionierung, ältere Fassungen
+   7 Tage/höchstens 100, ohne Soft Delete, nur Server-Konto mit `objectUser`),
+   `SICHERUNG_BUCKET` und `GOMEMLIMIT=192MiB` am Server (Parallelität bleibt 80,
+   Begründung in `server.tf`), Build-Konto liest nur Quellen und `gcf-v2-*` und
+   schreibt nur ins Repo `funktionen`, Absenz-Alarm „Kill-Switch wird nicht mehr
+   aufgerufen“ (23,5 h), `pruefe-regionen.sh` prüft Listen, neue tofu-Tests.
+   Image-Scan (SE3): kein eigener Scanner (anforderungen.md Kap. 11).
+   **Weiter mit:** `tofu apply` (nach Kevins Go), danach PR nach `main` (Deploy des
+   Servers mit Datensicherung und des Kill-Switch), Test in der Cloud mit dem
+   Test-Client, dann Schritt 6 (Review-Lauf).
 5. Für den B3-Entwurf aus Lauf 4: A2 (Mitgliedschaft: Server-Liste oder signiertes
    Log), A4 (Umschläge an Kontext binden, Keyset-Typen prüfen), A5 (Speicher und
    Dienste aufteilen; Anfang in B2b). A3 (Formate festschreiben) kommt in B2b.
