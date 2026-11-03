@@ -38,6 +38,8 @@ class AdapterTest {
     private sealed interface Antwort {
         data class Ok(val nachricht: MessageLite) : Antwort
         data class Fehler(val code: Code) : Antwort
+        /** Eine Antwort ohne Connect-Fehler, etwa eine HTML-Seite von einem Proxy. */
+        data class Roh(val status: Int, val typ: String, val text: String) : Antwort
     }
 
     /** Eine Anfrage, wie sie beim Nachbau ankam. */
@@ -56,6 +58,7 @@ class AdapterTest {
                 is Antwort.Ok -> Triple(200, "application/proto", a.nachricht.toByteArray())
                 // Der Status ist für den Client zweitrangig; maßgeblich ist der Code im JSON.
                 is Antwort.Fehler -> Triple(400, "application/json", """{"code":"${a.code.codeName}","message":"nachgebaut"}""".toByteArray())
+                is Antwort.Roh -> Triple(a.status, a.typ, a.text.toByteArray())
             }
             ex.responseHeaders.add("Content-Type", typ)
             ex.sendResponseHeaders(status, inhalt.size.toLong())
@@ -94,6 +97,26 @@ class AdapterTest {
             assertTrue(fall.erwartet.isInstance(e), "erwartet ${fall.erwartet.simpleName}, bekommen $e")
             if (e is Serverfehler) assertEquals(fall.fehler, e.code)
         }
+    }
+
+    // KRITISCH: Ein 404 ohne Connect-Code (falsche Adresse, Proxy) darf nicht als
+    // „keine Sicherung“ gelten, sonst richtete ein Gerät sich neu ein.
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("rohfaelle")
+    fun `Antworten ohne Connect-Fehler bleiben Serverfehler`(fall: RohFall) {
+        antwort = Antwort.Roh(fall.status, fall.typ, fall.text)
+        val e = runCatching { runBlocking { fall.aufruf(verbindung()) } }.exceptionOrNull()
+        assertTrue(e is Serverfehler, "erwartet Serverfehler, bekommen $e")
+    }
+
+    data class RohFall(
+        val name: String,
+        val status: Int,
+        val typ: String,
+        val text: String,
+        val aufruf: suspend (Verbindung) -> Any?,
+    ) {
+        override fun toString() = name
     }
 
     @Test
@@ -183,6 +206,16 @@ class AdapterTest {
             Fall("Backup speichern: zu groß bleibt Serverfehler", Code.RESOURCE_EXHAUSTED, { backup(it).speichern(CHIFFRAT, 1) }, Serverfehler::class),
             Fall("Backup speichern: nicht gefunden bleibt Serverfehler", Code.NOT_FOUND, { backup(it).speichern(CHIFFRAT, 1) }, Serverfehler::class),
             Fall("Backup löschen: Fehler bleibt Serverfehler", Code.UNAUTHENTICATED, { backup(it).loeschen() }, Serverfehler::class),
+        )
+
+        private const val HTML_404 = "<html><body>404 Not Found</body></html>"
+
+        @JvmStatic
+        fun rohfaelle() = listOf(
+            RohFall("Sicherung holen: HTML-Seite mit 404", 404, "text/html", HTML_404) { sicherung(it).holen() },
+            RohFall("Sicherung holen: Text mit 503", 503, "text/plain", "Service Unavailable") { sicherung(it).holen() },
+            RohFall("Backup holen: HTML-Seite mit 404", 404, "text/html", HTML_404) { backup(it).holen() },
+            RohFall("Backup holen: Text mit 503", 503, "text/plain", "Service Unavailable") { backup(it).holen() },
         )
     }
 }
