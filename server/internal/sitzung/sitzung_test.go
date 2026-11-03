@@ -34,7 +34,7 @@ func TestNeu(t *testing.T) {
 	if s.Hash != Hash(token) || s.Hash == token {
 		t.Errorf("Hash = %q, gespeichert werden darf nur der Hash", s.Hash)
 	}
-	if !s.LaeuftAb.Equal(jetzt.Add(Dauer)) {
+	if !s.LaeuftAb.Equal(jetzt.Add(time.Hour)) { // 1 Stunde laut Entscheidung B1
 		t.Errorf("LaeuftAb = %v", s.LaeuftAb)
 	}
 }
@@ -56,6 +56,9 @@ func TestPruefeErneuerung(t *testing.T) {
 		return sig
 	}
 
+	// Eigene Zahl statt Toleranz (Entscheidung ±2 min, anforderungen.md Kap. 11):
+	// Sonst blieben die Grenzfälle grün, wenn jemand die Konstante ändert.
+	const fenster = 2 * time.Minute
 	tests := []struct {
 		name      string
 		geraet    speicher.Geraet
@@ -64,14 +67,14 @@ func TestPruefeErneuerung(t *testing.T) {
 		wantErr   error
 	}{
 		{"erneuert mit gültiger Signatur", aktiv, jetzt, signiere(privat, "geraet-1", jetzt), nil},
-		{"erneuert mit Uhr 2 Minuten nach", aktiv, jetzt.Add(-Toleranz), signiere(privat, "geraet-1", jetzt.Add(-Toleranz)), nil},
-		{"erneuert mit Uhr 2 Minuten vor", aktiv, jetzt.Add(Toleranz), signiere(privat, "geraet-1", jetzt.Add(Toleranz)), nil},
+		{"erneuert mit Uhr 2 Minuten nach", aktiv, jetzt.Add(-fenster), signiere(privat, "geraet-1", jetzt.Add(-fenster)), nil},
+		{"erneuert mit Uhr 2 Minuten vor", aktiv, jetzt.Add(fenster), signiere(privat, "geraet-1", jetzt.Add(fenster)), nil},
 		{"lehnt gesperrtes Gerät ab, auch mit gültiger Signatur", gesperrt, jetzt, signiere(privat, "geraet-1", jetzt), ErrGesperrt},
 		// Ohne gültige Signatur erfährt niemand, ob das Gerät gesperrt ist.
 		{"verrät Sperre nicht bei falscher Signatur", gesperrt, jetzt, signiere(anderer, "geraet-1", jetzt), ErrSignatur},
-		{"verrät Sperre nicht bei altem Zeitpunkt", gesperrt, jetzt.Add(-Toleranz - time.Second), signiere(privat, "geraet-1", jetzt.Add(-Toleranz-time.Second)), ErrZeitpunkt},
-		{"lehnt alten Zeitpunkt ab (abgefangene Erneuerung)", aktiv, jetzt.Add(-Toleranz - time.Second), signiere(privat, "geraet-1", jetzt.Add(-Toleranz-time.Second)), ErrZeitpunkt},
-		{"lehnt Zeitpunkt in der Zukunft ab", aktiv, jetzt.Add(Toleranz + time.Second), signiere(privat, "geraet-1", jetzt.Add(Toleranz+time.Second)), ErrZeitpunkt},
+		{"verrät Sperre nicht bei altem Zeitpunkt", gesperrt, jetzt.Add(-fenster - time.Second), signiere(privat, "geraet-1", jetzt.Add(-fenster-time.Second)), ErrZeitpunkt},
+		{"lehnt alten Zeitpunkt ab (abgefangene Erneuerung)", aktiv, jetzt.Add(-fenster - time.Second), signiere(privat, "geraet-1", jetzt.Add(-fenster-time.Second)), ErrZeitpunkt},
+		{"lehnt Zeitpunkt in der Zukunft ab", aktiv, jetzt.Add(fenster + time.Second), signiere(privat, "geraet-1", jetzt.Add(fenster+time.Second)), ErrZeitpunkt},
 		{"lehnt Signatur eines anderen Schlüssels ab", aktiv, jetzt, signiere(anderer, "geraet-1", jetzt), ErrSignatur},
 		{"lehnt Signatur für ein anderes Gerät ab", aktiv, jetzt, signiere(privat, "geraet-2", jetzt), ErrSignatur},
 		{"lehnt Signatur über einen anderen Zeitpunkt ab", aktiv, jetzt, signiere(privat, "geraet-1", jetzt.Add(time.Second)), ErrSignatur},
@@ -106,7 +109,7 @@ func TestInterceptor(t *testing.T) {
 	if _, err := sp.Anmelden(ctx, "kennung", speicher.Geraet{ID: "geraet-1"}, s); err != nil {
 		t.Fatal(err)
 	}
-	abgelaufen, s2 := Neu(jetzt.Add(-Dauer)) // läuft genau jetzt ab
+	abgelaufen, s2 := Neu(jetzt.Add(-time.Hour)) // läuft genau jetzt ab (Sitzung gilt 1 Stunde)
 	if _, err := sp.SitzungAnlegen(ctx, "geraet-1", s2); err != nil {
 		t.Fatal(err)
 	}
