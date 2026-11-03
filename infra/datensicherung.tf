@@ -1,6 +1,6 @@
 # Etappe B2b: Ablage der Datensicherungen (nur Chiffrate, docs/b2b-entwurf.md).
 #
-# Ein Objekt je Konto (datensicherung/<konto_id>). Jede neue Sicherung ersetzt
+# Ein Objekt je Konto (sicherung/<konto_id>). Jede neue Sicherung ersetzt
 # das Objekt; die vorige bleibt als ältere Fassung erhalten (Versionierung) und
 # schützt so vor einer fehlerhaften App, die kaputte Daten hochlädt (E-B2b-4).
 

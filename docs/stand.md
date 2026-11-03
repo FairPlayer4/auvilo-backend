@@ -152,9 +152,18 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
    schreibt nur ins Repo `funktionen`, Absenz-Alarm „Kill-Switch wird nicht mehr
    aufgerufen“ (23,5 h), `pruefe-regionen.sh` prüft Listen, neue tofu-Tests.
    Image-Scan (SE3): kein eigener Scanner (anforderungen.md Kap. 11).
-   **Weiter mit:** `tofu apply` (nach Kevins Go), danach PR nach `main` (Deploy des
-   Servers mit Datensicherung und des Kill-Switch), Test in der Cloud mit dem
-   Test-Client, dann Schritt 6 (Review-Lauf).
+   Am selben Tag angewendet (`tofu apply`, 7 neu, 2 geändert, 3 entfernt; Kill-Switch
+   mit dem engeren Build-Konto neu gebaut) und per PR #8 deployt.
+   **In der Cloud getestet** am 2026-11-03 (Geräte `cloud-pc`, `cloud-handy`,
+   Sitzung per `erneuern`, Dateien ohne echte Inhalte): `cloud-pc` sichert zweimal
+   (125 B und 2 MB, zwei Fassungen im Bucket); `cloud-handy` stellt byte-gleich
+   wieder her und sichert selbst; `cloud-pc` fragt dann nach („nein“ lässt die
+   Sicherung stehen, „ja“ überschreibt mit Zähler 4); 9 MB lehnt der Client vor dem
+   Hochladen ab; `sicherung-loeschen` entfernt alle Fassungen, danach „keine
+   Datensicherung“ und Neuanlage. Ohne Sitzung antwortet der Dienst
+   `unauthenticated`. Server-Log nur Gerät, Bytes, Version.
+   **Weiter mit:** Schritt 6 (Review-Lauf), danach Schritt 7 (App-Einbindung, eigener
+   Entwurf im App-Repo). Offen aus Lauf 5: Empfehlungen E5–E7.
 5. Für den B3-Entwurf aus Lauf 4: A2 (Mitgliedschaft: Server-Liste oder signiertes
    Log), A4 (Umschläge an Kontext binden, Keyset-Typen prüfen), A5 (Speicher und
    Dienste aufteilen; Anfang in B2b). A3 (Formate festschreiben) kommt in B2b.
