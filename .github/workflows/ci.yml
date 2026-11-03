@@ -43,6 +43,13 @@ jobs:
       # (Vertragstests). Die Google Cloud CLI ist auf dem Runner schon da, aber
       # das Runner-Image entfernt Googles apt-Quelle nach der Installation wieder;
       # deshalb wird sie hier neu eingetragen.
+      # Der Emulator aus apt braucht inzwischen Java 25 (Klassendateien Version 69);
+      # das Runner-Image hat nur bis Java 21 als Vorgabe.
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        if: matrix.modul == 'server'
+        with:
+          distribution: temurin
+          java-version: 25
       - name: Firestore-Emulator starten
         if: matrix.modul == 'server'
         run: |
@@ -50,7 +57,6 @@ jobs:
           echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee /etc/apt/sources.list.d/google-cloud-sdk.list > /dev/null
           sudo apt-get update -qq
           sudo apt-get install -y -qq google-cloud-cli-firestore-emulator
-          export PATH="$JAVA_HOME_21_X64/bin:$PATH" # der Emulator braucht Java 21
           gcloud emulators firestore start --host-port=localhost:8086 > "$RUNNER_TEMP/emulator.log" 2>&1 &
           for i in $(seq 60); do
             curl -sf http://localhost:8086/ > /dev/null && exit 0
