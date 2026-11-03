@@ -128,12 +128,15 @@ class SicherungsablaufTest {
         val server = FalscheAblage()
         val g = Geraet(server, uebernimmt = false)
         g.sichern()
+        val gemerkt = g.stand.stand
         server.vorDemSpeichern = { server.vonGeraet("tablet", zaehler = 9) }
 
         val ergebnis = g.sichern("meins")
 
         assertInstanceOf(Gesichert.AnderesGeraet::class.java, ergebnis)
+        assertEquals("tablet", g.gefragt?.geraetId)
         assertEquals("tablet", server.inhalt().kopf.geraetId)
+        assertEquals(gemerkt, g.stand.stand)
     }
 
     // KRITISCH: Gegenstück zu „übernimmt nach Zustimmung“: Ohne Zustimmung bleibt die
