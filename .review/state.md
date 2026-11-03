@@ -1,5 +1,5 @@
 # Review-Gedächtnis
-Letzter Lauf: 2026-11-03 @ 3180671 (Fixes auf review/2026-11-03)   Laufzähler: 5
+Letzter Lauf: 2026-11-03 @ c9cda64 (Fixes auf review/2026-11-03-2)   Laufzähler: 6
 
 ## Beabsichtigte Architektur
 Vom Entwickler bestätigt am 2026-11-01.
@@ -31,16 +31,16 @@ Vom Entwickler bestätigt am 2026-11-01.
 ## Bereiche
 | Bereich | Pfade | Anforderungen/Doku | Tests | Zuletzt reviewt | Zustand |
 |---|---|---|---|---|---|
-| Kill-Switch | `infra/killswitch/` | anforderungen.md KO3, stand.md | `*_test.go` | 2026-11-03 (Lauf 5) | gut; WARN-Dauertakt (Frage) |
-| Infrastruktur | `infra/*.tf`, `infra/*.sh` | anforderungen.md 4.3, 5, 6; gcp-einrichtung.md; stand.md | `infra/tests/` (tofu test), `pruefe-regionen.sh` | 2026-11-03 (Lauf 5, vollständig) | ok; Build-Konto breit, Testlücken tofu, Schritt-5-Punkte |
+| Kill-Switch | `infra/killswitch/` | anforderungen.md KO3, stand.md | `*_test.go` | 2026-11-03 (Lauf 6) | gut; 0 Dienste nur INFO (Frage) |
+| Infrastruktur | `infra/*.tf`, `infra/*.sh` | anforderungen.md 4.3, 5, 6; gcp-einrichtung.md; stand.md | `infra/tests/` (tofu test), `pruefe-regionen.sh` | 2026-11-03 (Lauf 6, Schritt 5) | gut nach Fixes; Fassungen 100 vs. 673 (Frage), Upload-Limit offen |
 | Server: Anmeldung/Sitzung | `server/internal/{geraeteschluessel,anmeldung,sitzung,dienst/dienst.go}`, `proto/` | b1-entwurf.md, proto-Kommentare, anforderungen.md Kap. 11 | `*_test.go` | 2026-11-03 (Lauf 5, vollständig) | gut; Neuanmeldung nach Sperren (Frage), Streaming ungetestet |
 | Server: Speicher/Start | `server/internal/speicher`, `server/cmd/server` | b1-entwurf.md (Daten, Betrieb) | `vertrag_test.go` (auch Emulator), `main_test.go` | 2026-11-03 (Lauf 5) | gut |
 | Server: Datensicherung | `server/internal/datensicherung`, `dienst/datensicherung.go`, `datensicherung.proto` | b2b-entwurf.md, proto-Kommentare | `vertrag_test.go` (Arbeitsspeicher, fake-gcs), `datensicherung_test.go` | 2026-11-03 (Lauf 5, neu) | gut; begrenze vor Sitzungsprüfung (Frage) |
-| CI, Deploy und Container | `.github/`, `server/Dockerfile`, `.golangci.yml`, `proto/buf*.yaml` | anforderungen.md Q4, go-review.md, stand.md | CI-Job `container` | 2026-11-01 (Lauf 4) | gut; Gradle-Cache jetzt `basic` |
-| Doku | `docs/`, `CLAUDE.md`, `README.md` | – | – | 2026-11-01 (Lauf 3, vollständig; Lauf 4 B2-Teile) | gut nach Fixes; anforderungen.md [E]-Markierungen veraltet |
-| Kotlin `protokoll` | `client/protokoll`, `proto/avlreminder/inhalt`, `proto/testvektoren` | b2-entwurf.md, b2b-entwurf.md, backup.proto | `*Test.kt`; Go prüft nur `geraetenachrichten.json` | 2026-11-03 (Lauf 5) | gut; gesehene Zähler, Wiederherstellen = Übernehmen (Fragen) |
+| CI, Deploy und Container | `.github/`, `server/Dockerfile`, `.golangci.yml`, `proto/buf*.yaml` | anforderungen.md Q4, go-review.md, stand.md | CI-Job `container` | 2026-11-03 (Lauf 6, CI-Fix) | gut; Emulator ohne feste Version (Nit) |
+| Doku | `docs/`, `CLAUDE.md`, `README.md` | – | – | 2026-11-03 (Lauf 6, vollständig) | gut nach Fixes; CLAUDE.md-Verweise (E6), Nits |
+| Kotlin `protokoll` | `client/protokoll`, `proto/avlreminder/inhalt`, `proto/testvektoren` | b2-entwurf.md, b2b-entwurf.md, backup.proto | `*Test.kt`; Go prüft nur `geraetenachrichten.json` | 2026-11-03 (Lauf 6) | gut nach Fix; Regel „offenes Backup“ im Test-Client (E1) |
 | Kotlin `verbindung` | `client/verbindung` | b2b-entwurf.md, proto-Kommentare | `AdapterTest` (Connect-Nachbau) | 2026-11-03 (Lauf 5, neu) | gut; Sitzung noch im Test-Client |
-| Backup und Test-Client | `server/internal/dienst/schluessel.go`, Backup in `speicher`, `client/testclient`, `schluessel.proto` | b2-entwurf.md, proto-Kommentare | `schluessel_test.go`, `vertrag_test.go`, `EinrichtungTest`, `GoogleTest` | 2026-11-03 (Lauf 5) | gut nach Fixes; `Ablage` ohne Tests, ABA (Frage) |
+| Backup und Test-Client | `server/internal/dienst/schluessel.go`, Backup in `speicher`, `client/testclient`, `schluessel.proto` | b2-entwurf.md, proto-Kommentare | `schluessel_test.go`, `vertrag_test.go`, `EinrichtungTest`, `GoogleTest` | 2026-11-03 (Lauf 6, Teil) | gut; `Ablage` ohne Tests, Löschen braucht Tresor (E2) |
 | Kotlin-Build | `client/*.gradle.kts`, `client/gradle/`, CI-Job `kotlin` | b2-entwurf.md (CI) | CI | 2026-11-03 (Lauf 5) | gut; Prüfsummen aller Abhängigkeiten |
 
 ## Bekannte Schulden und beobachtete Drift
@@ -83,13 +83,21 @@ Vom Entwickler bestätigt am 2026-11-01.
   - Vor App-Einbindung: Sitzung nach `verbindung`, Callbacks suspend, zweiter
     Schlüsselbund nach Backup-Löschen.
 - Erledigt in Lauf 5: Werkzeug `testanmeldung` ist entfernt (A6).
+- Erledigt in Schritt 5: Build-Konto eingeschränkt, GOMEMLIMIT, Image-Scan entschieden,
+  Absenz-Alarm, `pruefe-regionen.sh` für Listen, tofu-Testlücken (Lauf 6 gefixt).
+
+- 2026-11-03 (Lauf 6), offen (Details und Empfehlungen E1–E6 in runs/2026-11-03-2.md):
+  - Vor echten Daten: Pfeffer-Schutz, Upload-Limit, Sperren ohne actAs (seit Lauf 3) –
+    stand.md hatte sie auf B6 geschoben, Tester kommen aber schon in B2b.
+  - **Trend (Lauf 5 und 6): Ein Test kann nicht rot werden**, weil Testdaten gleich sind
+    (tofu-Mocks) oder eine Grenze nicht getroffen wird (8 MiB, Startzähler). Mit
+    Mutations-Stichproben gefunden; bei neuen Tests einen Gegenwert wählen.
+  - Doku: „Bekannte Grenzen“ wachsen in stand.md; erledigte Sätze aufräumen.
 
 ## Offene Fragen an den Entwickler
-Aus Lauf 5 (runs/2026-11-03.md, je mit Vorschlag): 1 Neuanmeldung eines gestohlenen
-Geräts nach dem Sperren (major); 2 Sicherungsplätze ohne Anmeldung belegbar; 3 ABA beim
-Schlüssel-Backup nach Löschen; 4 Wiederherstellen = Übernehmen; 5 gesehene Zähler merken;
-6 Löschen der Datensicherung in `protokoll`; 7 drei Fassungen vs. Alter; 8 Kill-Switch-WARN
-im Dauertakt; 9 Löschschutz vor echten Daten; 10 Bedeutung von SE1.
+Aus Lauf 6 (runs/2026-11-03-2.md, je mit Vorschlag): 1 ältere Fassungen 100 vs. 673
+(major); 2 Kill-Switch-WARN, wenn ab 100 % kein Dienst gefunden wird; 3 Pfeffer-Schutz,
+Upload-Limit und actAs vor echten Daten.
 
 ## Getroffene Entscheidungen
 - 2026-11-01: Architekturbild bestätigt.
@@ -121,3 +129,11 @@ im Dauertakt; 9 Löschschutz vor echten Daten; 10 Bedeutung von SE1.
   (Gradle prüft Prüfsummen aller Abhängigkeiten).
 - 2026-11-02 (nach Lauf 4): A1 umgesetzt (Einrichtung in `protokoll`); A2 und A3 werden
   im B3-Entwurf geklärt.
+- 2026-11-03 (nach Lauf 5, alle zehn Fragen, anforderungen.md Kap. 11): Neuanmeldung
+  nach Sperren bekannte Grenze bis vor echten Daten; Sitzung vor dem Lesen geprüft;
+  Schlüssel-Backup-Version ab 1 nach Löschen (kein Grabstein); Wiederherstellen =
+  Übernehmen, gesehene Zähler; Löschen in `protokoll` behält den Zähler; 7 Tage/100
+  Fassungen; Kill-Switch-WARN nur bei Eingriff; Löschschutz vor echten Daten; SE1 meint
+  Sync-Operationen ab B3; SE3 ohne eigenen Scanner. Nicht erneut als Fund melden.
+- 2026-11-03: Bucket ohne Soft Delete; `GOMEMLIMIT=192MiB`, Parallelität 80;
+  Absenz-Alarm 23,5 h.
