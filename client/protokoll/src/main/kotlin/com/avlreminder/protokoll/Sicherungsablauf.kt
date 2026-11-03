@@ -59,7 +59,10 @@ sealed interface Gesichert {
     /** Hochgeladen; [version] ist die neue Server-Version. */
     data class Ja(val version: Long, val zaehler: Long) : Gesichert
 
-    /** Ein anderes Gerät sichert; der Mensch wollte nicht übernehmen. Nichts geändert. */
+    /**
+     * Ein anderes Gerät sichert; der Mensch wollte nicht übernehmen. Auf dem Server
+     * bleibt alles, wie es ist; das Gerät merkt sich nur den Zähler als gesehen.
+     */
     data class AnderesGeraet(val kopf: Sicherungskopf) : Gesichert
 }
 
@@ -69,7 +72,7 @@ sealed interface Wiederhergestellt {
 
     data object KeineSicherung : Wiederhergestellt
 
-    /** Der Mensch hat nach Anzeige des Kopfs abgelehnt. Nichts geändert. */
+    /** Der Mensch hat nach Anzeige des Kopfs abgelehnt. Nichts angewendet; das Gerät merkt sich nur den Zähler als gesehen. */
     data object Abgelehnt : Wiederhergestellt
 }
 
@@ -143,9 +146,9 @@ class Sicherungsablauf(
      *
      * KRITISCH: Nichts wird angewendet, wenn die Sicherung sich nicht entschlüsseln
      * lässt, älter ist als gemerkt ([AeltereSicherung]), eine Schema-Version über
-     * [hoechsteSchemaVersion] hat oder der Mensch ablehnt. Den Stand merkt sich das
-     * Gerät erst, wenn [anwenden] ohne Fehler durchgelaufen ist; danach sichert es
-     * selbst weiter.
+     * [hoechsteSchemaVersion] hat oder der Mensch ablehnt (dann merkt es sich nur
+     * den Zähler als gesehen). Den Stand merkt sich das Gerät erst, wenn [anwenden]
+     * ohne Fehler durchgelaufen ist; danach sichert es selbst weiter.
      */
     suspend fun wiederherstellen(
         hoechsteSchemaVersion: Int,

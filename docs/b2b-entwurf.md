@@ -172,8 +172,9 @@ B4; bis dahin heißt „rotieren“ hier: zurücksetzen und neu erzeugen.
 - **Löschen und ein ganz neues Gerät.** Den Zähler kennt jedes Gerät nur lokal. Wird
   die Sicherung gelöscht und sichert danach zuerst ein Gerät ohne gemerkten Zähler,
   beginnt es bei 1; Geräte mit höherem Zähler melden dann „ältere Sicherung“, bis
-  sie selbst wieder sichern dürfen (Sicherung erneut löschen oder auf dem neuen Gerät
-  wiederherstellen und dort weitersichern). Selten, weil gelöscht nur bei Neuanfang wird.
+  sie selbst wieder sichern dürfen. Ausweg: auf einem Gerät mit dem höheren Zähler
+  erneut löschen und dort neu sichern (es zählt weiter, die anderen fragen dann nach).
+  Selten, weil gelöscht nur bei Neuanfang wird.
 - **Gestohlenes Gerät mit Google-Login** kann sich nach dem Sperren neu anmelden und
   die Sicherung löschen (siehe „Vor echten Daten“, Punkt 5).
 - **Schlüssel-Backup nach dem Löschen.** Die Version beginnt wieder bei 1. Ein Gerät,
