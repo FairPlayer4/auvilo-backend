@@ -135,11 +135,6 @@ class Ablage(private val ordner: File) {
             schreibe(datei("stand", name, "json"), json.encodeToString(GespeicherterStand(kontoId, stand.zaehler, stand.version)))
     }
 
-    /** Vergisst den Sicherungsstand (nach dem Löschen der Sicherung). */
-    fun loescheSicherungsStand(name: String) {
-        datei("stand", name, "json").delete()
-    }
-
     private fun datei(art: String, name: String, endung: String): File {
         // Verhindert Pfade wie "../x" als Gerätename.
         if (!Regex("[a-z0-9-]{1,32}").matches(name)) {
