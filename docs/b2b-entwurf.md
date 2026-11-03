@@ -44,7 +44,7 @@ oder das Projekt vom Rechnungskonto trennen. Deshalb gilt für die App:
 | E-B2b-1 | Was wird gesichert? | **Eine undurchsichtige Nutzlast**: Für `protokoll` und Server sind es nur Bytes. Die App legt dort ihre Room-Datenbank ab (Kopie per `VACUUM INTO`, gzip-komprimiert). Fotos und Audio nicht (3.6). | So bleibt `protokoll` ohne Android und ohne SQLite. Die App braucht kein zweites Datenformat: Beim Wiederherstellen laufen ihre Room-Migrationen wie bei einem Update. Ein eigenes, app-unabhängiges Format kommt erst mit der Synchronisation (B3), wo es ohnehin nötig ist. Verweise auf Fotos zeigen nach dem Wiederherstellen ins Leere; die App muss damit umgehen. |
 | E-B2b-2 | Format der Sicherung | Klartext = `Datensicherung` (proto, `inhalt/v1`): **Kopf** (Formatversion, Schema-Version der App, Zeitpunkt, Geräte-ID, fortlaufender Zähler) und Nutzlast. Verschlüsselt mit dem **Tresorschlüssel** (XChaCha20-Poly1305), zugehörige Daten `"avlreminder/datensicherung/v1\n" + konto_id`. | Tresorschlüssel, weil es private Daten sind (4.1). Er liegt schon im Schlüssel-Backup; ein neues Gerät hat ihn nach der Einrichtung aus B2. Der Kopf steht **im** Chiffrat; so kann der Server ihn weder lesen noch fälschen. |
 | E-B2b-3 | Schutz gegen ältere Fassung vom Server | Das Gerät merkt sich den höchsten Zähler, den es gesichert oder gesehen hat. Liefert der Server einen kleineren, **warnt** die App und stellt nicht still wieder her. | Behebt für Daten die bekannte Grenze aus B2 („älteres Backup vom Server“): Ein bösartiger Server kann eine alte, gültige Fassung ausliefern; der Zähler im Chiffrat verrät das. Ein ganz neues Gerät kennt noch keinen Zähler; dort zeigt die App den Zeitpunkt der Sicherung zur Kontrolle. |
-| E-B2b-4 | Wo liegt die Sicherung? | **Cloud Storage**, ein Bucket in `var.region`, ein Objekt je Konto (`datensicherung/<konto_id>`). Objekt-Versionierung an, Lebenszyklus: **3 ältere Fassungen**, ältere Fassungen nach 30 Tagen löschen. Nicht öffentlich (`public_access_prevention`), einheitlicher Zugriff, Zugriff nur für das Dienstkonto des Servers. | Firestore erlaubt höchstens 1 MiB je Dokument, eine Datenbank kann größer werden. Speicher kostet ca. 2 Cent je GB und Monat. Die älteren Fassungen schützen vor dem wichtigsten Fehler: Eine fehlerhafte App lädt kaputte Daten hoch und überschreibt damit das einzige Backup. |
+| E-B2b-4 | Wo liegt die Sicherung? | **Cloud Storage**, ein Bucket in `var.region`, ein Objekt je Konto (`datensicherung/<konto_id>`). Objekt-Versionierung an, Lebenszyklus: ältere Fassungen **7 Tage** aufbewahren, höchstens 100 (geändert am 2026-11-03, vorher 3 Fassungen und 30 Tage). Nicht öffentlich (`public_access_prevention`), einheitlicher Zugriff, Zugriff nur für das Dienstkonto des Servers. | Firestore erlaubt höchstens 1 MiB je Dokument, eine Datenbank kann größer werden. Speicher kostet ca. 2 Cent je GB und Monat. Die älteren Fassungen schützen vor dem wichtigsten Fehler: Eine fehlerhafte App lädt kaputte Daten hoch und überschreibt damit das einzige Backup. Nach Alter statt Anzahl, weil die App bis zu alle 15 Minuten sichert: 3 Fassungen reichten nur etwa eine Stunde zurück, ein Fehler fällt aber oft erst nach Tagen auf. 100 × 8 MiB im schlimmsten Fall kosten etwa 2 Cent im Monat je Konto. |
 | E-B2b-5 | Nie ein neueres Backup überschreiben | Wie in B2: Hochladen nur mit der **erwarteten Version** (0 = noch keins). Der Server setzt das mit der Vorbedingung `ifGenerationMatch` von Cloud Storage um. Die Generation reicht er als Version durch. | Cloud Storage prüft das selbst, ohne Transaktion in Firestore. Gleiches Verhalten wie beim Schlüssel-Backup: `failed_precondition`, neu holen, nicht überschreiben. |
 | E-B2b-6 | Zwei eigene Geräte sichern | Ohne Synchronisation gibt es **ein sicherndes Gerät**. Die App sichert automatisch nur, wenn die letzte Fassung von ihr selbst stammt (Geräte-ID im Kopf) oder es noch keine gibt. Sonst fragt sie einmal: „Dieses Gerät übernimmt die Sicherung?“ | Sonst würden sich zwei Geräte mit verschiedenen Daten gegenseitig überschreiben, und jedes Mal ginge der Stand des anderen verloren. Das Zusammenführen ist Aufgabe von B3. |
 | E-B2b-7 | Größe und Übertragung | Höchstens **8 MiB** Chiffrat je Sicherung, in **einer Anfrage** über den Server (Connect, eigenes Limit nur für diesen Dienst). Keine signierten URLs. | Der Server prüft Sitzung und Größe an einer Stelle. 8 MiB reichen für eine Datenbank ohne Fotos lange. Signierte URLs sparen nur Rechenzeit, die bei unserer Menge nichts kostet, machen aber Größenprüfung und Vorbedingung schwieriger. |
@@ -69,6 +69,9 @@ Gerät                                                    Server
 ```
 Meldet der Server `failed_precondition`, hat ein anderes Gerät gesichert. Das Gerät
 holt die neueste Fassung, liest die Geräte-ID im Kopf und verfährt wie in E-B2b-6.
+Lehnt der Mensch die Übernahme ab, merkt sich das Gerät den Zähler dieser Fassung als
+**gesehen** (E-B2b-3): Sie ließ sich entschlüsseln, ist also echt, und eine ältere
+Fassung vom Server gilt danach als veraltet.
 Die App sichert nur, wenn sich die Daten seit der letzten Sicherung geändert haben,
 höchstens alle 15 Minuten und nur mit Netz (WorkManager).
 
@@ -81,7 +84,19 @@ Nur auf ausdrücklichen Wunsch, nie automatisch über vorhandene lokale Daten:
    die aktuelle lokal sichern).
 
 Schlägt das Entschlüsseln fehl oder ist der Zähler kleiner als der gemerkte, wird
-nichts ersetzt.
+nichts ersetzt. Lehnt der Mensch in Schritt 3 ab, merkt sich das Gerät den Zähler als
+gesehen (wie beim Sichern).
+
+**Wiederherstellen heißt übernehmen (E-B2b-6).** Nach dem Wiederherstellen ist dieses
+Gerät das sichernde Gerät: Es sichert ohne weitere Rückfrage weiter, auch wenn die
+Fassung von einem anderen Gerät stammte. Die Bestätigung in Schritt 3 ist zugleich
+die Rückfrage „Dieses Gerät übernimmt die Sicherung?“.
+
+### Löschen
+`Sicherungsablauf.loeschen` löscht die Sicherung mit allen älteren Fassungen. Das
+Gerät behält seinen Zähler (nur die Version wird 0), die nächste Sicherung zählt
+also weiter. Finge sie bei 1 an, lehnten andere Geräte, die einen höheren Zähler
+kennen, sie als ältere Sicherung ab.
 
 ## Server und Infrastruktur
 - `infra/`: Bucket (`var.region`, Versionierung, Lebenszyklus,
@@ -136,6 +151,13 @@ gelesen hat. Bevor die App-Variante echte Daten sichert:
 3. Die App erzeugt auf dem Gerät **neue** Schlüssel und einen neuen
    Wiederherstellungsschlüssel. Den sieht nur Kevin, auf Papier; kein Terminal, kein
    Screenshot, kein Gespräch mit Claude.
+4. **Löschschutz an:** Firestore `deletion_policy = "ABANDON"` und
+   `delete_protection_state`, Cloud Run `deletion_protection = true`, Bucket mit
+   `force_destroy = false`. Bis dahin muss das Lernprojekt vollständig löschbar sein.
+5. **Neue Geräte:** entscheiden und umsetzen, dass ein neu angemeldetes Gerät erst
+   nach Freischaltung (QR oder Wiederherstellungsschlüssel) andere Geräte sperren und
+   Backup oder Datensicherung löschen darf, und dass vorhandene Geräte von jedem neuen
+   Gerät erfahren (Grenze in [b1-entwurf.md](b1-entwurf.md), „Gerät sperren“).
 
 Claude kündigt diesen Schritt vorher ausdrücklich an (siehe `CLAUDE.md`,
 „Geheimnisse und Sicherheitsphase“). Das Rotieren der Schlüssel selbst kommt erst in
@@ -147,6 +169,17 @@ B4; bis dahin heißt „rotieren“ hier: zurücksetzen und neu erzeugen.
 - **Fotos und Audio** werden nicht gesichert (3.6).
 - **Ganz neues Gerät und alte Fassung.** Ohne gemerkten Zähler erkennt das Gerät
   eine vom Server zurückgehaltene neuere Fassung nicht; es sieht nur den Zeitpunkt.
+- **Löschen und ein ganz neues Gerät.** Den Zähler kennt jedes Gerät nur lokal. Wird
+  die Sicherung gelöscht und sichert danach zuerst ein Gerät ohne gemerkten Zähler,
+  beginnt es bei 1; Geräte mit höherem Zähler melden dann „ältere Sicherung“, bis
+  sie selbst wieder sichern dürfen (Sicherung erneut löschen oder auf dem neuen Gerät
+  wiederherstellen und dort weitersichern). Selten, weil gelöscht nur bei Neuanfang wird.
+- **Gestohlenes Gerät mit Google-Login** kann sich nach dem Sperren neu anmelden und
+  die Sicherung löschen (siehe „Vor echten Daten“, Punkt 5).
+- **Schlüssel-Backup nach dem Löschen.** Die Version beginnt wieder bei 1. Ein Gerät,
+  das noch Version 1 erwartet, könnte so ein neues Backup überschreiben. Heute
+  harmlos, weil Clients nur mit `erwartet = 0` speichern (Kommentar in
+  `schluessel.proto`); ein Grabstein kommt, wenn Clients höhere Versionen nutzen.
 - **Kein Zugriff, solange der Kill-Switch greift.** Die Daten bleiben im Bucket, sind
   aber nicht erreichbar.
 - **Format der Nutzlast ist die Room-Datenbank.** Eine App-Version kann nur Sicherungen

@@ -2,8 +2,9 @@
 #
 # Kosten gehen vor Verfügbarkeit – ein stiller Ausfall des Kill-Switch darf
 # nicht unbemerkt bleiben, und ein Eingriff soll sofort auffallen. Die Funktion
-# loggt jeden Eingriff als WARNING und jeden Fehler als ERROR (funktion.go);
-# diese Regel schickt dann eine E-Mail.
+# loggt jeden Eingriff (neu gesperrte Dienste, Trennen) als WARNING und jeden
+# Fehler als ERROR (funktion.go); ist schon alles gesperrt, nur INFO. Bei WARNING
+# und ERROR schickt diese Regel eine E-Mail.
 #
 # Kosten: eine Bedingung, laut Google ca. 0,10 $ pro Monat (Log-Alarme zahlen
 # nur die Bedingung, keine Zeitreihen).

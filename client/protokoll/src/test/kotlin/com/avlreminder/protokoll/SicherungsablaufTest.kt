@@ -136,11 +136,12 @@ class SicherungsablaufTest {
         assertInstanceOf(Gesichert.AnderesGeraet::class.java, ergebnis)
         assertEquals("tablet", g.gefragt?.geraetId)
         assertEquals("tablet", server.inhalt().kopf.geraetId)
-        assertEquals(gemerkt, g.stand.stand)
+        assertEquals(gemerkt?.copy(gesehen = 9), g.stand.stand) // eigener Stand bleibt, Zähler 9 gesehen
     }
 
     // KRITISCH: Gegenstück zu „übernimmt nach Zustimmung“: Ohne Zustimmung bleibt die
-    // Sicherung des anderen Geräts unverändert, und das Gerät merkt sich nichts Neues.
+    // Sicherung des anderen Geräts unverändert. Das Gerät merkt sich nur ihren Zähler
+    // als gesehen, nicht als eigenen Stand.
     @Test
     fun `überschreibt ohne Zustimmung nie die Sicherung eines anderen Geräts`() {
         val server = FalscheAblage().apply { vonGeraet("tablet", zaehler = 5) }
@@ -151,7 +152,32 @@ class SicherungsablaufTest {
         assertEquals(Gesichert.AnderesGeraet(server.inhalt().kopf), ergebnis)
         assertSame(vorher, server.sicherung)
         assertEquals(0, server.gespeichert)
-        assertNull(g.stand.stand)
+        assertEquals(GemerkteSicherung(zaehler = 0, version = 0, gesehen = 5), g.stand.stand)
+    }
+
+    // KRITISCH: E-B2b-3 „gesichert oder gesehen“: Hat der Mensch eine Sicherung
+    // abgelehnt, darf der Server danach keine ältere Fassung unterschieben.
+    @Test
+    fun `nach abgelehnter Übernahme gilt eine ältere Fassung als veraltet`() {
+        val server = FalscheAblage().apply { vonGeraet("tablet", zaehler = 5) }
+        val g = Geraet(server, uebernimmt = false)
+        g.sichern()
+        server.vonGeraet("tablet", zaehler = 4) // Server liefert eine ältere Fassung
+
+        assertThrows<AeltereSicherung> { g.sichern() }
+        assertThrows<AeltereSicherung> { runBlocking { g.ablauf.wiederherstellen(SCHEMA, { true }, { }) } }
+        assertEquals(0, server.gespeichert)
+    }
+
+    @Test
+    fun `nach abgelehnter Übernahme fragt das Gerät bei derselben Fassung wieder nach`() {
+        val server = FalscheAblage().apply { vonGeraet("tablet", zaehler = 5) }
+        val g = Geraet(server, uebernimmt = false)
+        g.sichern()
+        g.gefragt = null
+
+        assertInstanceOf(Gesichert.AnderesGeraet::class.java, g.sichern())
+        assertEquals(5, g.gefragt?.zaehler)
     }
 
     // KRITISCH: Ein Server, der eine ältere Fassung zeigt als das Gerät kennt, bringt
@@ -297,12 +323,15 @@ class SicherungsablaufTest {
         val bestaetigt: Boolean = true,
         val hoechste: Int = SCHEMA,
         val erwartet: Class<out Throwable>? = null,
+        /** Der Stand danach; ohne Angabe unverändert. */
+        val danach: GemerkteSicherung? = gemerkt,
     ) {
         override fun toString() = name
     }
 
     // KRITISCH: Zu „spielt nach Bestätigung ein“ die Ablehnungen. Danach ist nichts
-    // angewendet, und das Gerät merkt sich keinen neuen Stand.
+    // angewendet, und das Gerät merkt sich keinen neuen Stand (lehnt der Mensch ab,
+    // nur den gesehenen Zähler).
     @ParameterizedTest(name = "{0}")
     @MethodSource("ablehnungen")
     fun `spielt nicht ein`(fall: Ablehnung) {
@@ -315,7 +344,37 @@ class SicherungsablaufTest {
             assertEquals(Wiederhergestellt.Abgelehnt, wiederherstellen(fall.server(), stand, fall.bestaetigt, fall.hoechste, angewendet))
         }
         assertTrue(angewendet.isEmpty())
-        assertEquals(fall.gemerkt, stand.stand)
+        assertEquals(fall.danach, stand.stand)
+    }
+
+    // --- Löschen --------------------------------------------------------------
+
+    // KRITISCH: Nach dem Löschen zählt das Gerät weiter, damit andere Geräte, die
+    // den alten Zähler kennen, die neue Sicherung annehmen.
+    @Test
+    fun `nach dem Löschen zählt die nächste Sicherung weiter`() {
+        val server = FalscheAblage()
+        val g = Geraet(server)
+        g.sichern()
+        g.sichern()
+        val anderes = FalscherStand()
+        wiederherstellen(server, anderes) // kennt jetzt Zähler 2
+
+        runBlocking { g.ablauf.loeschen() }
+        assertNull(server.sicherung)
+        assertEquals(GemerkteSicherung(2, 0), g.stand.stand)
+
+        assertEquals(3, (g.sichern() as Gesichert.Ja).zaehler)
+        assertInstanceOf(Wiederhergestellt.Ja::class.java, wiederherstellen(server, anderes))
+    }
+
+    @Test
+    fun `löscht auch ohne gemerkten Stand und merkt sich nichts`() {
+        val server = FalscheAblage().apply { vonGeraet("tablet", zaehler = 4) }
+        val stand = FalscherStand()
+        runBlocking { Sicherungsablauf(KONTO, "neu", tresor, server, stand, uebernehmen = { false }).loeschen() }
+        assertNull(server.sicherung)
+        assertNull(stand.stand)
     }
 
     @Test
@@ -338,7 +397,12 @@ class SicherungsablaufTest {
 
         @JvmStatic
         fun ablehnungen() = listOf(
-            Ablehnung("nicht ohne Bestätigung", { FalscheAblage().apply { vonGeraet("tablet", 4) } }, bestaetigt = false),
+            Ablehnung(
+                "nicht ohne Bestätigung",
+                { FalscheAblage().apply { vonGeraet("tablet", 4) } },
+                bestaetigt = false,
+                danach = GemerkteSicherung(0, 0, gesehen = 4),
+            ),
             Ablehnung(
                 "keine ältere Sicherung als gemerkt",
                 { FalscheAblage().apply { vonGeraet("tablet", 3) } },

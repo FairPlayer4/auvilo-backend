@@ -85,8 +85,11 @@ func Verarbeite(ctx context.Context, daten []byte, s Schwellen, p Plattform) (Er
 	stufe := slog.LevelInfo
 	if err != nil {
 		stufe = slog.LevelError
-	} else if erg.Aktion != Nichts {
-		stufe = slog.LevelWarn // ein Eingriff soll in der Console auffallen
+	} else if erg.GesperrteDienste > 0 || erg.AbrechnungGetrennt {
+		// Ein Eingriff soll auffallen (WARN löst die Alarm-Mail aus, alarm.tf).
+		// Budget meldet sich mehrmals am Tag; sind schon alle Dienste gesperrt,
+		// bleibt es bei INFO, damit nicht jede Meldung eine Mail schickt.
+		stufe = slog.LevelWarn
 	}
 	slog.Log(ctx, stufe, "Budget-Meldung verarbeitet",
 		"budget", m.BudgetDisplayName,

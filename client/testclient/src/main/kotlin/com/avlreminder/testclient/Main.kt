@@ -258,11 +258,8 @@ private class Werkzeug(
     }
 
     suspend fun sicherungLoeschen() {
-        val s = ablage.sitzung(name)
-        ServerSicherungsAblage(verbindung, s.token).loeschen()
-        // Der Sicherungsstand bleibt: Die nächste Sicherung zählt vom gemerkten
-        // Zähler weiter. Finge sie wieder bei 1 an, lehnten andere Geräte, die
-        // schon einen höheren Zähler gesehen haben, sie als ältere Sicherung ab.
+        // Der Ablauf behält den gemerkten Zähler (siehe Sicherungsablauf.loeschen).
+        sicherungsablauf { false }.loeschen()
         println("Datensicherung gelöscht (mit allen älteren Fassungen).")
     }
 

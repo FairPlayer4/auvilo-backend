@@ -125,7 +125,7 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
    **Für den Infrastruktur-Schritt:** Soft Delete des Buckets auf 0 Tage (sonst
    bleiben gelöschte Sicherungen 7 Tage liegen, DSGVO); Zeitlimit von Cloud Run
    und Server (30 s) für 8 MiB über langsames Mobilfunknetz prüfen.
-   **Am 2026-11-03 (Schritt 4, noch nicht committet):** Modul `client/verbindung`
+   **Am 2026-11-03 (Schritt 4):** Modul `client/verbindung`
    (Connect-Clients und Adapter, aus `testclient` herausgelöst) mit
    `ServerSicherungsAblage`; Adapter-Tests gegen einen Connect-Nachbau (Fehlercodes
    je Methode). Server: `BackupLoeschen` für das Schlüssel-Backup. Test-Client:
@@ -139,7 +139,15 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
    `sicherung-loeschen` entfernt alle Fassungen, danach legt ein Gerät mit altem
    Stand sauber neu an; `schluessel-loeschen` entfernt das Backup (zweimal ohne
    Fehler). Im Server-Log nur Gerät, Version und Größe.
-   **Weiter mit:** Commit, dann Schritt 5 (Infrastruktur, nach Kevins Go).
+   **Review Lauf 5 am 2026-11-03** (`.review/runs/2026-11-03.md`), Fragen wie
+   vorgeschlagen entschieden (anforderungen.md Kap. 11): Sitzung vor den
+   Sicherungsplätzen geprüft, gesehene Zähler gemerkt, `Sicherungsablauf.loeschen`
+   behält den Zähler, Kill-Switch-Mail nur bei echtem Eingriff (wirkt nach dem
+   nächsten Deploy über `main`), Grenzen und „Vor echten Daten“ ergänzt.
+   **Weiter mit:** Schritt 5 (Infrastruktur, nach Kevins Go): Bucket mit Fassungen
+   7 Tage/höchstens 100, `SICHERUNG_BUCKET`, GOMEMLIMIT und Parallelität,
+   Build-Konto einschränken, Image-Scan (SE3), Absenz-Alarm Kill-Switch,
+   `pruefe-regionen.sh` für Listen, tofu-Testlücken (Empfehlungen E2–E4 aus Lauf 5).
 5. Für den B3-Entwurf aus Lauf 4: A2 (Mitgliedschaft: Server-Liste oder signiertes
    Log), A4 (Umschläge an Kontext binden, Keyset-Typen prüfen), A5 (Speicher und
    Dienste aufteilen; Anfang in B2b). A3 (Formate festschreiben) kommt in B2b.

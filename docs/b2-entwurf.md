@@ -170,7 +170,9 @@ entfernt).
 
 ## Bekannte Grenzen (bewusst)
 - **Gesperrtes Gerät behält die Schlüssel.** Ein gestohlenes Gerät hat Personen- und
-  Tresorschlüssel. Sperren schließt es vom Server aus (B1), aber die Schlüssel zu
+  Tresorschlüssel. Sperren schließt seinen Geräteschlüssel vom Server aus (B1); mit
+  noch angemeldetem Google-Konto kann es sich aber als neues Gerät wieder anmelden
+  (Grenze in [b1-entwurf.md](b1-entwurf.md), „Gerät sperren“). Die Schlüssel zu
   wechseln gehört zu „Person entfernen und faule Rotation“ in B4.
 - **Wiederherstellungsschlüssel verloren und kein Gerät mehr**: Private Daten sind
   weg. Das ist so gewollt (ID4). Einen neuen Wiederherstellungsschlüssel erzeugen,

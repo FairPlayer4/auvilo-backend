@@ -179,3 +179,60 @@ func TestInterceptor(t *testing.T) {
 		})
 	}
 }
+
+// KRITISCH: Gegenstück zu „geschützte Prozedur geht mit gültiger Sitzung“ für die
+// Vorprüfung auf HTTP-Ebene: Ohne gültige Sitzung erreicht die Anfrage den Dienst
+// nicht (er liest also auch ihren Inhalt nicht), selbst bei einer Prozedur, die der
+// Interceptor offen lässt.
+func TestVorDemLesen(t *testing.T) {
+	const offen = "/test.v1.TestDienst/Offen"
+	ctx := context.Background()
+	sp := speicher.NeuerArbeitsspeicher()
+	gueltig, s := Neu(jetzt.Add(-time.Minute))
+	if _, err := sp.Anmelden(ctx, "kennung", speicher.Geraet{ID: "geraet-1"}, s); err != nil {
+		t.Fatal(err)
+	}
+	abgelaufen, s2 := Neu(jetzt.Add(-time.Hour)) // läuft genau jetzt ab
+	if _, err := sp.SitzungAnlegen(ctx, "geraet-1", s2); err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name     string
+		lesen    SitzungLesen
+		kopf     string // Authorization-Header, "" = keiner
+		wantCode connect.Code
+	}{
+		{"lässt Anfrage mit gültiger Sitzung durch", sp, "Bearer " + gueltig, 0},
+		{"lehnt Anfrage ohne Sitzung ab, auch bei offener Prozedur", sp, "", connect.CodeUnauthenticated},
+		{"lehnt unbekanntes Token ab", sp, "Bearer erfunden", connect.CodeUnauthenticated},
+		{"lehnt abgelaufene Sitzung ab", sp, "Bearer " + abgelaufen, connect.CodeUnauthenticated},
+		{"meldet Speicherausfall als nicht verfügbar, nicht als erlaubt", fehlerSpeicher{}, "Bearer " + gueltig, connect.CodeUnavailable},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			erreicht := false
+			dienst := connect.NewUnaryHandler(offen, func(context.Context, *connect.Request[emptypb.Empty]) (*connect.Response[emptypb.Empty], error) {
+				erreicht = true
+				return connect.NewResponse(&emptypb.Empty{}), nil
+			})
+			i := NeuerInterceptor(tt.lesen, []string{offen}, func() time.Time { return jetzt })
+			srv := httptest.NewServer(i.VorDemLesen(dienst))
+			t.Cleanup(srv.Close)
+
+			client := connect.NewClient[emptypb.Empty, emptypb.Empty](http.DefaultClient, srv.URL+offen)
+			req := connect.NewRequest(&emptypb.Empty{})
+			if tt.kopf != "" {
+				req.Header().Set("Authorization", tt.kopf)
+			}
+			_, err := client.CallUnary(ctx, req)
+			// Ohne Fehler liefert CodeOf "unknown", daher getrennt prüfen.
+			if (tt.wantCode == 0 && err != nil) || (tt.wantCode != 0 && connect.CodeOf(err) != tt.wantCode) {
+				t.Fatalf("Code = %v (%v), erwartet %v", connect.CodeOf(err), err, tt.wantCode)
+			}
+			if erreicht != (tt.wantCode == 0) {
+				t.Errorf("Dienst erreicht = %v, erwartet %v", erreicht, tt.wantCode == 0)
+			}
+		})
+	}
+}

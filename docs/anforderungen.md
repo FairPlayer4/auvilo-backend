@@ -203,7 +203,9 @@ aber nicht **was**. Wird in der Datenschutzerklärung so benannt.
   KI-Anfragen gar nicht.
 
 ### 4.5 Sicherheit
-- SE1 Nur HTTPS; Sitzungs-Tokens kurzlebig; Signaturen jeder Operation.
+- SE1 Nur HTTPS; Sitzungs-Tokens kurzlebig; Signaturen jeder Operation (gemeint sind
+  die Sync-Operationen ab B3; in B1/B2 signieren Anmelden und Erneuern, alles andere
+  trägt das Sitzungs-Token, siehe Kap. 11).
 - SE2 Secrets im Secret Manager; kein Schlüsselmaterial im Repo.
 - SE3 Dependabot, `govulncheck`, Container-Image-Scan.
 
@@ -356,8 +358,16 @@ tragen die Tests die Spezifikation. Anleitung zum Review: [go-review.md](go-revi
 | 2026-11-02 | Etappe B2b vor B3 eingeschoben: Das Backend kommt früh als verschlüsseltes Backup in die App (interne Variante), für echte Tests von B1/B2. Kein verlässliches Backup (Kill-Switch); das lokale Backup bleibt. Entwurf: [b2b-entwurf.md](b2b-entwurf.md) |
 | 2026-11-02 | B2b: Daten-Backup ist eine undurchsichtige Nutzlast; die App legt ihre Room-Datenbank ab (gzip), ohne Fotos und Audio. Eigenes Datenformat erst in B3 |
 | 2026-11-02 | B2b: Sicherung mit dem Tresorschlüssel verschlüsselt; Kopf im Chiffrat mit Zähler, Zeit, Geräte-ID, Schema-Version. Kleinerer Zähler vom Server → Warnung, kein stilles Wiederherstellen |
-| 2026-11-02 | B2b: Ablage in Cloud Storage (`var.region`), ein Objekt je Konto, 3 ältere Fassungen, nach 30 Tagen gelöscht; Schreiben nur mit erwarteter Version (`ifGenerationMatch`) |
+| 2026-11-02 | B2b: Ablage in Cloud Storage (`var.region`), ein Objekt je Konto, 3 ältere Fassungen, nach 30 Tagen gelöscht (am 2026-11-03 geändert: 7 Tage, höchstens 100); Schreiben nur mit erwarteter Version (`ifGenerationMatch`) |
 | 2026-11-02 | B2b: Ohne Synchronisation ein sicherndes Gerät; ein anderes übernimmt nur nach Rückfrage. Höchstens 8 MiB je Sicherung, Übertragung über den Server, Löschen von Anfang an |
 | 2026-11-02 | B2b: Formate maßgeblich in `docs/formate.md` mit festen Testvektoren (A3); Gradle-Prüfsummen; Modul `verbindung`; Einbindung per Composite Build |
 | 2026-11-02 | B2b: Testen nur Kevin und wenige Bekannte im internen Test-Track, eigene App-Variante; Testerinformation statt Datenschutzerklärung bis B6 |
 | 2026-11-02 | Testphase: Claude darf Wiederherstellungsschlüssel von Testkonten sehen. Vor echten Daten werden Schlüssel-Backup, Datensicherung und Testdateien gelöscht und neu erzeugt; ab dann (Sicherheitsphase, von Claude vorher angekündigt) sieht Claude keine Schlüssel mehr. Liste verbotener Geheimnisse in `CLAUDE.md` |
+| 2026-11-03 | Gestohlenes Gerät mit Google-Login kann sich nach dem Sperren neu anmelden: bekannte Grenze bis vor echten Daten; dann dürfen neue Geräte erst nach Freischaltung (QR oder Wiederherstellungsschlüssel) sperren und löschen, vorhandene Geräte erfahren von neuen ([b1-entwurf.md](b1-entwurf.md)) |
+| 2026-11-03 | Datensicherung: Sitzung wird auf HTTP-Ebene geprüft, bevor der Inhalt gelesen und ein Platz belegt wird (`sitzung.VorDemLesen`) |
+| 2026-11-03 | Schlüssel-Backup: Version beginnt nach dem Löschen wieder bei 1; Clients speichern nur mit erwarteter Version 0, Grabstein erst bei Bedarf (`schluessel.proto`) |
+| 2026-11-03 | Datensicherung: Wiederherstellen heißt übernehmen; abgelehnte Fassungen merkt sich das Gerät als gesehen (Untergrenze); Löschen behält den Zähler (`Sicherungsablauf.loeschen`) |
+| 2026-11-03 | Datensicherung: ältere Fassungen 7 Tage, höchstens 100, statt 3 Fassungen und 30 Tage ([b2b-entwurf.md](b2b-entwurf.md), E-B2b-4) |
+| 2026-11-03 | Kill-Switch: WARN (Alarm-Mail) nur bei neu gesperrten Diensten oder Trennen; ist schon alles gesperrt, INFO |
+| 2026-11-03 | Löschschutz (Firestore, Cloud Run, Bucket) wird vor echten Daten eingeschaltet ([b2b-entwurf.md](b2b-entwurf.md), „Vor echten Daten“) |
+| 2026-11-03 | SE1 „Signaturen jeder Operation“ meint die Sync-Operationen ab B3; bis dahin signieren nur Anmelden und Erneuern |

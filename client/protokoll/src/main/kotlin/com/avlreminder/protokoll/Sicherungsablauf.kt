@@ -25,9 +25,15 @@ interface SicherungsAblage {
  *
  * @property zaehler der höchste Zähler, den dieses Gerät gesichert oder eingespielt hat.
  * @property version die Server-Version dieser Sicherung; stimmt sie noch, hat seitdem
- *   kein anderes Gerät gesichert.
+ *   kein anderes Gerät gesichert (0 = keine bekannt, etwa nach dem Löschen).
+ * @property gesehen der höchste Zähler einer Sicherung, die dieses Gerät gesehen, aber
+ *   nicht übernommen hat (der Mensch hat abgelehnt). Sie ist echt, denn sie ließ sich
+ *   entschlüsseln; ältere Fassungen gelten deshalb ebenfalls als veraltet.
  */
-data class GemerkteSicherung(val zaehler: Long, val version: Long)
+data class GemerkteSicherung(val zaehler: Long, val version: Long, val gesehen: Long = 0) {
+    /** Sicherungen mit kleinerem Zähler sind älter, als dieses Gerät kennt. */
+    val untergrenze get() = maxOf(zaehler, gesehen)
+}
 
 /** Die Ablage auf dem Gerät für [GemerkteSicherung]. */
 interface SicherungsStand {
@@ -96,7 +102,7 @@ class Sicherungsablauf(
      */
     suspend fun sichern(nutzlast: ByteArray, schemaVersion: Int): Gesichert {
         val gemerkt = stand.laden()
-        var zaehler = (gemerkt?.zaehler ?: 0) + 1
+        var zaehler = (gemerkt?.untergrenze ?: 0) + 1
         var erwartet = gemerkt?.version ?: 0
         // Höchstens ein zweiter Versuch: nach dem Abgleich mit der Server-Fassung.
         repeat(2) { versuch ->
@@ -120,8 +126,11 @@ class Sicherungsablauf(
                 return@repeat
             }
             val kopf = Datensicherung.entschluesseln(vorhanden.chiffrat, tresor, kontoId).kopf
-            if (gemerkt != null && kopf.zaehler < gemerkt.zaehler) throw AeltereSicherung(gemerkt.zaehler, kopf.zaehler)
-            if (kopf.geraetId != geraetId && !uebernehmen(kopf)) return Gesichert.AnderesGeraet(kopf)
+            if (gemerkt != null && kopf.zaehler < gemerkt.untergrenze) throw AeltereSicherung(gemerkt.untergrenze, kopf.zaehler)
+            if (kopf.geraetId != geraetId && !uebernehmen(kopf)) {
+                merkeGesehen(gemerkt, kopf.zaehler)
+                return Gesichert.AnderesGeraet(kopf)
+            }
             zaehler = maxOf(zaehler, kopf.zaehler + 1)
             erwartet = vorhanden.version
         }
@@ -146,16 +155,38 @@ class Sicherungsablauf(
         val geholt = server.holen() ?: return Wiederhergestellt.KeineSicherung
         val sicherung = Datensicherung.entschluesseln(geholt.chiffrat, tresor, kontoId)
         val gemerkt = stand.laden()
-        if (gemerkt != null && sicherung.kopf.zaehler < gemerkt.zaehler) {
-            throw AeltereSicherung(gemerkt.zaehler, sicherung.kopf.zaehler)
+        if (gemerkt != null && sicherung.kopf.zaehler < gemerkt.untergrenze) {
+            throw AeltereSicherung(gemerkt.untergrenze, sicherung.kopf.zaehler)
         }
         if (sicherung.kopf.schemaVersion > hoechsteSchemaVersion) {
             throw NeueresSchema(sicherung.kopf.schemaVersion, hoechsteSchemaVersion)
         }
-        if (!bestaetigen(sicherung.kopf)) return Wiederhergestellt.Abgelehnt
+        if (!bestaetigen(sicherung.kopf)) {
+            merkeGesehen(gemerkt, sicherung.kopf.zaehler)
+            return Wiederhergestellt.Abgelehnt
+        }
         anwenden(sicherung)
         stand.speichern(GemerkteSicherung(sicherung.kopf.zaehler, geholt.version))
         return Wiederhergestellt.Ja(sicherung.kopf)
+    }
+
+    /**
+     * Löscht die Sicherung mit allen älteren Fassungen auf dem Server.
+     *
+     * KRITISCH: Der gemerkte Zähler bleibt, nur die Version wird 0. Die nächste
+     * Sicherung zählt also weiter; finge sie bei 1 an, lehnten andere Geräte, die
+     * schon einen höheren Zähler kennen, sie als [AeltereSicherung] ab.
+     */
+    suspend fun loeschen() {
+        server.loeschen()
+        val gemerkt = stand.laden() ?: return
+        stand.speichern(gemerkt.copy(version = 0))
+    }
+
+    /** Merkt sich den Zähler einer abgelehnten Sicherung als Untergrenze (E-B2b-3). */
+    private fun merkeGesehen(gemerkt: GemerkteSicherung?, zaehler: Long) {
+        val bisher = gemerkt ?: GemerkteSicherung(0, 0)
+        if (zaehler > bisher.gesehen) stand.speichern(bisher.copy(gesehen = zaehler))
     }
 }
 

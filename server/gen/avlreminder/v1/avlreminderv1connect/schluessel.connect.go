@@ -53,6 +53,11 @@ type SchluesselDienstClient interface {
 	BackupHolen(context.Context, *connect.Request[v1.BackupHolenRequest]) (*connect.Response[v1.BackupHolenResponse], error)
 	// Löscht das Backup des eigenen Kontos (Neuanfang mit neuen Schlüsseln, DSGVO
 	// Art. 17). Gibt es keins, ist das kein Fehler.
+	//
+	// Grenze: Danach beginnt die Version wieder bei 1. Ein Gerät, das sich noch
+	// Version 1 von vorher gemerkt hat, könnte ein neues Backup überschreiben. Clients
+	// speichern deshalb nur mit erwartete_version 0 (neu anlegen); wer höhere
+	// Versionen nutzen will, braucht vorher einen Grabstein auf dem Server.
 	BackupLoeschen(context.Context, *connect.Request[v1.BackupLoeschenRequest]) (*connect.Response[v1.BackupLoeschenResponse], error)
 }
 
@@ -119,6 +124,11 @@ type SchluesselDienstHandler interface {
 	BackupHolen(context.Context, *connect.Request[v1.BackupHolenRequest]) (*connect.Response[v1.BackupHolenResponse], error)
 	// Löscht das Backup des eigenen Kontos (Neuanfang mit neuen Schlüsseln, DSGVO
 	// Art. 17). Gibt es keins, ist das kein Fehler.
+	//
+	// Grenze: Danach beginnt die Version wieder bei 1. Ein Gerät, das sich noch
+	// Version 1 von vorher gemerkt hat, könnte ein neues Backup überschreiben. Clients
+	// speichern deshalb nur mit erwartete_version 0 (neu anlegen); wer höhere
+	// Versionen nutzen will, braucht vorher einen Grabstein auf dem Server.
 	BackupLoeschen(context.Context, *connect.Request[v1.BackupLoeschenRequest]) (*connect.Response[v1.BackupLoeschenResponse], error)
 }
 

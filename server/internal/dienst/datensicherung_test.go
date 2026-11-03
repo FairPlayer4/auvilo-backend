@@ -276,6 +276,12 @@ func TestZuVieleSicherungenGleichzeitigWerdenAbgewiesen(t *testing.T) {
 	if !ok {
 		return // die Ablage ist schon freigegeben, der Rest des Tests sagt nichts mehr
 	}
+	// KRITISCH: Die Sitzung wird vor den Plätzen geprüft. Sonst könnte jeder ohne
+	// Anmeldung die Plätze belegen und echte Sicherungen blockieren.
+	t.Run("ohne Sitzung kommt unauthenticated statt unavailable", func(t *testing.T) {
+		_, err := ts.sicherungSpeichern("erfunden", []byte("sicherung"), 0)
+		erwarteCode(t, err, connect.CodeUnauthenticated)
+	})
 	t.Run("andere Dienste laufen weiter", func(t *testing.T) {
 		if _, err := ts.geraete.GeraeteAuflisten(context.Background(), mitSitzung(&v1.GeraeteAuflistenRequest{}, tokens[2])); err != nil {
 			t.Fatal(err)

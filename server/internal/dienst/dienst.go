@@ -80,7 +80,9 @@ func NeuerHandler(k Konfiguration) (http.Handler, error) {
 	// Anfrage (die spätere Option gilt), dafür nur wenige gleichzeitig.
 	pfad, sicherungen := avlreminderv1connect.NewDatensicherungDienstHandler(d,
 		append(optionen, connect.WithReadMaxBytes(MaxSicherungsanfrage))...)
-	mux.Handle(pfad, begrenze(k.GleichzeitigeSicherungen, sicherungen))
+	// Reihenfolge: erst die Sitzung (ohne den Inhalt zu lesen), dann die Plätze.
+	// So belegen Anfragen ohne Anmeldung weder Plätze noch Speicher.
+	mux.Handle(pfad, interceptor.VorDemLesen(begrenze(k.GleichzeitigeSicherungen, sicherungen)))
 	return mux, nil
 }
 
