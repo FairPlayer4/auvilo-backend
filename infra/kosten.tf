@@ -125,7 +125,7 @@ resource "google_service_account_iam_member" "killswitch_act_as" {
   service_account_id = "projects/${var.projekt}/serviceAccounts/${each.value}"
   role               = "roles/iam.serviceAccountUser"
   member             = google_service_account.killswitch.member
-  depends_on         = [google_project_service.apis] # das Compute-Standardkonto entsteht mit der Run-API
+  depends_on         = [google_project_service.apis] # das Compute-Standardkonto legt Google erst mit den APIs an
 }
 
 # Ohne Organisation gibt Google den Standardkonten automatisch die Rolle

@@ -52,6 +52,13 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
 - **Bekannte Grenze:** Ab 100 % sperrt der Kill-Switch nur Cloud-Run-**Dienste** in
   `var.region`. Cloud-Run-Jobs und Dienste in anderen Regionen bleiben offen; dafür
   greift erst das Trennen ab 150 %. Kommen solche dazu, den Kill-Switch erweitern.
+  Ebenso kostet Speicher (Bucket der Datensicherungen) nach der Sperre weiter, bis
+  zum Trennen; die Lebenszyklusregeln greifen erst verzögert. Ein Upload-Limit je
+  Konto und Zeit im Server käme vor B6.
+- **Bekannte Grenze (Absenz-Alarm):** schlägt erst an, nachdem der Kill-Switch
+  einmal aufgerufen wurde. Nach einem Neuaufbau einmal eine Meldung unter der
+  Schwelle schicken (`gcloud pubsub topics publish budget-meldungen
+  --message='{"costAmount":1,"budgetAmount":20}'`) und den Aufruf im Log prüfen.
 - **Bekannte Grenze (Deploy-Konto):** Es darf den Dienst `server` ändern
   (`roles/run.developer`) und könnte damit technisch mehr als das Image setzen:
   den vom Kill-Switch gesperrten Ingress wieder öffnen, Mindestinstanzen, CPU

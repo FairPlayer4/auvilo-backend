@@ -35,8 +35,10 @@ resource "google_storage_bucket" "datensicherung" {
   }
 
   # Höchstens 100 ältere Fassungen: Die Regel trifft eine ältere Fassung, sobald
-  # es mindestens 101 neuere gibt (die aktuelle und 100 ältere). Begrenzt die
-  # Kosten, wenn eine App in einer Schleife sichert.
+  # es mindestens 101 neuere gibt (die aktuelle und 100 ältere). Begrenzt den
+  # Dauerzustand, wenn eine App in einer Schleife sichert – keine harte Grenze:
+  # Google wendet die Regeln verzögert an (bis etwa einen Tag), bis dahin bleibt
+  # jede Fassung liegen.
   lifecycle_rule {
     condition {
       num_newer_versions = 101
@@ -49,7 +51,9 @@ resource "google_storage_bucket" "datensicherung" {
   depends_on = [google_project_service.apis]
 }
 
-# Nur der Server darf lesen, schreiben und löschen, und nur in diesem Bucket.
+# Von den Diensten darf nur der Server lesen, schreiben und löschen, und nur in
+# diesem Bucket. (Projekt-Owner wie Kevin haben über die Projektrollen ohnehin
+# Zugriff; sie sehen nur Chiffrate.)
 # objectUser statt objectAdmin: keine Rechte an den Zugriffsregeln selbst.
 resource "google_storage_bucket_iam_member" "server_datensicherung" {
   bucket = google_storage_bucket.datensicherung.name
