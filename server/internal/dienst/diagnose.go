@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"net/http"
 
 	"connectrpc.com/connect"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/FairPlayer4/avlreminder-backend/server/gen/avlreminder/v1/avlreminderv1connect"
 	"github.com/FairPlayer4/avlreminder-backend/server/internal/diagnose"
 	"github.com/FairPlayer4/avlreminder-backend/server/internal/kontingent"
+	"github.com/FairPlayer4/avlreminder-backend/server/internal/sitzung"
 )
 
 // MaxDiagnoseanfrage ist die Sendung plus Platz für die Protobuf-Hülle.
@@ -30,6 +32,28 @@ var gzipKopf = []byte{0x1f, 0x8b, 0x08}
 
 var _ avlreminderv1connect.DiagnoseDienstHandler = (*dienste)(nil)
 
+// nurFreigeschaltet lehnt Konten ohne Freischaltung ab, bevor jemand den Inhalt
+// der Anfrage liest (nach sitzung.Interceptor.VorDemLesen, das die Identität in
+// den Kontext legt).
+//
+// KRITISCH: Ohne Identität im Kontext kommt niemand durch.
+func nurFreigeschaltet(erlaubt func(kontoID string) bool, h http.Handler) http.Handler {
+	fehler := connect.NewErrorWriter()
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		id, ok := sitzung.IdentitaetAus(r.Context())
+		if !ok || id.KontoID == "" || !erlaubt(id.KontoID) {
+			slog.WarnContext(r.Context(), "Diagnose von nicht freigeschaltetem Konto", "geraet", id.GeraetID)
+			_ = fehler.Write(w, r, nichtFreigeschaltet())
+			return
+		}
+		h.ServeHTTP(w, r)
+	})
+}
+
+func nichtFreigeschaltet() error {
+	return connect.NewError(connect.CodePermissionDenied, errors.New("Konto ist für Diagnosen nicht freigeschaltet"))
+}
+
 // DiagnoseSenden legt eine Diagnose des eigenen Kontos ab
 // (docs/diagnose-entwurf.md).
 //
@@ -44,9 +68,10 @@ func (d *dienste) DiagnoseSenden(ctx context.Context, req *connect.Request[v1.Di
 	if err != nil {
 		return nil, err
 	}
+	// Zweite Prüfung: nurFreigeschaltet hat das schon vor dem Lesen getan.
 	if !d.k.DiagnoseErlaubt(id.KontoID) {
 		slog.WarnContext(ctx, "Diagnose von nicht freigeschaltetem Konto", "geraet", id.GeraetID)
-		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("Konto ist für Diagnosen nicht freigeschaltet"))
+		return nil, nichtFreigeschaltet()
 	}
 	nutzlast := req.Msg.GetNutzlast()
 	if len(nutzlast) > diagnose.MaxNutzlast {

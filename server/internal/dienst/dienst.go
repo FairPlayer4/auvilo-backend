@@ -94,10 +94,12 @@ func NeuerHandler(k Konfiguration) (http.Handler, error) {
 	// So belegen Anfragen ohne Anmeldung weder Plätze noch Speicher.
 	mux.Handle(pfad, interceptor.VorDemLesen(begrenze(k.GleichzeitigeSicherungen, sicherungen)))
 
-	// Diagnosen sind bis zu 256 KiB groß; auch hier die Sitzung vor dem Lesen.
+	// Diagnosen sind bis zu 256 KiB groß; auch hier Sitzung und Freischaltung vor
+	// dem Lesen. Sonst könnte jedes angemeldete Konto beliebig oft 256 KiB in den
+	// Speicher schieben, ohne je ans Tageslimit zu stoßen.
 	pfad, diagnosen := avlreminderv1connect.NewDiagnoseDienstHandler(d,
 		append(optionen, connect.WithReadMaxBytes(MaxDiagnoseanfrage))...)
-	mux.Handle(pfad, interceptor.VorDemLesen(diagnosen))
+	mux.Handle(pfad, interceptor.VorDemLesen(nurFreigeschaltet(k.DiagnoseErlaubt, diagnosen)))
 	return mux, nil
 }
 

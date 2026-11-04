@@ -108,9 +108,13 @@ func TestDiagnoseSendenPrueftDieAnfrage(t *testing.T) {
 		{"lehnt leere Sendung ab", frei, nil, connect.CodeInvalidArgument},
 		{"lehnt Sendung ohne gzip ab", frei, []byte(`{"art":"kopf"}`), connect.CodeInvalidArgument},
 		{"lehnt Sendung mit unvollständigem gzip-Kopf ab", frei, []byte{0x1f, 0x8b}, connect.CodeInvalidArgument},
-		// Knapp darüber prüft der Dienst, weit darüber schon Connect.
+		// Knapp darüber prüft der Dienst, weit darüber schon Connect (siehe unten).
 		{"lehnt Sendung knapp über 256 KiB ab", frei, mitGzipKopf(kiB256 + 1), connect.CodeResourceExhausted},
 		{"lehnt Sendung weit über 256 KiB ab", frei, mitGzipKopf(kiB256 + 8<<10), connect.CodeResourceExhausted},
+		// KRITISCH: Sitzung und Freischaltung werden vor dem Lesen geprüft. Läse
+		// der Server erst, käme für 512 KiB resource_exhausted (Lesegrenze).
+		{"lehnt große Sendung ohne Sitzung ab, bevor er sie liest", "", mitGzipKopf(2 * kiB256), connect.CodeUnauthenticated},
+		{"lehnt große Sendung eines nicht freigeschalteten Kontos ab, bevor er sie liest", fremd, mitGzipKopf(2 * kiB256), connect.CodePermissionDenied},
 	}
 	for _, fall := range faelle {
 		t.Run(fall.name, func(t *testing.T) {
@@ -121,6 +125,17 @@ func TestDiagnoseSendenPrueftDieAnfrage(t *testing.T) {
 			}
 		})
 	}
+
+	// Die Lesegrenze liegt knapp über 256 KiB: Was weit darüber liegt, liest
+	// Connect gar nicht erst ein. Läge die Grenze höher (etwa die 8 MiB der
+	// Sicherungen), käme die Ablehnung erst vom Dienst mit seiner Meldung.
+	t.Run("liest Sendungen weit über 256 KiB gar nicht erst ein", func(t *testing.T) {
+		err := ts.diagnoseSenden(frei, mitGzipKopf(kiB256+8<<10))
+		erwarteCode(t, err, connect.CodeResourceExhausted)
+		if strings.Contains(err.Error(), "Diagnose größer") {
+			t.Errorf("der Dienst hat die Sendung gelesen: %v", err)
+		}
+	})
 }
 
 func TestDiagnoseSendenHatEinTageslimitJeKonto(t *testing.T) {
