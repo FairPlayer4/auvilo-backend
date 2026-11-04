@@ -1,6 +1,6 @@
 // Test-Client: spielt ein Gerät gegenüber dem Server – echte Google-Anmeldung
 // im Browser, Geräteschlüssel in einer Datei, Schlüssel-Backup (B2),
-// Datensicherung (B2b).
+// Datensicherung (B2b), Diagnose (docs/diagnose-entwurf.md).
 //
 //   ./gradlew :testclient:run --args="[--server URL] [--geraet NAME] anmelden"
 //
@@ -10,6 +10,10 @@
 package com.avlreminder.testclient
 
 import com.avlreminder.protokoll.AeltereSicherung
+import com.avlreminder.protokoll.Diagnose
+import com.avlreminder.protokoll.DiagnoseNichtFreigeschaltet
+import com.avlreminder.protokoll.DiagnoseTageslimit
+import com.avlreminder.protokoll.DiagnoseZuGross
 import com.avlreminder.protokoll.Eingerichtet
 import com.avlreminder.protokoll.Einrichtung
 import com.avlreminder.protokoll.EinrichtungAbgebrochen
@@ -28,6 +32,7 @@ import com.avlreminder.schnittstelle.v1.GeraeteAuflistenRequest
 import com.avlreminder.schnittstelle.v1.Sitzung
 import com.avlreminder.schnittstelle.v1.SitzungErneuernRequest
 import com.avlreminder.verbindung.ServerBackupAblage
+import com.avlreminder.verbindung.ServerDiagnoseAblage
 import com.avlreminder.verbindung.ServerSicherungsAblage
 import com.avlreminder.verbindung.Serverfehler
 import com.avlreminder.verbindung.Verbindung
@@ -42,6 +47,7 @@ import java.net.URISyntaxException
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.time.Instant
+import java.time.temporal.ChronoUnit
 import kotlin.system.exitProcess
 
 private const val HILFE = """Befehle:
@@ -58,6 +64,8 @@ private const val HILFE = """Befehle:
                     Datensicherung des Kontos mit allen Fassungen löschen
   schluessel-loeschen
                     Schlüssel-Backup des Kontos löschen (lokale Schlüssel bleiben)
+  diagnose-senden   eine Test-Diagnose ohne Inhalte senden (Konto muss
+                    freigeschaltet sein, infra: diagnose_konten)
 Schalter:
   --server URL      Adresse des Servers (Standard http://localhost:8080)
   --geraet NAME     simuliertes Gerät (mehrere Namen = mehrere Geräte; Standard pc)
@@ -81,7 +89,7 @@ fun main(args: Array<String>) {
     } catch (e: Exception) {
         // Erwartete Meldungen des Sicherungsablaufs (protokoll) ohne Stacktrace.
         if (e is VersionVeraltet || e is AeltereSicherung || e is NeueresSchema || e is SicherungZuGross ||
-            e is EntschluesselnFehlgeschlagen
+            e is EntschluesselnFehlgeschlagen || e is DiagnoseTageslimit || e is DiagnoseZuGross
         ) {
             System.err.println("Fehler: ${e.message}")
             exitProcess(1)
@@ -120,6 +128,7 @@ private suspend fun ausfuehren(args: List<String>) {
         rest.size == 2 && rest[0] == "wiederherstellen" -> werkzeug.wiederherstellen(File(rest[1]))
         rest == listOf("sicherung-loeschen") -> werkzeug.sicherungLoeschen()
         rest == listOf("schluessel-loeschen") -> werkzeug.schluesselLoeschen()
+        rest == listOf("diagnose-senden") -> werkzeug.diagnoseSenden()
         else -> {
             println(HILFE)
             throw Bedienfehler(if (rest.isEmpty()) "Befehl fehlt" else "unbekannter Befehl: ${rest.joinToString(" ")}")
@@ -269,6 +278,19 @@ private class Werkzeug(
         println("Schlüssel-Backup gelöscht. Die Schlüssel auf diesem Gerät bleiben.")
     }
 
+    suspend fun diagnoseSenden() {
+        val s = ablage.sitzung(name)
+        val groesse = try {
+            Diagnose.senden(ServerDiagnoseAblage(verbindung, s.token), testDiagnose(Instant.now()))
+        } catch (_: DiagnoseNichtFreigeschaltet) {
+            // Konto-IDs sind Pseudonyme, keine Geheimnisse (CLAUDE.md).
+            throw Bedienfehler(
+                "Konto ${s.kontoId} ist für Diagnosen nicht freigeschaltet - in infra/werte.auto.tfvars bei diagnose_konten eintragen und tofu apply.",
+            )
+        }
+        println("Diagnose gesendet ($groesse Bytes).")
+    }
+
     /** Der Ablauf für das angemeldete Gerät; braucht Sitzung und eingerichtete Schlüssel. */
     private fun sicherungsablauf(uebernehmen: (Sicherungskopf) -> Boolean): Sicherungsablauf {
         val s = ablage.sitzung(name)
@@ -294,6 +316,15 @@ private class Werkzeug(
     private fun speichereSitzung(kontoId: String, geraetId: String, sitzung: Sitzung) =
         ablage.speichereSitzung(name, GespeicherteSitzung(kontoId, geraetId, sitzung.token, sitzung.laeuftAb.seconds))
 }
+
+/**
+ * Eine Diagnose wie aus der App, aber nur mit festen Werten (docs/formate.md):
+ * Kopf und ein Ereignis, keine freien Zeichenketten.
+ */
+internal fun testDiagnose(jetzt: Instant): List<String> = listOf(
+    """{"art":"kopf","format":"${Diagnose.FORMAT}","app":"testclient","variante":"testclient","android":0,"modell":"testclient","schema":$SCHEMA_VERSION,"anlass":"knopf"}""",
+    """{"zeit":"${jetzt.truncatedTo(ChronoUnit.MILLIS)}","stufe":"INFO","bereich":"testclient","ereignis":"diagnose_test"}""",
+)
 
 /** Der Test-Client sichert Dateien unverändert; ihr Format ist Schema-Version 1. */
 private const val SCHEMA_VERSION = 1

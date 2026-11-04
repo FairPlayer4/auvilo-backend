@@ -181,9 +181,13 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
    Diagnose-Log aus der App: Entwurf [diagnose-entwurf.md](diagnose-entwurf.md)
    (bestätigt am 2026-11-04). Server, `infra/diagnose.tf` (Bucket `…-diagnose`,
    14 Tage, Server darf nur anlegen; Firestore-TTL der Tageszähler) und
-   `werkzeuge/diagnose-holen.sh` am 2026-11-04 umgesetzt, **noch nicht angewendet
-   und nicht deployt**. Danach Kevins Konto-ID in `diagnose_konten`
-   (`infra/werte.auto.tfvars`) eintragen und in der Cloud testen.
+   `werkzeuge/diagnose-holen.sh` am 2026-11-04 umgesetzt; Infrastruktur am selben
+   Tag angewendet (3 neu, 1 geändert). Test-Client: `diagnose-senden` (feste
+   Test-Diagnose; nennt bei „nicht freigeschaltet“ die Konto-ID), Packen und Senden
+   in `protokoll` (`Diagnose`), Adapter in `verbindung`. **Offen:** Deploy über PR
+   nach `main`, dann Kevins Konto-ID in `diagnose_konten` (`infra/werte.auto.tfvars`)
+   eintragen, `tofu apply`, und in der Cloud testen: `diagnose-senden`, danach
+   `werkzeuge/diagnose-holen.sh`.
    **Weiter mit:** Upload-Limit und Sperren ohne actAs vor echten Daten; Schritt 7 (App-Einbindung, eigener Entwurf im App-Repo). Offen aus
    Lauf 5: Empfehlungen E5–E7; aus Lauf 6: E1–E6.
 5. Für den B3-Entwurf aus Lauf 4: A2 (Mitgliedschaft: Server-Liste oder signiertes

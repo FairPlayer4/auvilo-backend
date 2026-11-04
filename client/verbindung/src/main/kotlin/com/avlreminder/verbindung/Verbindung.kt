@@ -1,6 +1,9 @@
 package com.avlreminder.verbindung
 
 import com.avlreminder.protokoll.BackupAblage
+import com.avlreminder.protokoll.DiagnoseAblage
+import com.avlreminder.protokoll.DiagnoseNichtFreigeschaltet
+import com.avlreminder.protokoll.DiagnoseTageslimit
 import com.avlreminder.protokoll.GeholteSicherung
 import com.avlreminder.protokoll.GeholtesBackup
 import com.avlreminder.protokoll.SicherungZuGross
@@ -11,6 +14,8 @@ import com.avlreminder.schnittstelle.v1.BackupHolenRequest
 import com.avlreminder.schnittstelle.v1.BackupLoeschenRequest
 import com.avlreminder.schnittstelle.v1.BackupSpeichernRequest
 import com.avlreminder.schnittstelle.v1.DatensicherungDienstClient
+import com.avlreminder.schnittstelle.v1.DiagnoseDienstClient
+import com.avlreminder.schnittstelle.v1.DiagnoseSendenRequest
 import com.avlreminder.schnittstelle.v1.GeraeteDienstClient
 import com.avlreminder.schnittstelle.v1.SchluesselDienstClient
 import com.avlreminder.schnittstelle.v1.SicherungHolenRequest
@@ -42,6 +47,7 @@ class Verbindung(server: String, val http: OkHttpClient = OkHttpClient()) {
     val geraete = GeraeteDienstClient(client)
     val schluessel = SchluesselDienstClient(client)
     val sicherung = DatensicherungDienstClient(client)
+    val diagnose = DiagnoseDienstClient(client)
 }
 
 /** Header mit dem Sitzungs-Token. */
@@ -121,5 +127,33 @@ class ServerSicherungsAblage(private val verbindung: Verbindung, private val tok
 
     override suspend fun loeschen() {
         verbindung.sicherung.sicherungLoeschen(SicherungLoeschenRequest.getDefaultInstance(), mitSitzung(token)).ergebnis()
+    }
+}
+
+/**
+ * Der Diagnose-Dienst des Servers (protokoll, [DiagnoseAblage]).
+ *
+ * KRITISCH: Übersetzt nur die zwei Codes, auf die die App mit eigener Meldung
+ * reagiert (diagnose.proto); alles andere bleibt ein [Serverfehler].
+ * resource_exhausted heißt auch „zu groß“; das prüft aber schon
+ * [com.avlreminder.protokoll.Diagnose.senden] vor dem Senden. Kommt es trotzdem,
+ * ist das Tageslimit erreicht.
+ *
+ * Bekannte Grenze: Ein HTTP-403 ohne Connect-Fehler (etwa von einem Proxy) macht
+ * Connect selbst zu permission_denied; dann meldet der Adapter fälschlich „nicht
+ * freigeschaltet“. Folgen hat das keine: Gesendet wird nichts, verloren geht nichts.
+ */
+class ServerDiagnoseAblage(private val verbindung: Verbindung, private val token: String) : DiagnoseAblage {
+    override suspend fun senden(nutzlast: ByteArray) {
+        try {
+            val anfrage = DiagnoseSendenRequest.newBuilder().setNutzlast(ByteString.copyFrom(nutzlast)).build()
+            verbindung.diagnose.diagnoseSenden(anfrage, mitSitzung(token)).ergebnis()
+        } catch (e: Serverfehler) {
+            when (e.code) {
+                Code.PERMISSION_DENIED -> throw DiagnoseNichtFreigeschaltet()
+                Code.RESOURCE_EXHAUSTED -> throw DiagnoseTageslimit()
+                else -> throw e
+            }
+        }
     }
 }

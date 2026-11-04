@@ -8,6 +8,8 @@
 > **Umgesetzt am 2026-11-04:** Server (`DiagnoseDienst.DiagnoseSenden`, Tageszähler
 > `server/internal/kontingent`), Infrastruktur (`infra/diagnose.tf`) und Skript
 > (`werkzeuge/diagnose-holen.sh`). Das Format steht in [formate.md](formate.md).
+> Kotlin: `Diagnose` (Packen, Größe prüfen, Senden) in `client/protokoll` für die
+> App, Adapter in `client/verbindung`, Befehl `diagnose-senden` im Test-Client.
 > Die App (Teil 3) fehlt noch.
 
 ## Ziel
