@@ -121,8 +121,9 @@ func (i *Interceptor) WrapStreamingHandler(next connect.StreamingHandlerFunc) co
 // der Anfrage liest. Connect liest den Inhalt nämlich vollständig, bevor der
 // Interceptor läuft. Für große Anfragen (Datensicherung, bis 8 MiB) heißt das:
 // Ohne diese Vorprüfung könnte jeder ohne Anmeldung Speicher und die wenigen
-// Plätze für gleichzeitige Sicherungen belegen. Der Interceptor prüft danach
-// trotzdem noch einmal und legt die Identität in den Kontext.
+// Plätze für gleichzeitige Sicherungen belegen. h bekommt die Identität im
+// Kontext (IdentitaetAus), etwa um die Freischaltung für Diagnosen ebenfalls vor
+// dem Lesen zu prüfen. Der Interceptor prüft danach trotzdem noch einmal.
 //
 // KRITISCH: Ohne gültige Sitzung kommt keine Anfrage zu h durch; es gibt hier
 // keine offenen Prozeduren.
@@ -130,11 +131,12 @@ func (i *Interceptor) VorDemLesen(h http.Handler) http.Handler {
 	fehler := connect.NewErrorWriter()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// "" ist nie eine offene Prozedur: Geprüft wird immer.
-		if _, err := i.pruefe(r.Context(), "", r.Header); err != nil {
+		ctx, err := i.pruefe(r.Context(), "", r.Header)
+		if err != nil {
 			_ = fehler.Write(w, r, err)
 			return
 		}
-		h.ServeHTTP(w, r)
+		h.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 

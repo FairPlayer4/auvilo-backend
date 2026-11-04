@@ -12,7 +12,7 @@ func TestLeseKonfiguration(t *testing.T) {
 		"PFEFFER_SECRET":    "projects/p/secrets/pfeffer/versions/latest",
 		"SICHERUNG_BUCKET":  "b",
 		"DIAGNOSE_BUCKET":   "d",
-		"DIAGNOSE_KONTEN":   " k1 ,,k2",
+		"DIAGNOSE_KONTEN":   " 0123456789abcdef0123456789abcdef ,,fedcba9876543210fedcba9876543210",
 	}
 	mit := func(aenderungen map[string]string) func(string) string {
 		m := map[string]string{}
@@ -31,7 +31,7 @@ func TestLeseKonfiguration(t *testing.T) {
 			t.Fatal(err)
 		}
 		if !slices.Equal(k.clientIDs, []string{"a.apps", "b.apps"}) || k.port != "8080" || k.sicherungBucket != "b" ||
-			k.diagnoseBucket != "d" || !slices.Equal(k.diagnoseKonten, []string{"k1", "k2"}) {
+			k.diagnoseBucket != "d" || !slices.Equal(k.diagnoseKonten, []string{"0123456789abcdef0123456789abcdef", "fedcba9876543210fedcba9876543210"}) {
 			t.Errorf("Konfiguration = %+v", k)
 		}
 	})
@@ -59,6 +59,9 @@ func TestLeseKonfiguration(t *testing.T) {
 		{"lehnt fehlenden Pfeffer ab", map[string]string{"PFEFFER_SECRET": ""}},
 		{"lehnt beide Pfeffer-Quellen zugleich ab", map[string]string{"PFEFFER": "aGFsbG8="}},
 		{"lehnt Pfeffer ab, der kein base64 ist", map[string]string{"PFEFFER_SECRET": "", "PFEFFER": "%%%"}},
+		{"lehnt freigeschaltete Konto-ID mit Großbuchstaben ab", map[string]string{"DIAGNOSE_KONTEN": "0123456789ABCDEF0123456789ABCDEF"}},
+		{"lehnt zu kurze freigeschaltete Konto-ID ab", map[string]string{"DIAGNOSE_KONTEN": "0123456789abcdef0123456789abcde"}},
+		{"lehnt zu lange freigeschaltete Konto-ID ab", map[string]string{"DIAGNOSE_KONTEN": "0123456789abcdef0123456789abcdef0"}},
 	}
 	for _, tt := range fehler {
 		t.Run(tt.name, func(t *testing.T) {

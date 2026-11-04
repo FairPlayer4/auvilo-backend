@@ -52,7 +52,7 @@ Tink-Konfiguration: `TinkConfig2026`, ausdrücklich je Aufruf (keine globale Reg
 
 ## Diagnose-Sendung (`avlreminder/diagnose/v1`, unverschlüsselt)
 Entwurf und Begründung: [diagnose-entwurf.md](diagnose-entwurf.md). Lesen nur Kevin
-und Claude (`werkzeuge/diagnose-holen.sh`); der Server prüft nur den gzip-Kopf.
+und Claude (`werkzeuge/diagnose-holen.sh`); der Server prüft nur Größe und gzip-Kopf.
 Gespeichert wird höchstens 14 Tage, darum gilt „Nie still ändern“ hier nur für
 die Formatkennung: Ein neues Format bekommt `…/v2`.
 - gzip-Datei, darin JSON-Zeilen (UTF-8, eine Zeile je Objekt), höchstens 256 KiB

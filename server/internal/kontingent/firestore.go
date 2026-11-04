@@ -10,7 +10,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// sammlung: Dokument-ID "<art>-<tag>-<konto>"; TTL auf laeuft_ab (infra/server.tf).
+// sammlung: Dokument-ID "<art>-<tag>-<konto>"; TTL auf laeuft_ab (infra/diagnose.tf).
 const sammlung = "kontingente"
 
 // Wie lange ein Zähler nach seinem Tag liegen bleibt, bis Firestore ihn löscht

@@ -1,5 +1,5 @@
 # Review-Gedächtnis
-Letzter Lauf: 2026-11-03 @ c9cda64 (Fixes auf review/2026-11-03-2)   Laufzähler: 6
+Letzter Lauf: 2026-11-04 @ ddf0a02 (Fixes auf review/2026-11-04, nach develop gemergt)   Laufzähler: 7
 
 ## Beabsichtigte Architektur
 Vom Entwickler bestätigt am 2026-11-01.
@@ -31,8 +31,8 @@ Vom Entwickler bestätigt am 2026-11-01.
 ## Bereiche
 | Bereich | Pfade | Anforderungen/Doku | Tests | Zuletzt reviewt | Zustand |
 |---|---|---|---|---|---|
-| Kill-Switch | `infra/killswitch/` | anforderungen.md KO3, stand.md | `*_test.go` | 2026-11-03 (Lauf 6) | gut; 0 Dienste nur INFO (Frage) |
-| Infrastruktur | `infra/*.tf`, `infra/*.sh` | anforderungen.md 4.3, 5, 6; gcp-einrichtung.md; stand.md | `infra/tests/` (tofu test), `pruefe-regionen.sh` | 2026-11-03 (Lauf 6, Schritt 5) | gut nach Fixes; Fassungen 100 vs. 673 (Frage), Upload-Limit offen |
+| Kill-Switch | `infra/killswitch/` | anforderungen.md KO3, stand.md | `*_test.go` | 2026-11-04 (Lauf 7, WARN-Änderung) | gut; WARN ab 100 % ohne Dienst |
+| Infrastruktur | `infra/*.tf`, `infra/*.sh` | anforderungen.md 4.3, 5, 6; gcp-einrichtung.md; stand.md | `infra/tests/` (tofu test), `pruefe-regionen.sh` | 2026-11-04 (Lauf 7, Diagnose, 200 Fassungen, Pfeffer) | gut nach Fixes; `prevent_destroy` und Diagnose-IAM ungetestet (E1, E2), Upload-Limit offen |
 | Server: Anmeldung/Sitzung | `server/internal/{geraeteschluessel,anmeldung,sitzung,dienst/dienst.go}`, `proto/` | b1-entwurf.md, proto-Kommentare, anforderungen.md Kap. 11 | `*_test.go` | 2026-11-03 (Lauf 5, vollständig) | gut; Neuanmeldung nach Sperren (Frage), Streaming ungetestet |
 | Server: Speicher/Start | `server/internal/speicher`, `server/cmd/server` | b1-entwurf.md (Daten, Betrieb) | `vertrag_test.go` (auch Emulator), `main_test.go` | 2026-11-03 (Lauf 5) | gut |
 | Server: Datensicherung | `server/internal/datensicherung`, `dienst/datensicherung.go`, `datensicherung.proto` | b2b-entwurf.md, proto-Kommentare | `vertrag_test.go` (Arbeitsspeicher, fake-gcs), `datensicherung_test.go` | 2026-11-03 (Lauf 5, neu) | gut; begrenze vor Sitzungsprüfung (Frage) |
@@ -41,6 +41,8 @@ Vom Entwickler bestätigt am 2026-11-01.
 | Kotlin `protokoll` | `client/protokoll`, `proto/avlreminder/inhalt`, `proto/testvektoren` | b2-entwurf.md, b2b-entwurf.md, backup.proto | `*Test.kt`; Go prüft nur `geraetenachrichten.json` | 2026-11-03 (Lauf 6) | gut nach Fix; Regel „offenes Backup“ im Test-Client (E1) |
 | Kotlin `verbindung` | `client/verbindung` | b2b-entwurf.md, proto-Kommentare | `AdapterTest` (Connect-Nachbau) | 2026-11-03 (Lauf 5, neu) | gut; Sitzung noch im Test-Client |
 | Backup und Test-Client | `server/internal/dienst/schluessel.go`, Backup in `speicher`, `client/testclient`, `schluessel.proto` | b2-entwurf.md, proto-Kommentare | `schluessel_test.go`, `vertrag_test.go`, `EinrichtungTest`, `GoogleTest` | 2026-11-03 (Lauf 6, Teil) | gut; `Ablage` ohne Tests, Löschen braucht Tresor (E2) |
+| Server: Diagnose | `server/internal/{diagnose,kontingent}`, `dienst/diagnose.go`, `diagnose.proto` | diagnose-entwurf.md, formate.md, proto | `vertrag_test.go` (Arbeitsspeicher, Emulatoren), `diagnose_test.go` | 2026-11-04 (Lauf 7, neu) | gut nach Fixes (Freischaltung vor dem Lesen) |
+| Diagnose: Skript und Kotlin | `werkzeuge/diagnose-holen.sh`, `client/*/Diagnose*`, `ServerDiagnoseAblage`, `diagnose-senden` | diagnose-entwurf.md E-D-6 | `DiagnoseTest`, `AdapterTest`, `TestDiagnoseTest`; Skript nur von Hand | 2026-11-04 (Lauf 7, neu) | gut nach Fixes; Grenzwert `MAX_NUTZLAST` ungetestet (E3), Skript noch nie gegen echte Sendungen |
 | Kotlin-Build | `client/*.gradle.kts`, `client/gradle/`, CI-Job `kotlin` | b2-entwurf.md (CI) | CI | 2026-11-03 (Lauf 5) | gut; Prüfsummen aller Abhängigkeiten |
 
 ## Bekannte Schulden und beobachtete Drift
@@ -94,10 +96,18 @@ Vom Entwickler bestätigt am 2026-11-01.
     Mutations-Stichproben gefunden; bei neuen Tests einen Gegenwert wählen.
   - Doku: „Bekannte Grenzen“ wachsen in stand.md; erledigte Sätze aufräumen.
 
+- 2026-11-04 (Lauf 7), offen (Details und Empfehlungen E1–E4 in runs/2026-11-04.md):
+  - **Trend (Lauf 5, 6, 7): Test trifft die Grenze nicht** – diesmal Kotlin
+    `MAX_NUTZLAST` (E3). Und: Ein Schutz (Rolle, `prevent_destroy`, weitere
+    IAM-Bindung) wird nur positiv geprüft, nicht gegen „zusätzlich zu weit“.
+  - Pfeffer-Wiederherstellung ungetestet (Frage 3).
+
 ## Offene Fragen an den Entwickler
-Aus Lauf 6 (runs/2026-11-03-2.md, je mit Vorschlag): 1 ältere Fassungen 100 vs. 673
-(major); 2 Kill-Switch-WARN, wenn ab 100 % kein Dienst gefunden wird; 3 Pfeffer-Schutz,
-Upload-Limit und actAs vor echten Daten.
+Aus Lauf 7 (runs/2026-11-04.md, je mit Vorschlag): 1 gescheitertes Ablegen zählt zum
+Tageslimit; 2 Servermeldung bei `resource_exhausted` im Kotlin-Adapter; 3
+Pfeffer-Wiederherstellung einmal durchspielen.
+Lauf 6 erledigt: 200 Fassungen (stündlich), WARN ab 100 %, Pfeffer-Offline-Kopie;
+Upload-Limit und actAs bleiben vor echten Daten offen (stand.md).
 
 ## Getroffene Entscheidungen
 - 2026-11-01: Architekturbild bestätigt.

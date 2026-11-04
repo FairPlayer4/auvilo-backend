@@ -21,7 +21,8 @@ option java_package = "com.avlreminder.schnittstelle.v1";
 //   invalid_argument    nutzlast leer oder nicht gzip-komprimiert.
 //   resource_exhausted  nutzlast größer als 256 KiB oder Tageslimit erreicht
 //                       (die Meldung sagt, welches von beiden).
-//   unavailable         vorübergehend; später wiederholen.
+//   unavailable         vorübergehend; später wiederholen. Scheitert erst das
+//                       Ablegen, zählt die Sendung trotzdem zum Tageslimit.
 //   internal            Fehler im Server.
 service DiagnoseDienst {
   // Legt eine Diagnose des eigenen Kontos ab. Jede Sendung ist ein eigenes

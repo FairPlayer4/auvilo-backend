@@ -329,6 +329,15 @@ run "pfeffer_bleibt_wiederherstellbar" {
     error_message = "Das Secret des Pfeffers läuft ab."
   }
   assert {
+    # KRITISCH: Der Server darf den Pfeffer nur lesen, nicht löschen oder ändern.
+    condition     = google_secret_manager_secret_iam_member.server_pfeffer.role == "roles/secretmanager.secretAccessor"
+    error_message = "Der Server hat am Pfeffer mehr als Leserechte."
+  }
+  assert {
+    condition     = google_secret_manager_secret_iam_member.server_pfeffer.member == google_service_account.server.member
+    error_message = "Das Leserecht am Pfeffer hat nicht das Server-Konto."
+  }
+  assert {
     condition     = tostring(google_secret_manager_secret_version.pfeffer.secret_data_wo_version) == "1"
     error_message = "Der Pfeffer bekäme einen neuen Wert; alle Konten wären unauffindbar."
   }

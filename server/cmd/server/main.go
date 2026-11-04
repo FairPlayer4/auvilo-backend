@@ -19,6 +19,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"regexp"
 	"strings"
 	"syscall"
 	"time"
@@ -35,6 +36,10 @@ import (
 	"github.com/FairPlayer4/avlreminder-backend/server/internal/kontingent"
 	"github.com/FairPlayer4/avlreminder-backend/server/internal/speicher"
 )
+
+// kontoIDMuster beschreibt eine Konto-ID: 128 Bit Zufall als Hex in
+// Kleinbuchstaben (wie in infra/diagnose.tf geprüft).
+var kontoIDMuster = regexp.MustCompile(`^[0-9a-f]{32}$`)
 
 func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{ReplaceAttr: cloudLoggingFelder})))
@@ -91,6 +96,13 @@ func leseKonfiguration(getenv func(string) string) (konfiguration, error) {
 	}
 	// DIAGNOSE_KONTEN darf leer sein: Dann nimmt der Server keine Diagnosen an.
 	k.diagnoseKonten = liste(getenv("DIAGNOSE_KONTEN"))
+	// Ein Tippfehler (Großbuchstaben, ein Zeichen zu wenig) würde sonst still
+	// niemanden freischalten; lieber startet der Server nicht.
+	for _, id := range k.diagnoseKonten {
+		if !kontoIDMuster.MatchString(id) {
+			return k, fmt.Errorf("DIAGNOSE_KONTEN: %q ist keine Konto-ID (32 Zeichen 0-9a-f)", id)
+		}
+	}
 	k.clientIDs = liste(getenv("GOOGLE_CLIENT_IDS"))
 	if len(k.clientIDs) == 0 {
 		return k, errors.New("GOOGLE_CLIENT_IDS fehlt")
