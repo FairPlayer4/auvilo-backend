@@ -134,9 +134,20 @@ Terminal-Bereich der Claude-App, und den Wert nicht anzeigen lassen.
 ```bash
 gcloud secrets versions access 1 --secret=pfeffer --project=avlreminder-exp-1ef2 | clip
 ```
-In den Passwortmanager einfügen (Eintrag „avlreminder Pfeffer“), danach die
-Zwischenablage leeren (z. B. ein Leerzeichen kopieren). Der Wert besteht aus
-64 Buchstaben und Ziffern.
+Vorher prüfen, dass der Zwischenablageverlauf von Windows (Win+V) und seine
+Synchronisierung aus sind; sonst bleibt der Wert dort liegen. In den
+Passwortmanager einfügen (Eintrag „avlreminder Pfeffer“), danach die
+Zwischenablage leeren (z. B. ein Leerzeichen kopieren; bei eingeschaltetem
+Verlauf im Win+V-Menü „Alle löschen“). Der Wert besteht aus 64 Buchstaben und
+Ziffern.
+
+**Kopie prüfen** (Wert erneut aus dem Passwortmanager kopieren): Beide Zeilen
+müssen gleich sein. Der Hash ist unbedenklich, er verrät den Pfeffer nicht.
+```bash
+gcloud secrets versions access 1 --secret=pfeffer --project=avlreminder-exp-1ef2 | sha256sum
+powershell -NoProfile -Command Get-Clipboard | tr -d '\r\n' | sha256sum
+```
+Danach die Zwischenablage wieder leeren.
 
 **Version zerstört** (innerhalb von 30 Tagen; die Version steht auf „deaktiviert“):
 ```bash
