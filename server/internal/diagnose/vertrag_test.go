@@ -100,6 +100,15 @@ func liesBucket(t *testing.T, b *storage.BucketHandle) map[string][]byte {
 	}
 }
 
+// festerZufall lässt objektname bis zum Ende des Tests immer denselben Namen
+// liefern (Tests dieses Pakets laufen nicht parallel).
+func festerZufall(t *testing.T) {
+	t.Helper()
+	vorher := zufall
+	zufall = func(b []byte) (int, error) { clear(b); return len(b), nil }
+	t.Cleanup(func() { zufall = vorher })
+}
+
 var namensmuster = regexp.MustCompile(`^diagnose/([0-9a-f]+)/20261104T120000Z-[0-9a-f]{8}\.jsonl\.gz$`)
 
 func pruefeVertrag(t *testing.T, neu func(t *testing.T) pruefling) {
@@ -134,6 +143,23 @@ func pruefeVertrag(t *testing.T, neu func(t *testing.T) pruefling) {
 		inhalt := p.inhalt(t)
 		if n1 == n2 || string(inhalt[n1]) != "eins" || string(inhalt[n2]) != "zwei" {
 			t.Errorf("Namen %q und %q, abgelegt: %q", n1, n2, inhalt)
+		}
+	})
+
+	// KRITISCH: Trifft der Zufall doch einmal einen vorhandenen Namen, schlägt
+	// das Ablegen fehl, statt die ältere Sendung zu überschreiben.
+	t.Run("überschreibt bei gleichem Namen nicht, sondern meldet einen Fehler", func(t *testing.T) {
+		p := neu(t)
+		festerZufall(t)
+		n1, err := p.ablage.Ablegen(ctx, "a1", jetzt, []byte("eins"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := p.ablage.Ablegen(ctx, "a1", jetzt, []byte("zwei")); err == nil {
+			t.Error("kein Fehler, erwartet einen")
+		}
+		if inhalt := p.inhalt(t); len(inhalt) != 1 || string(inhalt[n1]) != "eins" {
+			t.Errorf("abgelegt: %q", inhalt)
 		}
 	})
 
