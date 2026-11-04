@@ -205,7 +205,8 @@ cd infra/killswitch && go test -cover ./...
 
 Server lokal gegen Firestore-Emulator und fake-gcs-server (beide vorher starten,
 Bucket `lokal` anlegen, siehe [entwicklungsumgebung.md](entwicklungsumgebung.md));
-`PFEFFER` ist ein Zufallswert nur für diesen Lauf:
+`PFEFFER` ist ein Zufallswert nur für diesen Lauf. Für `diagnose-senden` zusätzlich
+`DIAGNOSE_KONTEN=<eigene Konto-ID>` setzen, sonst ist niemand freigeschaltet:
 
 ```bash
 cd server && FIRESTORE_EMULATOR_HOST=localhost:8086 STORAGE_EMULATOR_HOST=localhost:4443 SICHERUNG_BUCKET=lokal DIAGNOSE_BUCKET=lokal PROJEKT=lokal GOOGLE_CLIENT_IDS=82416816442-vka4ve2no02681umqkn8b0rk37ri37qd.apps.googleusercontent.com PFEFFER=$(openssl rand -base64 32) go run ./cmd/server
