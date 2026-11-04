@@ -4,6 +4,11 @@
 > [anforderungen.md](anforderungen.md), Kap. 11). Anlass: Die App wird
 > komplexer und hat kleinere Fehler; Kevin möchte Diagnosedaten direkt aus der App
 > nach GCP schicken, damit Claude sie lesen kann. EU, automatische Löschung.
+>
+> **Umgesetzt am 2026-11-04:** Server (`DiagnoseDienst.DiagnoseSenden`, Tageszähler
+> `server/internal/kontingent`), Infrastruktur (`infra/diagnose.tf`) und Skript
+> (`werkzeuge/diagnose-holen.sh`). Das Format steht in [formate.md](formate.md).
+> Die App (Teil 3) fehlt noch.
 
 ## Ziel
 - Die App sammelt **technische Ereignisse ohne Inhalte** in einem Ringpuffer auf
@@ -37,13 +42,13 @@ Eine gzip-Datei mit JSON-Zeilen. Die erste Zeile beschreibt die Sendung, jede
 weitere ein Ereignis:
 
 ```json
-{"art":"kopf","app":"1.8.0 (42)","variante":"cloud","android":35,"modell":"Pixel 8","schema":7,"anlass":"knopf"}
+{"art":"kopf","format":"avlreminder/diagnose/v1","app":"1.8.0 (42)","variante":"cloud","android":35,"modell":"Pixel 8","schema":7,"anlass":"knopf"}
 {"zeit":"2026-11-04T09:12:03.120Z","stufe":"WARN","bereich":"sicherung","ereignis":"hochladen_fehlgeschlagen","felder":{"versuch":3,"code":"unavailable"}}
 {"zeit":"2026-11-04T09:12:04.002Z","stufe":"ERROR","bereich":"erinnerung","ereignis":"alarm_nicht_gesetzt","ausnahme":{"klasse":"java.lang.SecurityException","stapel":["…AlarmPlaner.setze(AlarmPlaner.kt:58)","…"]}}
 ```
 
-`code` ist ein Wert aus einer Aufzählung, keine freie Zeichenkette. Das Format
-kommt mit der Umsetzung in [formate.md](formate.md).
+`code` ist ein Wert aus einer Aufzählung, keine freie Zeichenkette. Maßgeblich ist
+[formate.md](formate.md).
 
 ## App (eigener kurzer Entwurf im App-Repo)
 - Logger-API in der App, z. B. `diagnose.warn(Bereich.SICHERUNG, Ereignis.HOCHLADEN_FEHLGESCHLAGEN, "versuch" to 3)`;
@@ -57,7 +62,7 @@ kommt mit der Umsetzung in [formate.md](formate.md).
   Puffer im Debug-Menü als Datei teilen (ohne Server).
 
 ## Server und Infrastruktur
-- `proto/avlreminder/v1/diagnose.proto`: `DiagnoseDienst.Senden(SendenAnfrage{bytes nutzlast})`.
+- `proto/avlreminder/v1/diagnose.proto`: `DiagnoseDienst.DiagnoseSenden(DiagnoseSendenRequest{bytes nutzlast})`.
 - `server/internal/dienst/diagnose.go` mit Ablage-Schnittstelle (Arbeitsspeicher für
   Tests, Cloud Storage); tabellengetriebene Tests: nicht freigeschaltet, zu groß,
   kein gzip, Limit erreicht, ohne Sitzung – je mit Ablehnungsfall.

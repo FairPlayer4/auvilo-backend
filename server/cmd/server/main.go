@@ -6,7 +6,7 @@
 // "lokal" anlegen, siehe docs/entwicklungsumgebung.md):
 //
 //	FIRESTORE_EMULATOR_HOST=localhost:8086 STORAGE_EMULATOR_HOST=localhost:4443 \
-//	PROJEKT=lokal SICHERUNG_BUCKET=lokal \
+//	PROJEKT=lokal SICHERUNG_BUCKET=lokal DIAGNOSE_BUCKET=lokal \
 //	GOOGLE_CLIENT_IDS=<client-id> PFEFFER=<base64, ≥ 32 Bytes> go run ./cmd/server
 package main
 
@@ -30,7 +30,9 @@ import (
 
 	"github.com/FairPlayer4/avlreminder-backend/server/internal/anmeldung"
 	"github.com/FairPlayer4/avlreminder-backend/server/internal/datensicherung"
+	"github.com/FairPlayer4/avlreminder-backend/server/internal/diagnose"
 	"github.com/FairPlayer4/avlreminder-backend/server/internal/dienst"
+	"github.com/FairPlayer4/avlreminder-backend/server/internal/kontingent"
 	"github.com/FairPlayer4/avlreminder-backend/server/internal/speicher"
 )
 
@@ -58,6 +60,8 @@ func cloudLoggingFelder(_ []string, a slog.Attr) slog.Attr {
 type konfiguration struct {
 	projekt         string   // PROJEKT
 	sicherungBucket string   // SICHERUNG_BUCKET: Bucket für die Datensicherungen
+	diagnoseBucket  string   // DIAGNOSE_BUCKET: Bucket für Diagnosen aus der App
+	diagnoseKonten  []string // DIAGNOSE_KONTEN: freigeschaltete Konto-IDs, durch Komma getrennt; leer = niemand
 	clientIDs       []string // GOOGLE_CLIENT_IDS, durch Komma getrennt
 	pfefferSecret   string   // PFEFFER_SECRET: Secret-Manager-Version (Betrieb)
 	pfeffer         []byte   // PFEFFER: base64 (nur lokal)
@@ -69,6 +73,7 @@ func leseKonfiguration(getenv func(string) string) (konfiguration, error) {
 	k := konfiguration{
 		projekt:         getenv("PROJEKT"),
 		sicherungBucket: getenv("SICHERUNG_BUCKET"),
+		diagnoseBucket:  getenv("DIAGNOSE_BUCKET"),
 		pfefferSecret:   getenv("PFEFFER_SECRET"),
 		port:            getenv("PORT"),
 	}
@@ -81,11 +86,12 @@ func leseKonfiguration(getenv func(string) string) (konfiguration, error) {
 	if k.sicherungBucket == "" {
 		return k, errors.New("SICHERUNG_BUCKET fehlt")
 	}
-	for _, id := range strings.Split(getenv("GOOGLE_CLIENT_IDS"), ",") {
-		if id = strings.TrimSpace(id); id != "" {
-			k.clientIDs = append(k.clientIDs, id)
-		}
+	if k.diagnoseBucket == "" {
+		return k, errors.New("DIAGNOSE_BUCKET fehlt")
 	}
+	// DIAGNOSE_KONTEN darf leer sein: Dann nimmt der Server keine Diagnosen an.
+	k.diagnoseKonten = liste(getenv("DIAGNOSE_KONTEN"))
+	k.clientIDs = liste(getenv("GOOGLE_CLIENT_IDS"))
 	if len(k.clientIDs) == 0 {
 		return k, errors.New("GOOGLE_CLIENT_IDS fehlt")
 	}
@@ -104,6 +110,28 @@ func leseKonfiguration(getenv func(string) string) (konfiguration, error) {
 		return k, errors.New("PFEFFER_SECRET (oder lokal PFEFFER) fehlt")
 	}
 	return k, nil
+}
+
+// liste zerlegt eine durch Komma getrennte Liste und lässt leere Einträge weg.
+func liste(s string) []string {
+	var l []string
+	for _, e := range strings.Split(s, ",") {
+		if e = strings.TrimSpace(e); e != "" {
+			l = append(l, e)
+		}
+	}
+	return l
+}
+
+// erlaubtFuer liefert die Prüfung, ob ein Konto Diagnosen senden darf.
+//
+// KRITISCH: Nur genau die genannten Konten (E-D-3), keine Teilstrings.
+func erlaubtFuer(konten []string) func(kontoID string) bool {
+	menge := make(map[string]bool, len(konten))
+	for _, k := range konten {
+		menge[k] = true
+	}
+	return func(kontoID string) bool { return menge[kontoID] }
 }
 
 func starte() error {
@@ -146,7 +174,11 @@ func starte() error {
 		Pruefer:     pruefer,
 		Speicher:    speicher.NeuerFirestore(fs),
 		Sicherungen: datensicherung.NeuesCloudStorage(gcs, k.sicherungBucket),
+		Diagnosen:   diagnose.NeuesCloudStorage(gcs, k.diagnoseBucket),
+		Kontingente: kontingent.NeuerFirestore(fs),
 		Pfeffer:     k.pfeffer,
+		// Freigeschaltet werden Konten, nicht Geräte (E-D-3).
+		DiagnoseErlaubt: erlaubtFuer(k.diagnoseKonten),
 	})
 	if err != nil {
 		return err
@@ -169,7 +201,7 @@ func starte() error {
 
 	fehler := make(chan error, 1)
 	go func() { fehler <- srv.ListenAndServe() }() // "go": läuft parallel weiter
-	slog.Info("Server gestartet", "port", k.port, "projekt", k.projekt)
+	slog.Info("Server gestartet", "port", k.port, "projekt", k.projekt, "diagnoseKonten", len(k.diagnoseKonten))
 
 	// select wartet auf das, was zuerst passiert: Fehler beim Start oder Signal.
 	select {

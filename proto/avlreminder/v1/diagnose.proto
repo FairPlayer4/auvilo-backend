@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+package avlreminder.v1;
+
+option java_multiple_files = true;
+option java_package = "com.avlreminder.schnittstelle.v1";
+
+// Diagnose-Log aus der App (docs/diagnose-entwurf.md).
+//
+// Anders als die Datensicherung ist eine Diagnose **nicht** verschlüsselt:
+// Kevin und Claude sollen sie lesen können. Darum darf sie per Konstruktion keine
+// Inhalte enthalten (feste Ereignisnamen, typisierte Felder, Stapel ohne
+// Meldungstext; Format in docs/formate.md). Der Server liest sie nicht, er prüft
+// nur Größe und gzip-Kopf. Nach 14 Tagen wird sie gelöscht.
+//
+// Senden dürfen nur freigeschaltete Konten; jedes Konto höchstens 10-mal am Tag.
+//
+// Fehlercodes (Connect):
+//   unauthenticated     Sitzung fehlt, ist ungültig oder abgelaufen.
+//   permission_denied   Das Konto ist für Diagnosen nicht freigeschaltet.
+//   invalid_argument    nutzlast leer oder nicht gzip-komprimiert.
+//   resource_exhausted  nutzlast größer als 256 KiB oder Tageslimit erreicht
+//                       (die Meldung sagt, welches von beiden).
+//   unavailable         vorübergehend; später wiederholen.
+//   internal            Fehler im Server.
+service DiagnoseDienst {
+  // Legt eine Diagnose des eigenen Kontos ab. Jede Sendung ist ein eigenes
+  // Objekt; nichts wird überschrieben.
+  rpc DiagnoseSenden(DiagnoseSendenRequest) returns (DiagnoseSendenResponse);
+}
+
+message DiagnoseSendenRequest {
+  // gzip-komprimierte JSON-Zeilen (erste Zeile: Kopf der Sendung), höchstens
+  // 256 KiB komprimiert.
+  bytes nutzlast = 1;
+}
+
+message DiagnoseSendenResponse {}

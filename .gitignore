@@ -37,3 +37,6 @@ stand-*.json
 
 # Gebaute Archive
 .build/
+
+# Diagnosen aus der App (werkzeuge/diagnose-holen.sh)
+.diagnose/

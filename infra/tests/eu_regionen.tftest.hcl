@@ -137,6 +137,10 @@ run "alle_standorte_liegen_in_der_eu" {
     condition     = upper(google_storage_bucket.datensicherung.location) == upper(var.region)
     error_message = "Der Bucket der Datensicherungen liegt nicht in var.region."
   }
+  assert {
+    condition     = upper(google_storage_bucket.diagnose.location) == upper(var.region)
+    error_message = "Der Bucket der Diagnosen liegt nicht in var.region."
+  }
 }
 
 # Eine andere EU-Region geht durch, und alles zieht mit (nicht nur die Vorgabe).
@@ -154,6 +158,10 @@ run "nimmt_andere_eu_region_an" {
   assert {
     condition     = upper(google_storage_bucket.datensicherung.location) == "EUROPE-WEST10"
     error_message = "Der Bucket der Datensicherungen folgt var.region nicht."
+  }
+  assert {
+    condition     = upper(google_storage_bucket.diagnose.location) == "EUROPE-WEST10"
+    error_message = "Der Bucket der Diagnosen folgt var.region nicht."
   }
 }
 
@@ -324,4 +332,74 @@ run "pfeffer_bleibt_wiederherstellbar" {
     condition     = tostring(google_secret_manager_secret_version.pfeffer.secret_data_wo_version) == "1"
     error_message = "Der Pfeffer bekäme einen neuen Wert; alle Konten wären unauffindbar."
   }
+}
+
+# Diagnosen (docs/diagnose-entwurf.md): nie öffentlich, nach 14 Tagen weg, der
+# Server darf nur anlegen, freigeschaltet ist ohne Eintrag niemand.
+run "diagnosen_sind_geschuetzt_und_kurzlebig" {
+  command = plan
+
+  assert {
+    condition     = google_storage_bucket.diagnose.public_access_prevention == "enforced" && google_storage_bucket.diagnose.uniform_bucket_level_access
+    error_message = "Der Bucket der Diagnosen könnte öffentlich werden."
+  }
+  assert {
+    # KRITISCH: genau eine Regel, die alles nach 14 Tagen löscht (E-D-5).
+    condition     = length(google_storage_bucket.diagnose.lifecycle_rule) == 1 && one(google_storage_bucket.diagnose.lifecycle_rule[0].action).type == "Delete" && one(google_storage_bucket.diagnose.lifecycle_rule[0].condition).age == 14
+    error_message = "Diagnosen werden nicht nach 14 Tagen gelöscht."
+  }
+  assert {
+    condition     = google_storage_bucket.diagnose.soft_delete_policy[0].retention_duration_seconds == 0
+    error_message = "Gelöschte Diagnosen bleiben im Soft Delete liegen."
+  }
+  assert {
+    # objectCreator: anlegen ja, lesen, überschreiben, löschen nein.
+    condition     = google_storage_bucket_iam_member.server_diagnose.member == "serviceAccount:server@test-projekt.iam.gserviceaccount.com" && google_storage_bucket_iam_member.server_diagnose.role == "roles/storage.objectCreator"
+    error_message = "Das Server-Konto hat am Bucket der Diagnosen andere Rechte als nur Anlegen."
+  }
+  assert {
+    condition     = contains([for e in google_cloud_run_v2_service.server.template[0].containers[0].env : e.value if e.name == "DIAGNOSE_BUCKET"], "test-projekt-diagnose")
+    error_message = "Der Server kennt den Bucket der Diagnosen nicht."
+  }
+  assert {
+    condition     = [for e in google_cloud_run_v2_service.server.template[0].containers[0].env : e.value if e.name == "DIAGNOSE_KONTEN"] == [""]
+    error_message = "Ohne Eintrag in diagnose_konten ist jemand freigeschaltet."
+  }
+  assert {
+    condition     = google_firestore_field.kontingente_ttl.collection == "kontingente" && google_firestore_field.kontingente_ttl.field == "laeuft_ab" && length(google_firestore_field.kontingente_ttl.ttl_config) == 1
+    error_message = "Firestore löscht die Tageszähler nicht."
+  }
+}
+
+run "gibt_freigeschaltete_konten_an_den_server" {
+  command = plan
+
+  variables {
+    diagnose_konten = ["0123456789abcdef0123456789abcdef", "fedcba9876543210fedcba9876543210"]
+  }
+
+  assert {
+    condition     = [for e in google_cloud_run_v2_service.server.template[0].containers[0].env : e.value if e.name == "DIAGNOSE_KONTEN"] == ["0123456789abcdef0123456789abcdef,fedcba9876543210fedcba9876543210"]
+    error_message = "Der Server bekommt die freigeschalteten Konten nicht."
+  }
+}
+
+run "lehnt_konto_id_mit_tippfehler_ab" {
+  command = plan
+
+  variables {
+    diagnose_konten = ["0123456789ABCDEF0123456789abcdef"]
+  }
+
+  expect_failures = [var.diagnose_konten]
+}
+
+run "lehnt_zu_kurze_konto_id_ab" {
+  command = plan
+
+  variables {
+    diagnose_konten = ["0123456789abcdef"]
+  }
+
+  expect_failures = [var.diagnose_konten]
 }

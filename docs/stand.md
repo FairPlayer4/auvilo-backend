@@ -1,6 +1,6 @@
 # Stand und nächste Schritte
 
-Stand: 2026-11-03. Bei jedem größeren Schritt aktualisieren.
+Stand: 2026-11-04. Bei jedem größeren Schritt aktualisieren.
 
 ## In GCP (Projekt `avlreminder-exp-1ef2`, Region `europe-west1`)
 Etappe **B0** ist angelegt (OpenTofu, `infra/`):
@@ -179,7 +179,11 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
    Pfeffer: Offline-Kopie zu Beginn der Sicherheitsphase (Ablauf in
    [gcp-einrichtung.md](gcp-einrichtung.md)), tofu-Test für den Schutz.
    Diagnose-Log aus der App: Entwurf [diagnose-entwurf.md](diagnose-entwurf.md)
-   (bestätigt am 2026-11-04; Server und Skript vor Schritt 7).
+   (bestätigt am 2026-11-04). Server, `infra/diagnose.tf` (Bucket `…-diagnose`,
+   14 Tage, Server darf nur anlegen; Firestore-TTL der Tageszähler) und
+   `werkzeuge/diagnose-holen.sh` am 2026-11-04 umgesetzt, **noch nicht angewendet
+   und nicht deployt**. Danach Kevins Konto-ID in `diagnose_konten`
+   (`infra/werte.auto.tfvars`) eintragen und in der Cloud testen.
    **Weiter mit:** Upload-Limit und Sperren ohne actAs vor echten Daten; Schritt 7 (App-Einbindung, eigener Entwurf im App-Repo). Offen aus
    Lauf 5: Empfehlungen E5–E7; aus Lauf 6: E1–E6.
 5. Für den B3-Entwurf aus Lauf 4: A2 (Mitgliedschaft: Server-Liste oder signiertes
@@ -200,7 +204,7 @@ Bucket `lokal` anlegen, siehe [entwicklungsumgebung.md](entwicklungsumgebung.md)
 `PFEFFER` ist ein Zufallswert nur für diesen Lauf:
 
 ```bash
-cd server && FIRESTORE_EMULATOR_HOST=localhost:8086 STORAGE_EMULATOR_HOST=localhost:4443 SICHERUNG_BUCKET=lokal PROJEKT=lokal GOOGLE_CLIENT_IDS=82416816442-vka4ve2no02681umqkn8b0rk37ri37qd.apps.googleusercontent.com PFEFFER=$(openssl rand -base64 32) go run ./cmd/server
+cd server && FIRESTORE_EMULATOR_HOST=localhost:8086 STORAGE_EMULATOR_HOST=localhost:4443 SICHERUNG_BUCKET=lokal DIAGNOSE_BUCKET=lokal PROJEKT=lokal GOOGLE_CLIENT_IDS=82416816442-vka4ve2no02681umqkn8b0rk37ri37qd.apps.googleusercontent.com PFEFFER=$(openssl rand -base64 32) go run ./cmd/server
 ```
 
 Test-Client (Kotlin, B2) bauen, dann als Gerät anmelden und Schlüssel einrichten

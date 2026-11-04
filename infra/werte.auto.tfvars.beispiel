@@ -2,3 +2,6 @@
 projekt        = "avlreminder-exp-xxxx"
 rechnungskonto = "000000-000000-000000"
 alarm_email    = "name@example.com"
+
+# Konten, die Diagnosen senden dürfen (32 Zeichen 0-9a-f); leer = niemand.
+# diagnose_konten = ["0123456789abcdef0123456789abcdef"]
