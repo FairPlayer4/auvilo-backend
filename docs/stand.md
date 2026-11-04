@@ -155,7 +155,7 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
    `tofu apply` in Schritt 5), Grenzen und „Vor echten Daten“ ergänzt.
    **Schritt 5 (Infrastruktur), Konfiguration am 2026-11-03:** Bucket
    `…-datensicherung` (`infra/datensicherung.tf`: Versionierung, ältere Fassungen
-   7 Tage/höchstens 100, ohne Soft Delete, nur Server-Konto mit `objectUser`),
+   7 Tage/höchstens 200 (am 2026-11-04 von 100 erhöht), ohne Soft Delete, nur Server-Konto mit `objectUser`),
    `SICHERUNG_BUCKET` und `GOMEMLIMIT=192MiB` am Server (Parallelität bleibt 80,
    Begründung in `server.tf`), Build-Konto liest nur Quellen und `gcf-v2-*` und
    schreibt nur ins Repo `funktionen`, Absenz-Alarm „Kill-Switch wird nicht mehr
@@ -171,8 +171,14 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
    Hochladen ab; `sicherung-loeschen` entfernt alle Fassungen, danach „keine
    Datensicherung“ und Neuanlage. Ohne Sitzung antwortet der Dienst
    `unauthenticated`. Server-Log nur Gerät, Bytes, Version.
-   **Weiter mit:** Schritt 6 (Review-Lauf), danach Schritt 7 (App-Einbindung, eigener
-   Entwurf im App-Repo). Offen aus Lauf 5: Empfehlungen E5–E7.
+   **Schritt 6 (Review Lauf 6) am 2026-11-03** (`.review/runs/2026-11-03-2.md`).
+   Am 2026-11-04 entschieden und umgesetzt: App sichert höchstens stündlich plus
+   manuell, ältere Fassungen höchstens 200; Kill-Switch warnt (Mail), wenn ab 100 %
+   kein Dienst gefunden wird. Beides wirkt erst nach `tofu apply` (Bucket-Regel und
+   Neubau des Kill-Switch aus dem lokalen Stand).
+   **Weiter mit:** Vorschläge zu Pfeffer, Upload-Limit und actAs vor echten Daten
+   entscheiden; Schritt 7 (App-Einbindung, eigener Entwurf im App-Repo). Offen aus
+   Lauf 5: Empfehlungen E5–E7; aus Lauf 6: E1–E6.
 5. Für den B3-Entwurf aus Lauf 4: A2 (Mitgliedschaft: Server-Liste oder signiertes
    Log), A4 (Umschläge an Kontext binden, Keyset-Typen prüfen), A5 (Speicher und
    Dienste aufteilen; Anfang in B2b). A3 (Formate festschreiben) kommt in B2b.

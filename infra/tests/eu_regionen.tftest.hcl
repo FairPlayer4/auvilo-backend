@@ -158,7 +158,7 @@ run "nimmt_andere_eu_region_an" {
 }
 
 # Datensicherungen (E-B2b-4): nie öffentlich, ältere Fassungen 7 Tage und
-# höchstens 100, Zugriff nur für das Server-Konto.
+# höchstens 200, Zugriff nur für das Server-Konto.
 run "datensicherung_ist_geschuetzt_und_begrenzt" {
   command = plan
 
@@ -182,9 +182,9 @@ run "datensicherung_ist_geschuetzt_und_begrenzt" {
     error_message = "Ältere Fassungen werden nicht nach 7 Tagen gelöscht."
   }
   assert {
-    # 101 neuere = die aktuelle und 100 ältere Fassungen bleiben.
-    condition     = anytrue([for r in google_storage_bucket.datensicherung.lifecycle_rule : one(r.condition).num_newer_versions == 101 && coalesce(one(r.condition).days_since_noncurrent_time, 0) == 0])
-    error_message = "Es bleiben nicht höchstens 100 ältere Fassungen."
+    # 201 neuere = die aktuelle und 200 ältere Fassungen bleiben.
+    condition     = anytrue([for r in google_storage_bucket.datensicherung.lifecycle_rule : one(r.condition).num_newer_versions == 201 && coalesce(one(r.condition).days_since_noncurrent_time, 0) == 0])
+    error_message = "Es bleiben nicht höchstens 200 ältere Fassungen."
   }
   assert {
     condition     = google_storage_bucket.datensicherung.soft_delete_policy[0].retention_duration_seconds == 0

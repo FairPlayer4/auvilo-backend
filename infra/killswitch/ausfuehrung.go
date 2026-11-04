@@ -18,8 +18,8 @@ var sperrZeitlimit = 60 * time.Second
 // "implements".
 type Plattform interface {
 	// DiensteSperren sperrt alle Cloud-Run-Dienste für Anfragen von außen und
-	// gibt zurück, wie viele Dienste geändert wurden.
-	DiensteSperren(ctx context.Context) (int, error)
+	// gibt zurück, wie viele Dienste es gefunden und geändert hat.
+	DiensteSperren(ctx context.Context) (Sperrung, error)
 	// AbrechnungTrennen trennt das Projekt vom Rechnungskonto.
 	AbrechnungTrennen(ctx context.Context) error
 }
@@ -27,7 +27,8 @@ type Plattform interface {
 // Ergebnis beschreibt, was tatsächlich passiert ist (fürs Log).
 type Ergebnis struct {
 	Aktion             Aktion
-	GesperrteDienste   int
+	GefundeneDienste   int // ohne den Kill-Switch selbst, auch schon gesperrte
+	GesperrteDienste   int // jetzt neu gesperrt
 	AbrechnungGetrennt bool
 }
 
@@ -44,8 +45,8 @@ func Ausfuehren(ctx context.Context, a Aktion, p Plattform) (Ergebnis, error) {
 		return erg, nil
 
 	case DiensteSperren:
-		n, err := p.DiensteSperren(ctx)
-		erg.GesperrteDienste = n
+		s, err := p.DiensteSperren(ctx)
+		erg.GefundeneDienste, erg.GesperrteDienste = s.Gefunden, s.Gesperrt
 		if err != nil {
 			return erg, fmt.Errorf("Dienste sperren: %w", err)
 		}
@@ -53,9 +54,9 @@ func Ausfuehren(ctx context.Context, a Aktion, p Plattform) (Ergebnis, error) {
 
 	case AbrechnungTrennen:
 		sperrCtx, abbrechen := context.WithTimeout(ctx, sperrZeitlimit)
-		n, sperrFehler := p.DiensteSperren(sperrCtx)
+		s, sperrFehler := p.DiensteSperren(sperrCtx)
 		abbrechen() // gibt den Timer frei; ctx fürs Trennen bleibt unberührt
-		erg.GesperrteDienste = n
+		erg.GefundeneDienste, erg.GesperrteDienste = s.Gefunden, s.Gesperrt
 		if err := p.AbrechnungTrennen(ctx); err != nil {
 			trennFehler := fmt.Errorf("Abrechnung trennen: %w", err)
 			if sperrFehler != nil {

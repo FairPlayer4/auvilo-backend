@@ -11,7 +11,7 @@ import (
 // attrappe ersetzt GCP in Tests und merkt sich, was in welcher Reihenfolge
 // aufgerufen wurde.
 type attrappe struct {
-	dienste     int
+	sperrung    Sperrung
 	sperrFehler error
 	trennFehler error
 	haengt      bool  // Sperren wartet, bis sein Zeitlimit abläuft
@@ -19,13 +19,13 @@ type attrappe struct {
 	aufrufe     []string
 }
 
-func (a *attrappe) DiensteSperren(ctx context.Context) (int, error) {
+func (a *attrappe) DiensteSperren(ctx context.Context) (Sperrung, error) {
 	a.aufrufe = append(a.aufrufe, "sperren")
 	if a.haengt {
 		<-ctx.Done() // wartet, bis das Zeitlimit abläuft
-		return 0, ctx.Err()
+		return Sperrung{}, ctx.Err()
 	}
-	return a.dienste, a.sperrFehler
+	return a.sperrung, a.sperrFehler
 }
 
 func (a *attrappe) AbrechnungTrennen(ctx context.Context) error {
@@ -48,10 +48,10 @@ func TestAusfuehren(t *testing.T) {
 		wantErgTrenn bool
 		wantUrsachen []error // diese Fehler müssen per errors.Is im Ergebnis stecken
 	}{
-		{"nichts: keine Eingriffe", Nichts, attrappe{dienste: 2}, nil, false, nil},
-		{"sperren: nur Dienste sperren, nicht trennen", DiensteSperren, attrappe{dienste: 2}, []string{"sperren"}, false, nil},
+		{"nichts: keine Eingriffe", Nichts, attrappe{sperrung: Sperrung{Gefunden: 2, Gesperrt: 2}}, nil, false, nil},
+		{"sperren: nur Dienste sperren, nicht trennen", DiensteSperren, attrappe{sperrung: Sperrung{Gefunden: 2, Gesperrt: 2}}, []string{"sperren"}, false, nil},
 		{"sperren: Fehler wird gemeldet", DiensteSperren, attrappe{sperrFehler: sperrKaputt}, []string{"sperren"}, false, []error{sperrKaputt}},
-		{"trennen: sperrt zuerst und trennt dann", AbrechnungTrennen, attrappe{dienste: 1}, []string{"sperren", "trennen"}, true, nil},
+		{"trennen: sperrt zuerst und trennt dann", AbrechnungTrennen, attrappe{sperrung: Sperrung{Gefunden: 1, Gesperrt: 1}}, []string{"sperren", "trennen"}, true, nil},
 		{"trennen: trennt auch, wenn Sperren scheitert", AbrechnungTrennen, attrappe{sperrFehler: sperrKaputt}, []string{"sperren", "trennen"}, true, []error{sperrKaputt}},
 		{"trennen: Fehler beim Trennen wird gemeldet", AbrechnungTrennen, attrappe{trennFehler: trennKaputt}, []string{"sperren", "trennen"}, false, []error{trennKaputt}},
 		{"trennen: scheitern beide, werden beide Fehler gemeldet", AbrechnungTrennen, attrappe{sperrFehler: sperrKaputt, trennFehler: trennKaputt}, []string{"sperren", "trennen"}, false, []error{sperrKaputt, trennKaputt}},
@@ -76,12 +76,12 @@ func TestAusfuehren(t *testing.T) {
 			if erg.AbrechnungGetrennt != tt.wantErgTrenn {
 				t.Errorf("Ergebnis getrennt = %v, erwartet %v", erg.AbrechnungGetrennt, tt.wantErgTrenn)
 			}
-			wantDienste := 0
+			var want Sperrung
 			if p.gesperrt() {
-				wantDienste = tt.p.dienste
+				want = tt.p.sperrung
 			}
-			if erg.GesperrteDienste != wantDienste {
-				t.Errorf("gesperrte Dienste = %d, erwartet %d", erg.GesperrteDienste, wantDienste)
+			if got := (Sperrung{erg.GefundeneDienste, erg.GesperrteDienste}); got != want {
+				t.Errorf("Dienste im Ergebnis = %+v, erwartet %+v", got, want)
 			}
 		})
 	}

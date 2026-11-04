@@ -85,8 +85,11 @@ func Verarbeite(ctx context.Context, daten []byte, s Schwellen, p Plattform) (Er
 	stufe := slog.LevelInfo
 	if err != nil {
 		stufe = slog.LevelError
-	} else if erg.GesperrteDienste > 0 || erg.AbrechnungGetrennt {
-		// Ein Eingriff soll auffallen (WARN löst die Alarm-Mail aus, alarm.tf).
+	} else if erg.GesperrteDienste > 0 || erg.AbrechnungGetrennt ||
+		(erg.Aktion != Nichts && erg.GefundeneDienste == 0) {
+		// KRITISCH: Ein Eingriff soll auffallen (WARN löst die Alarm-Mail aus,
+		// alarm.tf). Ebenso, wenn gesperrt werden soll, aber kein Dienst da ist:
+		// Dann schützt der Kill-Switch nichts (z. B. falsche REGION).
 		// Budget meldet sich mehrmals am Tag; sind schon alle Dienste gesperrt,
 		// bleibt es bei INFO, damit nicht jede Meldung eine Mail schickt.
 		stufe = slog.LevelWarn
@@ -97,6 +100,7 @@ func Verarbeite(ctx context.Context, daten []byte, s Schwellen, p Plattform) (Er
 		"betrag", m.BudgetAmount,
 		"waehrung", m.CurrencyCode,
 		"aktion", erg.Aktion.String(),
+		"gefundeneDienste", erg.GefundeneDienste,
 		"gesperrteDienste", erg.GesperrteDienste,
 		"abrechnungGetrennt", erg.AbrechnungGetrennt,
 		"fehler", fehlerText(err),
