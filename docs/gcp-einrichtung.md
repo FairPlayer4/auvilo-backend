@@ -120,6 +120,48 @@ Hinweise:
 - Für die Android-App kommen später ein Web- und ein Android-Client dazu (Etappe
   mit App-Anbindung); der Server akzeptiert dann mehrere Client-IDs.
 
+### Vor echten Daten: Pfeffer offline sichern [Kevin, allein]
+Mit dem Pfeffer bildet der Server aus der Google-Konto-ID die Konto-ID. Ohne ihn
+findet kein Gerät sein Konto, sein Schlüssel-Backup und seine Datensicherung wieder.
+OpenTofu schützt ihn vor `tofu destroy`; eine zerstörte Version bleibt 30 Tage
+wiederherstellbar. **Nicht** geschützt ist das Löschen des ganzen Secrets (Konsole,
+gcloud): Das geht sofort und endgültig. Dagegen hilft nur diese Kopie.
+
+Claude sieht den Pfeffer nie. Darum in einem **eigenen** Terminal ausführen, nicht im
+Terminal-Bereich der Claude-App, und den Wert nicht anzeigen lassen.
+
+**Sichern** (einmal, zu Beginn der Sicherheitsphase; Git Bash):
+```bash
+gcloud secrets versions access 1 --secret=pfeffer --project=avlreminder-exp-1ef2 | clip
+```
+In den Passwortmanager einfügen (Eintrag „avlreminder Pfeffer“), danach die
+Zwischenablage leeren (z. B. ein Leerzeichen kopieren). Der Wert besteht aus
+64 Buchstaben und Ziffern.
+
+**Version zerstört** (innerhalb von 30 Tagen; die Version steht auf „deaktiviert“):
+```bash
+gcloud secrets versions enable 1 --secret=pfeffer --project=avlreminder-exp-1ef2
+```
+
+**Secret gelöscht** – Achtung: vorher **kein** `tofu apply`, das legte einen neuen,
+zufälligen Pfeffer an.
+1. Secret neu anlegen und den Wert aus der Zwischenablage hochladen (Git Bash,
+   Wert vorher aus dem Passwortmanager kopieren):
+   ```bash
+   gcloud secrets create pfeffer --project=avlreminder-exp-1ef2 --replication-policy=user-managed --locations=europe-west1 --version-destroy-ttl=2592000s
+   powershell -NoProfile -Command Get-Clipboard | tr -d '\r\n' | gcloud secrets versions add pfeffer --project=avlreminder-exp-1ef2 --data-file=-
+   ```
+2. OpenTofu den neuen Stand übernehmen lassen (im Ordner `infra/`):
+   ```bash
+   tofu state rm google_secret_manager_secret_version.pfeffer google_secret_manager_secret.pfeffer
+   tofu import google_secret_manager_secret.pfeffer projects/avlreminder-exp-1ef2/secrets/pfeffer
+   tofu import google_secret_manager_secret_version.pfeffer projects/avlreminder-exp-1ef2/secrets/pfeffer/versions/1
+   ```
+   Danach darf `tofu plan` keine neue Version des Pfeffers zeigen; die
+   Zugriffsrechte des Servers legt `tofu apply` wieder an.
+3. Prüfen: Ein vorhandenes Gerät meldet sich an und findet seine Datensicherung.
+   Findet es keine, ist der Wert falsch (z. B. mit Zeilenumbruch hochgeladen).
+
 ### B4: Firebase für Push [Kevin, mit Anleitung]
 - console.firebase.google.com → *Projekt hinzufügen* → **bestehendes GCP-Projekt**
   wählen. Google Analytics **ausschalten**.

@@ -159,10 +159,10 @@ gelesen hat. Bevor die App-Variante echte Daten sichert:
    nach Freischaltung (QR oder Wiederherstellungsschlüssel) andere Geräte sperren und
    Backup oder Datensicherung löschen darf, und dass vorhandene Geräte von jedem neuen
    Gerät erfahren (Grenze in [b1-entwurf.md](b1-entwurf.md), „Gerät sperren“).
-6. **Pfeffer schützen:** Die Konto-ID ist ein HMAC der Google-Konto-ID mit dem
-   Pfeffer. Geht er verloren, findet kein Gerät Schlüssel-Backup und Datensicherung
-   wieder. Vor echten Daten entscheiden, wie der Pfeffer gegen Löschen geschützt und
-   gesichert wird.
+6. **Pfeffer offline sichern:** Die Konto-ID ist ein HMAC der Google-Konto-ID mit
+   dem Pfeffer. Geht er verloren, findet kein Gerät Schlüssel-Backup und
+   Datensicherung wieder. Kevin legt allein eine Kopie im Passwortmanager ab
+   (Ablauf und Wiederherstellen in [gcp-einrichtung.md](gcp-einrichtung.md)).
 7. **Kosten und Rechte:** Upload-Limit je Konto und Zeit im Server; prüfen, ob der
    Kill-Switch ohne actAs auf die Laufzeitkonten sperren kann (Grenzen in
    [stand.md](stand.md)).

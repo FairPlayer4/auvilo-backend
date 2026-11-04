@@ -303,3 +303,25 @@ run "alarm_bei_stillem_kill_switch" {
     error_message = "Ohne Summe über Revisionen meldet der Alarm nach jedem Deploy fälschlich Stille."
   }
 }
+
+# Pfeffer: Ohne ihn findet kein Gerät sein Konto, sein Schlüssel-Backup und seine
+# Datensicherung wieder. prevent_destroy prüft OpenTofu selbst; hier nur, was
+# außerhalb von OpenTofu schützt.
+run "pfeffer_bleibt_wiederherstellbar" {
+  command = plan
+
+  assert {
+    # KRITISCH: Eine zerstörte Version bleibt 30 Tage wiederherstellbar.
+    condition     = google_secret_manager_secret.pfeffer.version_destroy_ttl == "2592000s"
+    error_message = "Eine zerstörte Version des Pfeffers ist nicht 30 Tage wiederherstellbar."
+  }
+  assert {
+    # Ein Ablaufdatum würde das Secret samt Pfeffer von selbst löschen.
+    condition     = google_secret_manager_secret.pfeffer.ttl == null
+    error_message = "Das Secret des Pfeffers läuft ab."
+  }
+  assert {
+    condition     = tostring(google_secret_manager_secret_version.pfeffer.secret_data_wo_version) == "1"
+    error_message = "Der Pfeffer bekäme einen neuen Wert; alle Konten wären unauffindbar."
+  }
+}

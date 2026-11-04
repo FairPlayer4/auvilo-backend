@@ -176,8 +176,9 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
    manuell, ältere Fassungen höchstens 200; Kill-Switch warnt (Mail), wenn ab 100 %
    kein Dienst gefunden wird. Beides wirkt erst nach `tofu apply` (Bucket-Regel und
    Neubau des Kill-Switch aus dem lokalen Stand).
-   **Weiter mit:** Vorschläge zu Pfeffer, Upload-Limit und actAs vor echten Daten
-   entscheiden; Schritt 7 (App-Einbindung, eigener Entwurf im App-Repo). Offen aus
+   Pfeffer: Offline-Kopie zu Beginn der Sicherheitsphase (Ablauf in
+   [gcp-einrichtung.md](gcp-einrichtung.md)), tofu-Test für den Schutz.
+   **Weiter mit:** Upload-Limit und Sperren ohne actAs vor echten Daten; Schritt 7 (App-Einbindung, eigener Entwurf im App-Repo). Offen aus
    Lauf 5: Empfehlungen E5–E7; aus Lauf 6: E1–E6.
 5. Für den B3-Entwurf aus Lauf 4: A2 (Mitgliedschaft: Server-Liste oder signiertes
    Log), A4 (Umschläge an Kontext binden, Keyset-Typen prüfen), A5 (Speicher und
