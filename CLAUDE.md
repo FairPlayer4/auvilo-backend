@@ -14,6 +14,7 @@ Kommunikation auf **Deutsch, mit ß**.
 - [docs/go-review.md](docs/go-review.md) – Review-Anleitung; Code und Tests danach ausrichten
 - [docs/b2-entwurf.md](docs/b2-entwurf.md) – Schlüsselmodell, Backup, Kotlin-Client (`client/`)
 - [docs/b2b-entwurf.md](docs/b2b-entwurf.md) – Daten-Backup, Vorbereitung der App-Einbindung
+- [docs/diagnose-entwurf.md](docs/diagnose-entwurf.md) – Diagnose-Log aus der App
 
 ## Code
 - Go-Code erklärend kommentieren (Kevin kennt Go nur grob). Kevin liest vor allem
@@ -42,6 +43,10 @@ Kommunikation auf **Deutsch, mit ß**.
   Sitzungs-Token (`sitzung-*.json`), Google-ID-Tokens und Auth-Codes, Passwörter,
   2FA-Codes, Dienstkonto-Schlüssel, echte App-Inhalte und Daten von Testern.
   Unbedenklich: Fingerabdrücke, Geräte-IDs, Konto-Pseudonyme, Chiffrate, Client-IDs.
+- **Ausnahme Diagnose-Logs:** Sendungen freigeschalteter Konten
+  ([diagnose-entwurf.md](docs/diagnose-entwurf.md), E-D-3/E-D-7) darf Claude lesen,
+  weil sie per Konstruktion keine Inhalte enthalten – auch in der Sicherheitsphase.
+  Fällt doch ein Inhalt auf: als Fehler im Logger melden und nicht weiterlesen.
 - **Testphase (jetzt):** Wiederherstellungsschlüssel und Keysets von Testkonten ohne
   echte Daten darf Claude sehen. Vor echten Daten wird alles zurückgesetzt
   ([b2b-entwurf.md](docs/b2b-entwurf.md), „Vor echten Daten“).
