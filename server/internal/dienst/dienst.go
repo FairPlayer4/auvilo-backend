@@ -1,7 +1,8 @@
 // Package dienst verbindet die Schnittstelle (Connect) mit Anmeldung, Sitzung
-// und Speicher. Hier steht keine Sicherheitslogik; die liegt in den Paketen
-// anmeldung, sitzung und speicher. Dieses Paket übersetzt nur Anfragen und
-// Fehler.
+// und Speicher. Die Prüfung von Anmeldung, Sitzung und Versionen liegt in den
+// Paketen anmeldung, sitzung und speicher. Hier stehen nur die Regeln, welcher
+// Aufruf was darf (Freischaltung neuer Geräte, freischaltung.go; Ersetzen des
+// Backups, schluessel.go), sowie die Übersetzung von Anfragen und Fehlern.
 package dienst
 
 import (
