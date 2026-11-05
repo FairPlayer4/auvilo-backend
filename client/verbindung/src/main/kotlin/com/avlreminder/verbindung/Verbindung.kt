@@ -2,9 +2,11 @@ package com.avlreminder.verbindung
 
 import com.avlreminder.protokoll.BackupAblage
 import com.avlreminder.protokoll.Datensicherung
+import com.avlreminder.protokoll.Diagnose
 import com.avlreminder.protokoll.DiagnoseAblage
 import com.avlreminder.protokoll.DiagnoseNichtFreigeschaltet
 import com.avlreminder.protokoll.DiagnoseTageslimit
+import com.avlreminder.protokoll.DiagnoseZuGross
 import com.avlreminder.protokoll.GeholteSicherung
 import com.avlreminder.protokoll.GeholtesBackup
 import com.avlreminder.protokoll.SicherungTageslimit
@@ -140,9 +142,9 @@ class ServerSicherungsAblage(private val verbindung: Verbindung, private val tok
  *
  * KRITISCH: Übersetzt nur die zwei Codes, auf die die App mit eigener Meldung
  * reagiert (diagnose.proto); alles andere bleibt ein [Serverfehler].
- * resource_exhausted heißt auch „zu groß“; das prüft aber schon
- * [com.avlreminder.protokoll.Diagnose.senden] vor dem Senden. Kommt es trotzdem,
- * ist das Tageslimit erreicht.
+ * resource_exhausted heißt „zu groß“ oder „Tageslimit“; wie bei der Datensicherung
+ * unterscheidet die Größe des Gesendeten: Bis 256 KiB lehnt der Server nur wegen
+ * des Limits ab. Zu große Sendungen hält schon [Diagnose.senden] zurück.
  *
  * Bekannte Grenze: Ein HTTP-403 ohne Connect-Fehler (etwa von einem Proxy) macht
  * Connect selbst zu permission_denied; dann meldet der Adapter fälschlich „nicht
@@ -156,7 +158,8 @@ class ServerDiagnoseAblage(private val verbindung: Verbindung, private val token
         } catch (e: Serverfehler) {
             when (e.code) {
                 Code.PERMISSION_DENIED -> throw DiagnoseNichtFreigeschaltet()
-                Code.RESOURCE_EXHAUSTED -> throw DiagnoseTageslimit()
+                Code.RESOURCE_EXHAUSTED ->
+                    if (nutzlast.size > Diagnose.MAX_NUTZLAST) throw DiagnoseZuGross(nutzlast.size) else throw DiagnoseTageslimit()
                 else -> throw e
             }
         }

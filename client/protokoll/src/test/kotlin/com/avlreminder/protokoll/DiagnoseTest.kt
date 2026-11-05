@@ -63,6 +63,22 @@ class DiagnoseTest {
         assertTrue(server.gesendet.isEmpty())
     }
 
+    // KRITISCH: Die Grenze aufs Byte; eigene Zahl statt MAX_NUTZLAST (diagnose.proto:
+    // 256 KiB), sonst bliebe der Test bei einer geänderten Konstante grün.
+    @Test
+    fun `sendet gepackt genau 256 KiB`() {
+        val server = Mitschnitt()
+        assertEquals(256 * 1024, runBlocking { Diagnose.sendeGepackt(server, ByteArray(256 * 1024)) })
+        assertEquals(256 * 1024, server.gesendet.single().size)
+    }
+
+    @Test
+    fun `lehnt gepackt ein Byte über 256 KiB ab und sendet nichts`() {
+        val server = Mitschnitt()
+        assertThrows<DiagnoseZuGross> { runBlocking { Diagnose.sendeGepackt(server, ByteArray(256 * 1024 + 1)) } }
+        assertTrue(server.gesendet.isEmpty())
+    }
+
     data class Ablehnung(val name: String, val zeilen: List<String>) {
         override fun toString() = name
     }

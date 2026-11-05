@@ -104,10 +104,12 @@ Vom Entwickler bestätigt am 2026-11-01.
 
 ## Offene Fragen an den Entwickler
 Aus Lauf 7 (runs/2026-11-04.md, je mit Vorschlag): 1 gescheitertes Ablegen zählt zum
-Tageslimit; 2 Servermeldung bei `resource_exhausted` im Kotlin-Adapter; 3
-Pfeffer-Wiederherstellung einmal durchspielen.
+Tageslimit; 3 Pfeffer-Wiederherstellung einmal durchspielen.
+Erledigt am 2026-11-05: Frage 2 (Adapter unterscheiden „zu groß“ und „Tageslimit“ an
+der gesendeten Größe, Diagnose und Datensicherung), Empfehlung E3 (Grenzwerttest
+`MAX_NUTZLAST`), Upload-Limit (48 je Tag, E-B2b-12).
 Lauf 6 erledigt: 200 Fassungen (stündlich), WARN ab 100 %, Pfeffer-Offline-Kopie;
-Upload-Limit und actAs bleiben vor echten Daten offen (stand.md).
+actAs bleibt vor echten Daten offen (stand.md).
 
 ## Getroffene Entscheidungen
 - 2026-11-01: Architekturbild bestätigt.

@@ -16,7 +16,7 @@ interface DiagnoseAblage {
 /** Das Konto darf keine Diagnosen senden (docs/diagnose-entwurf.md, E-D-3). */
 class DiagnoseNichtFreigeschaltet : Exception("Dieses Konto ist für Diagnosen nicht freigeschaltet - nichts gesendet")
 
-/** Für heute ist das Limit erreicht (oder die Grenze des Servers kleiner als [Diagnose.MAX_NUTZLAST]). */
+/** Für heute ist das Limit erreicht (10 Sendungen je Konto und Tag, UTC; diagnose.proto). */
 class DiagnoseTageslimit : Exception("Tageslimit für Diagnosen erreicht - morgen wieder")
 
 /** Die gepackte Diagnose ist größer als [Diagnose.MAX_NUTZLAST]; gesendet wurde nichts. */
@@ -57,8 +57,14 @@ object Diagnose {
      * Packt und sendet; liefert die Größe der Sendung in Bytes. Zu große Sendungen
      * lehnt es ab, bevor etwas hochgeladen wird ([DiagnoseZuGross]).
      */
-    suspend fun senden(server: DiagnoseAblage, zeilen: List<String>): Int {
-        val nutzlast = packen(zeilen)
+    suspend fun senden(server: DiagnoseAblage, zeilen: List<String>): Int = sendeGepackt(server, packen(zeilen))
+
+    /**
+     * Sendet eine schon gepackte Diagnose, wenn sie höchstens [MAX_NUTZLAST] groß
+     * ist. Eigene Funktion, damit Tests die Grenze aufs Byte treffen (gzip macht
+     * das über [packen] kaum möglich).
+     */
+    internal suspend fun sendeGepackt(server: DiagnoseAblage, nutzlast: ByteArray): Int {
         if (nutzlast.size > MAX_NUTZLAST) throw DiagnoseZuGross(nutzlast.size)
         server.senden(nutzlast)
         return nutzlast.size

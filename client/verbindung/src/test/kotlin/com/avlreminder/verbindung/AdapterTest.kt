@@ -2,6 +2,7 @@ package com.avlreminder.verbindung
 
 import com.avlreminder.protokoll.DiagnoseNichtFreigeschaltet
 import com.avlreminder.protokoll.DiagnoseTageslimit
+import com.avlreminder.protokoll.DiagnoseZuGross
 import com.avlreminder.protokoll.SicherungTageslimit
 import com.avlreminder.protokoll.SicherungZuGross
 import com.avlreminder.protokoll.VersionVeraltet
@@ -204,7 +205,12 @@ class AdapterTest {
 
         private fun sicherung(v: Verbindung) = ServerSicherungsAblage(v, TOKEN)
         private fun backup(v: Verbindung) = ServerBackupAblage(v, TOKEN)
-        private suspend fun diagnose(v: Verbindung): Any? = ServerDiagnoseAblage(v, TOKEN).senden(CHIFFRAT).let { "gesendet" }
+        private suspend fun diagnose(v: Verbindung, nutzlast: ByteArray = CHIFFRAT): Any? =
+            ServerDiagnoseAblage(v, TOKEN).senden(nutzlast).let { "gesendet" }
+
+        // Eigene Zahl statt Diagnose.MAX_NUTZLAST (diagnose.proto: 256 KiB).
+        private val UEBER_256_KIB = ByteArray(256 * 1024 + 1)
+        private val GENAU_256_KIB = ByteArray(256 * 1024)
 
         @JvmStatic
         fun fehlerfaelle() = listOf(
@@ -232,7 +238,9 @@ class AdapterTest {
             Fall("Backup löschen: Fehler bleibt Serverfehler", Code.UNAUTHENTICATED, { backup(it).loeschen() }, Serverfehler::class),
             // Diagnose
             Fall("Diagnose senden: keine Erlaubnis heißt nicht freigeschaltet", Code.PERMISSION_DENIED, { diagnose(it) }, DiagnoseNichtFreigeschaltet::class),
-            Fall("Diagnose senden: erschöpft heißt Tageslimit", Code.RESOURCE_EXHAUSTED, { diagnose(it) }, DiagnoseTageslimit::class),
+            Fall("Diagnose senden: erschöpft bei kleiner Sendung heißt Tageslimit", Code.RESOURCE_EXHAUSTED, { diagnose(it) }, DiagnoseTageslimit::class),
+            Fall("Diagnose senden: erschöpft bei genau 256 KiB heißt Tageslimit", Code.RESOURCE_EXHAUSTED, { diagnose(it, GENAU_256_KIB) }, DiagnoseTageslimit::class),
+            Fall("Diagnose senden: erschöpft über 256 KiB heißt zu groß", Code.RESOURCE_EXHAUSTED, { diagnose(it, UEBER_256_KIB) }, DiagnoseZuGross::class),
             Fall("Diagnose senden: ungültige Sitzung bleibt Serverfehler", Code.UNAUTHENTICATED, { diagnose(it) }, Serverfehler::class),
             Fall("Diagnose senden: ungültige Anfrage bleibt Serverfehler", Code.INVALID_ARGUMENT, { diagnose(it) }, Serverfehler::class),
             Fall("Diagnose senden: Überlastung bleibt Serverfehler", Code.UNAVAILABLE, { diagnose(it) }, Serverfehler::class),
