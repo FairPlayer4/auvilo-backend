@@ -27,6 +27,8 @@ Kommunikation auf **Deutsch, mit ß**.
   als Schnittstellen); die Connect-Anbindung (Adapter zu diesen Schnittstellen) liegt in
   `verbindung`, `testclient` ist nur CLI und Dateiablage.
 - Tests prüfen Verhalten, nicht die geprüfte Konstante selbst (kein `VERSUCHE == 3`).
+- Nach Änderungen an `.github/workflows/` actionlint per Docker ausführen
+  ([entwicklungsumgebung.md](docs/entwicklungsumgebung.md)).
 
 ## Zusammenarbeit
 - Kevin entwickelt die Anforderungen iterativ mit Claude: Feedback und Rückfragen geben,

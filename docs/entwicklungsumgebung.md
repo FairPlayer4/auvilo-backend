@@ -17,6 +17,7 @@ angegeben.
 | JDK | 21 (Microsoft) | Kotlin-Client, Firestore-Emulator | war schon da (App) |
 | Docker Desktop | – | Container-Image lokal bauen/testen | war schon da |
 | Gradle | 9.8.1 | Kotlin-Client bauen | nichts installieren: Wrapper `client/gradlew` |
+| actionlint | 1.7.12 | GitHub-Actions-Workflows prüfen (mit shellcheck) | nichts installieren: Docker-Image `rhysd/actionlint:1.7.12` |
 
 ## Hinweise
 - Nach der Installation ein **neues Terminal** öffnen, damit der `PATH` stimmt.
@@ -35,6 +36,11 @@ angegeben.
 - Die Versionen von buf und den beiden Plugins stehen auch in `.github/workflows/ci.yml`
   (Job `proto`). Andere Versionen erzeugen anderen Code; dann meldet die CI „erzeugter
   Code nicht aktuell“. Beim Aktualisieren beide Stellen ändern.
+- Nach Änderungen an `.github/workflows/` actionlint ausführen (bei Bedarf, nicht in
+  der CI), im Wurzelverzeichnis des Repos in Git Bash:
+  `MSYS_NO_PATHCONV=1 docker run --rm -v "$(pwd -W):/repo" -w /repo rhysd/actionlint:1.7.12 -no-color -oneline`
+  (PowerShell: `docker run --rm -v "${PWD}:/repo" -w /repo rhysd/actionlint:1.7.12 -no-color -oneline`).
+  Ohne Ausgabe und mit Exit-Code 0 ist alles in Ordnung.
 - Code neu erzeugen nach Änderungen an `proto/`: `cd proto && buf generate`.
 - Firestore-Emulator für die Server-Tests (in einem eigenen Terminal):
   `gcloud emulators firestore start --host-port=localhost:8086`, dann
