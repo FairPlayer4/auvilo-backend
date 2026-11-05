@@ -348,6 +348,12 @@ run "pfeffer_bleibt_wiederherstellbar" {
 run "diagnosen_sind_geschuetzt_und_kurzlebig" {
   command = plan
 
+  # Ausdrücklich leer: Sonst nähme der Test lokal die Liste aus
+  # werte.auto.tfvars und schlüge fehl (in der CI gibt es die Datei nicht).
+  variables {
+    diagnose_konten = []
+  }
+
   assert {
     condition     = google_storage_bucket.diagnose.public_access_prevention == "enforced" && google_storage_bucket.diagnose.uniform_bucket_level_access
     error_message = "Der Bucket der Diagnosen könnte öffentlich werden."
@@ -414,7 +420,9 @@ run "lehnt_zu_kurze_konto_id_ab" {
 }
 
 # Vor echten Daten (b2b-entwurf.md): Datenbank, Sicherungen und Server lassen
-# sich weder mit `tofu destroy` noch aus Versehen löschen.
+# sich nicht mit `tofu destroy` löschen. In GCP selbst (Konsole, gcloud) schützt
+# nur die Datenbank (delete_protection_state); deletion_protection am Dienst und
+# force_destroy am Bucket wirken nur in OpenTofu.
 run "echte_daten_sind_vor_dem_loeschen_geschuetzt" {
   command = plan
 
@@ -433,7 +441,7 @@ run "echte_daten_sind_vor_dem_loeschen_geschuetzt" {
   }
   assert {
     condition     = google_cloud_run_v2_service.server.deletion_protection
-    error_message = "Der Server-Dienst lässt sich löschen."
+    error_message = "`tofu destroy` würde den Server-Dienst löschen."
   }
 }
 
@@ -451,5 +459,26 @@ run "kill_switch_kann_keine_dienste_aendern" {
     # "server" starten.
     condition     = length([for p in google_project_iam_custom_role.killswitch_cloud_run.permissions : p if !startswith(p, "run.services.") || endswith(p, ".update") || endswith(p, ".create") || endswith(p, ".delete")]) == 0
     error_message = "Der Kill-Switch darf mehr als Dienste auflisten und ihre Richtlinie setzen."
+  }
+  assert {
+    # Auch keine weitere Rolle neben der eigenen (z. B. run.admin oder
+    # iam.serviceAccountUser = actAs).
+    condition     = toset(keys(google_project_iam_member.killswitch)) == toset(["cloud_run", "abrechnung", "eventarc"]) && google_project_iam_member.killswitch["abrechnung"].role == "roles/billing.projectManager" && google_project_iam_member.killswitch["eventarc"].role == "roles/eventarc.eventReceiver"
+    error_message = "Das Konto des Kill-Switch hat andere Rollen im Projekt als die eigene, Abrechnung trennen und Ereignisse empfangen."
+  }
+  assert {
+    condition     = length([for m in google_project_iam_member.killswitch : m if m.member != google_service_account.killswitch.member]) == 0
+    error_message = "Die Rollen des Kill-Switch gehen an ein anderes Konto."
+  }
+}
+
+# KO3: Ohne ausdrücklichen Wunsch öffnet `tofu apply` keinen gesperrten Dienst
+# (module/oeffentlich). Wäre der Standard true, bliebe der Modultest grün.
+run "gesperrte_dienste_bleiben_ohne_wunsch_zu" {
+  command = plan
+
+  assert {
+    condition     = !var.gesperrte_dienste_oeffnen
+    error_message = "tofu apply öffnet gesperrte Dienste ohne -var=gesperrte_dienste_oeffnen=true."
   }
 }
