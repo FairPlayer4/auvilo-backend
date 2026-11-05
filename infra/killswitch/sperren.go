@@ -22,8 +22,9 @@ type CloudRun interface {
 	// Dienste listet alle Cloud-Run-Dienste der Region.
 	Dienste(ctx context.Context) ([]Dienst, error)
 	// Sperre entzieht dem Internet das Recht, den Dienst mit diesem vollen
-	// Namen aufzurufen (siehe ohneOeffentlich).
-	Sperre(ctx context.Context, name string) error
+	// Namen aufzurufen (siehe ohneOeffentlich). Gibt zurück, ob sich dabei
+	// etwas geändert hat (false: war inzwischen schon gesperrt).
+	Sperre(ctx context.Context, name string) (bool, error)
 }
 
 // oeffentlich sind die beiden IAM-Mitglieder, über die jeder aus dem Internet
@@ -117,11 +118,14 @@ func SperreAlle(ctx context.Context, cr CloudRun, eigenerDienst string) (Sperrun
 		if d.Gesperrt {
 			continue
 		}
-		if err := cr.Sperre(ctx, d.Name); err != nil {
+		geaendert, err := cr.Sperre(ctx, d.Name)
+		if err != nil {
 			fehler = append(fehler, fmt.Errorf("%s: %w", d.Name, err))
 			continue
 		}
-		s.Gesperrt++
+		if geaendert {
+			s.Gesperrt++
+		}
 	}
 	// errors.Join gibt nil zurück, wenn die Liste leer ist.
 	return s, errors.Join(fehler...)

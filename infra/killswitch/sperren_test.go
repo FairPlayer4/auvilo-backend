@@ -15,6 +15,7 @@ type cloudRunAttrappe struct {
 	dienste    []Dienst
 	listFehler error
 	fehlerBei  map[string]error // voller Name → Fehler beim Sperren
+	schonZu    map[string]bool  // voller Name → beim Sperren schon gesperrt vorgefunden
 	gesperrt   []string
 }
 
@@ -22,12 +23,15 @@ func (c *cloudRunAttrappe) Dienste(context.Context) ([]Dienst, error) {
 	return c.dienste, c.listFehler
 }
 
-func (c *cloudRunAttrappe) Sperre(_ context.Context, name string) error {
+func (c *cloudRunAttrappe) Sperre(_ context.Context, name string) (bool, error) {
 	if err := c.fehlerBei[name]; err != nil {
-		return err
+		return false, err
+	}
+	if c.schonZu[name] {
+		return false, nil
 	}
 	c.gesperrt = append(c.gesperrt, name)
-	return nil
+	return true, nil
 }
 
 func TestSperreAlle(t *testing.T) {
@@ -55,6 +59,9 @@ func TestSperreAlle(t *testing.T) {
 		// falscher REGION keine Warnung, solange er selbst dort läuft.
 		{"nur der eigene Dienst: nichts gefunden", cloudRunAttrappe{dienste: []Dienst{killswitch}}, "killswitch", nil, Sperrung{}, nil},
 		{"alles schon gesperrt: gefunden, aber nichts neu gesperrt", cloudRunAttrappe{dienste: []Dienst{schonGesperrt}}, "killswitch", nil, Sperrung{Gefunden: 1}, nil},
+		// Beim Auflisten offen (oder Richtlinie nicht lesbar), beim Sperren schon
+		// zu: kein Eingriff, sonst gäbe es eine WARN-Mail ohne Grund.
+		{"inzwischen gesperrter Dienst zählt nicht als neu gesperrt", cloudRunAttrappe{dienste: []Dienst{api, web}, schonZu: map[string]bool{api.Name: true}}, "killswitch", []string{web.Name}, Sperrung{Gefunden: 2, Gesperrt: 1}, nil},
 		{"Fehler bei einem Dienst hält die anderen nicht auf", cloudRunAttrappe{dienste: []Dienst{api, web}, fehlerBei: map[string]error{api.Name: apiKaputt}}, "killswitch", []string{web.Name}, Sperrung{Gefunden: 2, Gesperrt: 1}, apiKaputt},
 		{"scheitert das Auflisten, wird nichts gesperrt", cloudRunAttrappe{dienste: []Dienst{api}, listFehler: listKaputt}, "killswitch", nil, Sperrung{}, listKaputt},
 		{"ohne eigenen Namen werden alle offenen gesperrt", cloudRunAttrappe{dienste: []Dienst{api}}, "", []string{api.Name}, Sperrung{Gefunden: 1, Gesperrt: 1}, nil},
