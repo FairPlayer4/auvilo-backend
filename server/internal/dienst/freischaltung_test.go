@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -122,8 +123,17 @@ func TestNichtFreigeschaltetesGeraetDarfNichtsAendern(t *testing.T) {
 		name   string
 		aktion func(t *testing.T, ts *testServer, k konto) error
 	}{
+		// Die Erlaubnisfälle prüfen auch die Wirkung: Ein Dienst, der nach der
+		// Prüfung nichts tut, darf nicht als „erlaubt“ durchgehen.
 		{"anderes Gerät sperren", func(_ *testing.T, ts *testServer, k konto) error {
-			return ts.sperren(k.laptopSitzung, k.handy.ID())
+			if err := ts.sperren(k.laptopSitzung, k.handy.ID()); err != nil {
+				return err
+			}
+			_, err := ts.geraete.GeraeteAuflisten(context.Background(), mitSitzung(&v1.GeraeteAuflistenRequest{}, k.handySitzung))
+			if connect.CodeOf(err) != connect.CodeUnauthenticated {
+				return fmt.Errorf("Handy nach dem Sperren: %v, erwartet unauthenticated", err)
+			}
+			return nil
 		}},
 		// Ein drittes Gerät, damit die Erlaubnis eine Wirkung hat: Sich selbst
 		// freizuschalten änderte für ein freigeschaltetes Gerät nichts.
@@ -139,22 +149,44 @@ func TestNichtFreigeschaltetesGeraetDarfNichtsAendern(t *testing.T) {
 			return nil
 		}},
 		{"Backup ersetzen", func(_ *testing.T, ts *testServer, k konto) error {
-			_, err := ts.backupSpeichern(k.laptopSitzung, []byte("backup-laptop"), 1)
-			return err
+			if _, err := ts.backupSpeichern(k.laptopSitzung, []byte("backup-laptop"), 1); err != nil {
+				return err
+			}
+			if b, err := ts.backupHolen(k.handySitzung); err != nil || string(b.Chiffrat) != "backup-laptop" {
+				return fmt.Errorf("Backup danach = %v, Fehler %v", b, err)
+			}
+			return nil
 		}},
 		{"Backup löschen", func(_ *testing.T, ts *testServer, k konto) error {
-			return ts.backupLoeschen(k.laptopSitzung)
+			if err := ts.backupLoeschen(k.laptopSitzung); err != nil {
+				return err
+			}
+			if _, err := ts.backupHolen(k.handySitzung); connect.CodeOf(err) != connect.CodeNotFound {
+				return fmt.Errorf("Backup nach dem Löschen: %v, erwartet not_found", err)
+			}
+			return nil
 		}},
 		{"Sicherung speichern", func(_ *testing.T, ts *testServer, k konto) error {
 			geholt, err := ts.sicherungHolen(k.laptopSitzung)
 			if err != nil {
 				return err
 			}
-			_, err = ts.sicherungSpeichern(k.laptopSitzung, []byte("sicherung-laptop"), geholt.Version)
-			return err
+			if _, err = ts.sicherungSpeichern(k.laptopSitzung, []byte("sicherung-laptop"), geholt.Version); err != nil {
+				return err
+			}
+			if s, err := ts.sicherungHolen(k.handySitzung); err != nil || string(s.Chiffrat) != "sicherung-laptop" {
+				return fmt.Errorf("Sicherung danach = %v, Fehler %v", s, err)
+			}
+			return nil
 		}},
 		{"Sicherung löschen", func(_ *testing.T, ts *testServer, k konto) error {
-			return ts.sicherungLoeschen(k.laptopSitzung)
+			if err := ts.sicherungLoeschen(k.laptopSitzung); err != nil {
+				return err
+			}
+			if _, err := ts.sicherungHolen(k.handySitzung); connect.CodeOf(err) != connect.CodeNotFound {
+				return fmt.Errorf("Sicherung nach dem Löschen: %v, erwartet not_found", err)
+			}
+			return nil
 		}},
 	}
 	for _, fall := range faelle {
