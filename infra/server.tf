@@ -7,8 +7,8 @@
 # --- Dienstkonto -------------------------------------------------------------
 
 # Unter diesem Konto läuft der Server. Es darf nur Firestore benutzen, genau
-# ein Secret (den Pfeffer) lesen und im Bucket der Datensicherungen schreiben
-# (datensicherung.tf).
+# ein Secret (den Pfeffer) lesen, im Bucket der Datensicherungen schreiben
+# (datensicherung.tf) und Diagnosen anlegen (diagnose.tf).
 resource "google_service_account" "server" {
   account_id   = "server"
   display_name = "Server (Cloud Run)"
@@ -151,6 +151,15 @@ resource "google_cloud_run_v2_service" "server" {
         value = google_storage_bucket.datensicherung.name
       }
       env {
+        name  = "DIAGNOSE_BUCKET"
+        value = google_storage_bucket.diagnose.name
+      }
+      env {
+        # Konto-IDs sind Pseudonyme, keine Geheimnisse.
+        name  = "DIAGNOSE_KONTEN"
+        value = join(",", var.diagnose_konten)
+      }
+      env {
         # Weiche Grenze für Go: Ab hier räumt der Garbage Collector häufiger auf,
         # statt dass Cloud Run die Instanz bei 256 MiB beendet. Gut 25 % Luft für
         # das, was Go nicht zählt (Stacks des Laufzeitsystems, Puffer).
@@ -175,6 +184,7 @@ resource "google_cloud_run_v2_service" "server" {
     google_project_iam_member.server_firestore,
     google_secret_manager_secret_iam_member.server_pfeffer,
     google_storage_bucket_iam_member.server_datensicherung,
+    google_storage_bucket_iam_member.server_diagnose,
   ]
 }
 

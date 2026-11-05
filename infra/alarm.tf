@@ -60,9 +60,15 @@ resource "google_monitoring_alert_policy" "killswitch" {
 # Alarm, wenn der Kill-Switch gar nicht mehr läuft (Review Lauf 5, E3).
 #
 # Das Budget meldet sich mehrmals täglich; jede Meldung ist ein Aufruf der
-# Funktion. Kommt fast einen Tag lang keiner an (Funktion kaputt deployt,
-# Trigger oder Thema weg, Rechte entzogen), schützt der Kill-Switch nicht mehr –
-# und die Regel oben sähe nichts, weil dann auch nichts geloggt wird.
+# Funktion. Kommt fast einen Tag lang keiner an (Budget, Thema, Trigger oder
+# Eventarc fehlen), schützt der Kill-Switch nicht mehr – und die Regel oben sähe
+# nichts, weil dann auch nichts geloggt wird. Kommt der Aufruf an, scheitert aber
+# (Funktion kaputt, Rechte entzogen), loggt Cloud Run die Antwort als WARNING
+# oder ERROR, und die Regel oben schlägt an.
+#
+# Grenze: Die Bedingung schlägt erst an, nachdem es einmal einen Aufruf gab.
+# Nach einem Neuaufbau deshalb einmal eine Meldung unter der Schwelle schicken
+# (docs/stand.md, „Befehle“) und prüfen, dass sie ankommt.
 #
 # Kosten: eine weitere Bedingung, ca. 0,10 $ pro Monat; die Metrik
 # run.googleapis.com/request_count liefert Cloud Run kostenlos.

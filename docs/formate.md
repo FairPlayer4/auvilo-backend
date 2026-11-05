@@ -50,6 +50,29 @@ Tink-Konfiguration: `TinkConfig2026`, ausdrücklich je Aufruf (keine globale Reg
   ab (gzip); deren Format beschreibt das App-Repo, Version in `schema_version`.
 - Auf dem Server höchstens 8 MiB Chiffrat (`DatensicherungDienst`).
 
+## Diagnose-Sendung (`avlreminder/diagnose/v1`, unverschlüsselt)
+Entwurf und Begründung: [diagnose-entwurf.md](diagnose-entwurf.md). Lesen nur Kevin
+und Claude (`werkzeuge/diagnose-holen.sh`); der Server prüft nur Größe und gzip-Kopf.
+Gespeichert wird höchstens 14 Tage, darum gilt „Nie still ändern“ hier nur für
+die Formatkennung: Ein neues Format bekommt `…/v2`.
+- gzip-Datei, darin JSON-Zeilen (UTF-8, eine Zeile je Objekt), höchstens 256 KiB
+  komprimiert (`DiagnoseDienst`, [diagnose.proto](../proto/avlreminder/v1/diagnose.proto)).
+- Erste Zeile, der Kopf: `"art":"kopf"`, `"format":"avlreminder/diagnose/v1"`,
+  `app` (Version und Build), `variante`, `android` (API-Stufe), `modell`, `schema`
+  (Datenbank), `anlass` (`knopf` oder `absturz`).
+- Jede weitere Zeile ein Ereignis: `zeit` (RFC 3339, UTC, Millisekunden), `stufe`
+  (`DEBUG`, `INFO`, `WARN`, `ERROR`), `bereich` und `ereignis` (feste Namen aus
+  Aufzählungen der App), optional `felder` (Werte nur Zahl, Wahrheitswert oder
+  Name aus einer Aufzählung) und `ausnahme` (`klasse`, `stapel` als Liste von
+  Zeilen, **ohne Meldungstext**).
+- **Keine freien Zeichenketten** (E-D-1): Was nicht in eine Aufzählung passt, kommt
+  nicht in die Sendung.
+
+```json
+{"art":"kopf","format":"avlreminder/diagnose/v1","app":"1.8.0 (42)","variante":"cloud","android":35,"modell":"Pixel 8","schema":7,"anlass":"knopf"}
+{"zeit":"2026-11-04T09:12:03.120Z","stufe":"WARN","bereich":"sicherung","ereignis":"hochladen_fehlgeschlagen","felder":{"versuch":3,"code":"unavailable"}}
+```
+
 ## Umschlag (`avlreminder/umschlag/v1`, vorbereitet für B3)
 - Ein Freigabe-Schlüssel (Tink-Keyset binär, mit geheimem Teil), mit HPKE für den
   öffentlichen Personenschlüssel des Empfängers verschlüsselt.

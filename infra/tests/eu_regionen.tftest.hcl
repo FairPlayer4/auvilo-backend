@@ -45,6 +45,35 @@ mock_provider "google" {
   }
 }
 
+# Eigene Werte für die Konten und Repos, um die es in den Rechte-Tests geht. Mit
+# den gemeinsamen Vorgaben oben hätten alle Konten dieselbe Adresse, und ein Test
+# „gehört nur dem Server-Konto“ bliebe auch mit dem falschen Konto grün.
+override_resource {
+  target = google_service_account.server
+  values = {
+    email  = "server@test-projekt.iam.gserviceaccount.com"
+    member = "serviceAccount:server@test-projekt.iam.gserviceaccount.com"
+    name   = "projects/test-projekt/serviceAccounts/server@test-projekt.iam.gserviceaccount.com"
+    id     = "projects/test-projekt/serviceAccounts/server@test-projekt.iam.gserviceaccount.com"
+  }
+}
+override_resource {
+  target = google_service_account.bauen
+  values = {
+    email  = "funktionen-bauen@test-projekt.iam.gserviceaccount.com"
+    member = "serviceAccount:funktionen-bauen@test-projekt.iam.gserviceaccount.com"
+    name   = "projects/test-projekt/serviceAccounts/funktionen-bauen@test-projekt.iam.gserviceaccount.com"
+    id     = "projects/test-projekt/serviceAccounts/funktionen-bauen@test-projekt.iam.gserviceaccount.com"
+  }
+}
+override_resource {
+  target = google_artifact_registry_repository.funktionen
+  values = {
+    id   = "projects/test-projekt/locations/europe-west1/repositories/funktionen"
+    name = "funktionen"
+  }
+}
+
 mock_provider "random" {}
 
 mock_provider "archive" {
@@ -108,6 +137,10 @@ run "alle_standorte_liegen_in_der_eu" {
     condition     = upper(google_storage_bucket.datensicherung.location) == upper(var.region)
     error_message = "Der Bucket der Datensicherungen liegt nicht in var.region."
   }
+  assert {
+    condition     = upper(google_storage_bucket.diagnose.location) == upper(var.region)
+    error_message = "Der Bucket der Diagnosen liegt nicht in var.region."
+  }
 }
 
 # Eine andere EU-Region geht durch, und alles zieht mit (nicht nur die Vorgabe).
@@ -126,10 +159,14 @@ run "nimmt_andere_eu_region_an" {
     condition     = upper(google_storage_bucket.datensicherung.location) == "EUROPE-WEST10"
     error_message = "Der Bucket der Datensicherungen folgt var.region nicht."
   }
+  assert {
+    condition     = upper(google_storage_bucket.diagnose.location) == "EUROPE-WEST10"
+    error_message = "Der Bucket der Diagnosen folgt var.region nicht."
+  }
 }
 
 # Datensicherungen (E-B2b-4): nie öffentlich, ältere Fassungen 7 Tage und
-# höchstens 100, Zugriff nur für das Server-Konto.
+# höchstens 200, Zugriff nur für das Server-Konto.
 run "datensicherung_ist_geschuetzt_und_begrenzt" {
   command = plan
 
@@ -142,16 +179,27 @@ run "datensicherung_ist_geschuetzt_und_begrenzt" {
     error_message = "Ohne Versionierung gibt es keine älteren Fassungen."
   }
   assert {
-    condition     = anytrue([for r in google_storage_bucket.datensicherung.lifecycle_rule : one(r.condition).days_since_noncurrent_time == 7 && one(r.action).type == "Delete"])
+    # Genau zwei Regeln, jede mit nur einer Grenze: Eine zusätzliche Regel (etwa
+    # nach Alter) könnte die aktuelle Sicherung löschen, und zwei Grenzen in einer
+    # Regel griffen erst, wenn beide zugleich erfüllt sind.
+    condition     = length(google_storage_bucket.datensicherung.lifecycle_rule) == 2 && alltrue([for r in google_storage_bucket.datensicherung.lifecycle_rule : one(r.action).type == "Delete" && coalesce(one(r.condition).age, 0) == 0])
+    error_message = "Der Bucket hat andere Lebenszyklusregeln als die zwei für ältere Fassungen."
+  }
+  assert {
+    condition     = anytrue([for r in google_storage_bucket.datensicherung.lifecycle_rule : one(r.condition).days_since_noncurrent_time == 7 && coalesce(one(r.condition).num_newer_versions, 0) == 0])
     error_message = "Ältere Fassungen werden nicht nach 7 Tagen gelöscht."
   }
   assert {
-    # 101 neuere = die aktuelle und 100 ältere Fassungen bleiben.
-    condition     = anytrue([for r in google_storage_bucket.datensicherung.lifecycle_rule : one(r.condition).num_newer_versions == 101 && one(r.action).type == "Delete"])
-    error_message = "Es bleiben nicht höchstens 100 ältere Fassungen."
+    # 201 neuere = die aktuelle und 200 ältere Fassungen bleiben.
+    condition     = anytrue([for r in google_storage_bucket.datensicherung.lifecycle_rule : one(r.condition).num_newer_versions == 201 && coalesce(one(r.condition).days_since_noncurrent_time, 0) == 0])
+    error_message = "Es bleiben nicht höchstens 200 ältere Fassungen."
   }
   assert {
-    condition     = google_storage_bucket_iam_member.server_datensicherung.member == google_service_account.server.member && google_storage_bucket_iam_member.server_datensicherung.role == "roles/storage.objectUser"
+    condition     = google_storage_bucket.datensicherung.soft_delete_policy[0].retention_duration_seconds == 0
+    error_message = "Gelöschte Sicherungen bleiben im Soft Delete liegen (DSGVO Art. 17)."
+  }
+  assert {
+    condition     = google_storage_bucket_iam_member.server_datensicherung.member == "serviceAccount:server@test-projekt.iam.gserviceaccount.com" && google_storage_bucket_iam_member.server_datensicherung.role == "roles/storage.objectUser"
     error_message = "Der Bucket der Datensicherungen gehört nicht (nur) dem Server-Konto."
   }
   assert {
@@ -195,8 +243,12 @@ run "build_konto_ist_eng" {
     error_message = "Das Build-Konto darf mehr Buckets lesen als den Quellen-Bucket und die von Cloud Functions."
   }
   assert {
-    condition     = google_artifact_registry_repository_iam_member.bauen_funktionen.repository == google_artifact_registry_repository.funktionen.name
+    condition     = google_artifact_registry_repository_iam_member.bauen_funktionen.repository == "funktionen" && google_artifact_registry_repository_iam_member.bauen_funktionen.member == "serviceAccount:funktionen-bauen@test-projekt.iam.gserviceaccount.com"
     error_message = "Das Build-Konto schreibt Images nicht (nur) ins Repo der Funktionen."
+  }
+  assert {
+    condition     = google_project_iam_member.bauen_quellen.member == "serviceAccount:funktionen-bauen@test-projekt.iam.gserviceaccount.com"
+    error_message = "Das Leserecht auf die Quellen hat ein anderes Konto als das Build-Konto."
   }
 }
 
@@ -239,4 +291,124 @@ run "lehnt_sperren_ueber_trennen_ab" {
   }
 
   expect_failures = [var.schwelle_trennen]
+}
+
+# Fällt der Kill-Switch still aus, kommt eine Mail (Absenz-Bedingung auf seine
+# Aufrufe, summiert über Revisionen).
+run "alarm_bei_stillem_kill_switch" {
+  command = plan
+
+  assert {
+    condition     = length(google_monitoring_alert_policy.killswitch_still.conditions[0].condition_absent) == 1
+    error_message = "Es gibt keinen Alarm, wenn der Kill-Switch nicht mehr aufgerufen wird."
+  }
+  assert {
+    condition     = strcontains(google_monitoring_alert_policy.killswitch_still.conditions[0].condition_absent[0].filter, "resource.labels.service_name=\"killswitch\"")
+    error_message = "Der Absenz-Alarm beobachtet nicht den Kill-Switch."
+  }
+  assert {
+    condition     = google_monitoring_alert_policy.killswitch_still.conditions[0].condition_absent[0].aggregations[0].cross_series_reducer == "REDUCE_SUM"
+    error_message = "Ohne Summe über Revisionen meldet der Alarm nach jedem Deploy fälschlich Stille."
+  }
+}
+
+# Pfeffer: Ohne ihn findet kein Gerät sein Konto, sein Schlüssel-Backup und seine
+# Datensicherung wieder. prevent_destroy prüft OpenTofu selbst; hier nur, was
+# außerhalb von OpenTofu schützt.
+run "pfeffer_bleibt_wiederherstellbar" {
+  command = plan
+
+  assert {
+    # KRITISCH: Eine zerstörte Version bleibt 30 Tage wiederherstellbar.
+    condition     = google_secret_manager_secret.pfeffer.version_destroy_ttl == "2592000s"
+    error_message = "Eine zerstörte Version des Pfeffers ist nicht 30 Tage wiederherstellbar."
+  }
+  assert {
+    # Ein Ablaufdatum würde das Secret samt Pfeffer von selbst löschen.
+    condition     = google_secret_manager_secret.pfeffer.ttl == null
+    error_message = "Das Secret des Pfeffers läuft ab."
+  }
+  assert {
+    # KRITISCH: Der Server darf den Pfeffer nur lesen, nicht löschen oder ändern.
+    condition     = google_secret_manager_secret_iam_member.server_pfeffer.role == "roles/secretmanager.secretAccessor"
+    error_message = "Der Server hat am Pfeffer mehr als Leserechte."
+  }
+  assert {
+    condition     = google_secret_manager_secret_iam_member.server_pfeffer.member == google_service_account.server.member
+    error_message = "Das Leserecht am Pfeffer hat nicht das Server-Konto."
+  }
+  assert {
+    condition     = tostring(google_secret_manager_secret_version.pfeffer.secret_data_wo_version) == "1"
+    error_message = "Der Pfeffer bekäme einen neuen Wert; alle Konten wären unauffindbar."
+  }
+}
+
+# Diagnosen (docs/diagnose-entwurf.md): nie öffentlich, nach 14 Tagen weg, der
+# Server darf nur anlegen, freigeschaltet ist ohne Eintrag niemand.
+run "diagnosen_sind_geschuetzt_und_kurzlebig" {
+  command = plan
+
+  assert {
+    condition     = google_storage_bucket.diagnose.public_access_prevention == "enforced" && google_storage_bucket.diagnose.uniform_bucket_level_access
+    error_message = "Der Bucket der Diagnosen könnte öffentlich werden."
+  }
+  assert {
+    # KRITISCH: genau eine Regel, die alles nach 14 Tagen löscht (E-D-5).
+    condition     = length(google_storage_bucket.diagnose.lifecycle_rule) == 1 && one(google_storage_bucket.diagnose.lifecycle_rule[0].action).type == "Delete" && one(google_storage_bucket.diagnose.lifecycle_rule[0].condition).age == 14
+    error_message = "Diagnosen werden nicht nach 14 Tagen gelöscht."
+  }
+  assert {
+    condition     = google_storage_bucket.diagnose.soft_delete_policy[0].retention_duration_seconds == 0
+    error_message = "Gelöschte Diagnosen bleiben im Soft Delete liegen."
+  }
+  assert {
+    # objectCreator: anlegen ja, lesen, überschreiben, löschen nein.
+    condition     = google_storage_bucket_iam_member.server_diagnose.member == "serviceAccount:server@test-projekt.iam.gserviceaccount.com" && google_storage_bucket_iam_member.server_diagnose.role == "roles/storage.objectCreator"
+    error_message = "Das Server-Konto hat am Bucket der Diagnosen andere Rechte als nur Anlegen."
+  }
+  assert {
+    condition     = contains([for e in google_cloud_run_v2_service.server.template[0].containers[0].env : e.value if e.name == "DIAGNOSE_BUCKET"], "test-projekt-diagnose")
+    error_message = "Der Server kennt den Bucket der Diagnosen nicht."
+  }
+  assert {
+    condition     = [for e in google_cloud_run_v2_service.server.template[0].containers[0].env : e.value if e.name == "DIAGNOSE_KONTEN"] == [""]
+    error_message = "Ohne Eintrag in diagnose_konten ist jemand freigeschaltet."
+  }
+  assert {
+    condition     = google_firestore_field.kontingente_ttl.collection == "kontingente" && google_firestore_field.kontingente_ttl.field == "laeuft_ab" && length(google_firestore_field.kontingente_ttl.ttl_config) == 1
+    error_message = "Firestore löscht die Tageszähler nicht."
+  }
+}
+
+run "gibt_freigeschaltete_konten_an_den_server" {
+  command = plan
+
+  variables {
+    diagnose_konten = ["0123456789abcdef0123456789abcdef", "fedcba9876543210fedcba9876543210"]
+  }
+
+  assert {
+    condition     = [for e in google_cloud_run_v2_service.server.template[0].containers[0].env : e.value if e.name == "DIAGNOSE_KONTEN"] == ["0123456789abcdef0123456789abcdef,fedcba9876543210fedcba9876543210"]
+    error_message = "Der Server bekommt die freigeschalteten Konten nicht."
+  }
+}
+
+run "lehnt_konto_id_mit_tippfehler_ab" {
+  command = plan
+
+  variables {
+    diagnose_konten = ["0123456789ABCDEF0123456789abcdef"]
+  }
+
+  expect_failures = [var.diagnose_konten]
+}
+
+run "lehnt_zu_kurze_konto_id_ab" {
+  command = plan
+
+  variables {
+    diagnose_konten = ["0123456789abcdef"]
+  }
+
+  expect_failures = [var.diagnose_konten]
 }

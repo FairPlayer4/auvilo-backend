@@ -368,6 +368,19 @@ class SicherungsablaufTest {
         assertInstanceOf(Wiederhergestellt.Ja::class.java, wiederherstellen(server, anderes))
     }
 
+    // KRITISCH: Auch ein nur gesehener Zähler zählt beim Neuanlegen mit. Sonst finge
+    // das Handy nach dem Löschen bei 1 an, und das Tablet (kennt 5) lehnte die
+    // Sicherung des Handys dauerhaft als älter ab.
+    @Test
+    fun `nach abgelehnter Übernahme und Löschen zählt die nächste Sicherung über dem gesehenen Zähler weiter`() {
+        val server = FalscheAblage().apply { vonGeraet("tablet", zaehler = 5) }
+        val g = Geraet(server, uebernimmt = false)
+        g.sichern() // abgelehnt: Zähler 5 gesehen
+        runBlocking { g.ablauf.loeschen() }
+
+        assertEquals(6, (g.sichern() as Gesichert.Ja).zaehler)
+    }
+
     @Test
     fun `löscht auch ohne gemerkten Stand und merkt sich nichts`() {
         val server = FalscheAblage().apply { vonGeraet("tablet", zaehler = 4) }

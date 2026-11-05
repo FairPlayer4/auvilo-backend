@@ -218,6 +218,7 @@ aber nicht **was**. Wird in der Datenschutzerklärung so benannt.
 | Protokoll + Test-Client | **Kotlin** (JVM-CLI) | Krypto und Konfliktauflösung laufen nur auf dem Client; das Modul wandert später in die App |
 | Schnittstelle | **Protobuf** mit **Connect** (connectrpc.com), Schemas mit `buf` verwaltet | sprachneutral, typsicher in Go und Kotlin, läuft über normales HTTP und kann zum Debuggen auch JSON sprechen |
 | Daten | **Firestore** (Native Mode, EU-Region) | Gratis-Kontingent, kein Grundpreis, Gültigkeitsdauer (TTL) für Ablaufzeiten |
+| Datensicherungen | **Cloud Storage** (EU-Region, versioniert) | ein Chiffrat je Konto bis 8 MiB, ältere Fassungen als Rückfallebene (B2b) |
 | Push | Firebase Cloud Messaging | kostenlos, inhaltslos |
 | KI | Vertex AI (EU-Endpunkt) | Bezahlung pro Aufruf |
 | Secrets | Secret Manager | |
@@ -276,11 +277,11 @@ tragen die Tests die Spezifikation. Anleitung zum Review: [go-review.md](go-revi
 - Q6 Ende-zu-Ende: Test-Client simuliert mehrere Personen/Geräte gegen lokale und
   Cloud-Instanz.
 - Q7 Umgebung mit einem Befehl aufbauen und **vollständig wieder löschen**.
-- Q8 Dokumentation auf Deutsch (`docs/anforderungen.md`, `design.md`, `stand.md`).
+- Q8 Dokumentation auf Deutsch (`docs/anforderungen.md`, Entwürfe je Etappe, `stand.md`).
 
 ## 8. Nicht-Ziele (vorerst)
 
-- Anbindung an die App
+- Anbindung an die App über das Daten-Backup (B2b) hinaus
 - Dateien/Fotos/Audio in der Cloud (Idee 3.6), KI für Medien
 - Weboberfläche (außer der Pflichtseite zum Löschen, später)
 - Ferneinladung, Rechte pro Mitglied, öffentliche Registrierung
@@ -340,12 +341,12 @@ tragen die Tests die Spezifikation. Anleitung zum Review: [go-review.md](go-revi
 | 2026-11-01 | B1: Geräteschlüssel ECDSA P-256 (Android Keystore inkl. StrongBox); Personen- und Freigabeschlüssel bleiben wie in 4.1 |
 | 2026-11-01 | B1: Sitzungs-Token zufällig, 1 Stunde gültig, auf dem Server nur als Hash; Sperren wirkt sofort |
 | 2026-11-01 | B1: Google-Konto-ID nur als HMAC mit geheimem Pfeffer (Secret Manager) gespeichert |
-| 2026-11-01 | B1: Test mit Go-Werkzeug `testanmeldung`; Kotlin-Test-Client ab B2 |
+| 2026-11-01 | B1: Test mit Go-Werkzeug `testanmeldung`; Kotlin-Test-Client ab B2 (ersetzt: seit B2 testet der Kotlin-Test-Client) |
 | 2026-11-01 | Namen in Schnittstelle und Code deutsch, ohne Umlaute |
 | 2026-11-01 | Abgefangene Anfragen dürfen sich im Zeitfenster wiederholen (Anmelden ca. 5 min, Erneuern ±2 min); keine Merkliste benutzter Signaturen. Schutz: TLS, kurze Fenster, Sitzung 1 h (Test `TestWiederholteAnfrageImZeitfensterGiltBewusst`) |
 | 2026-11-01 | Geräte-IDs (pseudonym) dürfen in Logs stehen, zur Fehlersuche und Missbrauchsabwehr (Art. 6 Abs. 1 f). Einzeln löschen geht in Cloud Logging nicht; stattdessen: Konto löschen trennt sofort die Zuordnung (Firestore), Logs laufen nach 30 Tagen ab (P5). In die Datenschutzerklärung (P4); vor B6 von jemandem mit Datenschutzerfahrung prüfen lassen |
 | 2026-11-01 | Anfrage-Logs von Cloud Run (mit IP-Adresse und User-Agent) bleiben 30 Tage in `logs-eu`, zur Missbrauchsabwehr (Art. 6 Abs. 1 f); „nicht dauerhaft“ im Sinne von B3. In die Datenschutzerklärung (P4) |
-| 2026-11-01 | Keine Offline-Kopie des Pfeffers, solange es keine echten Nutzer gibt; Schutz gegen `tofu destroy` (`prevent_destroy`) und gegen das Zerstören einzelner Versionen (30 Tage wiederherstellbar), nicht gegen das Löschen des ganzen Secrets. Vor echtem Betrieb neu entscheiden |
+| 2026-11-01 | Keine Offline-Kopie des Pfeffers, solange es keine echten Nutzer gibt; Schutz gegen `tofu destroy` (`prevent_destroy`) und gegen das Zerstören einzelner Versionen (30 Tage wiederherstellbar), nicht gegen das Löschen des ganzen Secrets. Vor echtem Betrieb neu entscheiden (am 2026-11-04 entschieden) |
 | 2026-11-01 | B2: Krypto mit Google Tink (JVM und Android); Personenschlüssel = HPKE/X25519 + Ed25519, Tresor- und Freigabe-Schlüssel XChaCha20-Poly1305 ([b2-entwurf.md](b2-entwurf.md)) |
 | 2026-11-01 | B2: Wiederherstellungsschlüssel = 256 Bit Zufall, gedruckt als Base32 in Vierergruppen mit Prüfzeichen |
 | 2026-11-01 | B2: Server speichert je Konto ein verschlüsseltes Schlüssel-Backup mit Version (kein Überschreiben eines neueren); Konto-ID als zugehörige Daten |
@@ -354,12 +355,12 @@ tragen die Tests die Spezifikation. Anleitung zum Review: [go-review.md](go-revi
 | 2026-11-02 | B2: Wiederherstellungsschlüssel wird angezeigt und bestätigt, bevor etwas gespeichert oder hochgeladen wird; danach lokal ablegen (mit offenem Backup), dann hochladen. Scheitert das Hochladen, setzt der nächste Lauf fort (Review-Lauf 4) |
 | 2026-11-02 | Abläufe, die auch die App braucht (z. B. Einrichtung), liegen in `protokoll` hinter Schnittstellen (Server, lokale Ablage); `testclient` enthält nur CLI, Connect-Anbindung und Dateiablage (Review A1) |
 | 2026-11-02 | Tests prüfen Verhalten, nicht die geprüfte Konstante selbst (kein Test, der nur `VERSUCHE == 3` nachspricht) |
-| 2026-11-02 | Gradle-Prüfsummen (`verification-metadata.xml`) noch nicht; bekannte Grenze, vor der App einführen |
+| 2026-11-02 | Gradle-Prüfsummen (`verification-metadata.xml`) noch nicht; bekannte Grenze, vor der App einführen (ersetzt am selben Tag: in B2b eingeführt) |
 | 2026-11-02 | Review A2 (Mitgliedschaft: Server-Liste oder signiertes Log) im B3-Entwurf klären; A3 (Client-Formate maßgeblich beschreiben, feste Vektoren) wird in B2b vorgezogen |
 | 2026-11-02 | Etappe B2b vor B3 eingeschoben: Das Backend kommt früh als verschlüsseltes Backup in die App (interne Variante), für echte Tests von B1/B2. Kein verlässliches Backup (Kill-Switch); das lokale Backup bleibt. Entwurf: [b2b-entwurf.md](b2b-entwurf.md) |
 | 2026-11-02 | B2b: Daten-Backup ist eine undurchsichtige Nutzlast; die App legt ihre Room-Datenbank ab (gzip), ohne Fotos und Audio. Eigenes Datenformat erst in B3 |
 | 2026-11-02 | B2b: Sicherung mit dem Tresorschlüssel verschlüsselt; Kopf im Chiffrat mit Zähler, Zeit, Geräte-ID, Schema-Version. Kleinerer Zähler vom Server → Warnung, kein stilles Wiederherstellen |
-| 2026-11-02 | B2b: Ablage in Cloud Storage (`var.region`), ein Objekt je Konto, 3 ältere Fassungen, nach 30 Tagen gelöscht (am 2026-11-03 geändert: 7 Tage, höchstens 100); Schreiben nur mit erwarteter Version (`ifGenerationMatch`) |
+| 2026-11-02 | B2b: Ablage in Cloud Storage (`var.region`), ein Objekt je Konto, 3 ältere Fassungen, nach 30 Tagen gelöscht (am 2026-11-03 geändert: 7 Tage, höchstens 100, am 2026-11-04: 200); Schreiben nur mit erwarteter Version (`ifGenerationMatch`) |
 | 2026-11-02 | B2b: Ohne Synchronisation ein sicherndes Gerät; ein anderes übernimmt nur nach Rückfrage. Höchstens 8 MiB je Sicherung, Übertragung über den Server, Löschen von Anfang an |
 | 2026-11-02 | B2b: Formate maßgeblich in `docs/formate.md` mit festen Testvektoren (A3); Gradle-Prüfsummen; Modul `verbindung`; Einbindung per Composite Build |
 | 2026-11-02 | B2b: Testen nur Kevin und wenige Bekannte im internen Test-Track, eigene App-Variante; Testerinformation statt Datenschutzerklärung bis B6 |
@@ -368,7 +369,7 @@ tragen die Tests die Spezifikation. Anleitung zum Review: [go-review.md](go-revi
 | 2026-11-03 | Datensicherung: Sitzung wird auf HTTP-Ebene geprüft, bevor der Inhalt gelesen und ein Platz belegt wird (`sitzung.VorDemLesen`) |
 | 2026-11-03 | Schlüssel-Backup: Version beginnt nach dem Löschen wieder bei 1; Clients speichern nur mit erwarteter Version 0, Grabstein erst bei Bedarf (`schluessel.proto`) |
 | 2026-11-03 | Datensicherung: Wiederherstellen heißt übernehmen; abgelehnte Fassungen merkt sich das Gerät als gesehen (Untergrenze); Löschen behält den Zähler (`Sicherungsablauf.loeschen`) |
-| 2026-11-03 | Datensicherung: ältere Fassungen 7 Tage, höchstens 100, statt 3 Fassungen und 30 Tage ([b2b-entwurf.md](b2b-entwurf.md), E-B2b-4) |
+| 2026-11-03 | Datensicherung: ältere Fassungen 7 Tage, höchstens 100, statt 3 Fassungen und 30 Tage ([b2b-entwurf.md](b2b-entwurf.md), E-B2b-4) (am 2026-11-04 geändert: höchstens 200) |
 | 2026-11-03 | Kill-Switch: WARN (Alarm-Mail) nur bei neu gesperrten Diensten oder Trennen; ist schon alles gesperrt, INFO |
 | 2026-11-03 | Löschschutz (Firestore, Cloud Run, Bucket) wird vor echten Daten eingeschaltet ([b2b-entwurf.md](b2b-entwurf.md), „Vor echten Daten“) |
 | 2026-11-03 | SE1 „Signaturen jeder Operation“ meint die Sync-Operationen ab B3; bis dahin signieren nur Anmelden und Erneuern |
@@ -376,3 +377,7 @@ tragen die Tests die Spezifikation. Anleitung zum Review: [go-review.md](go-revi
 | 2026-11-03 | Datensicherung: Bucket ohne Soft Delete – Löschen löscht sofort (DSGVO Art. 17); vor Fehlern der App schützen die älteren Fassungen |
 | 2026-11-03 | Server: `GOMEMLIMIT=192MiB` bei 256 MiB; Parallelität bleibt 80, weil Sicherungen auf vier gleichzeitig begrenzt sind |
 | 2026-11-03 | Kill-Switch: zweiter Alarm, wenn die Funktion 23,5 h nicht aufgerufen wurde (Absenz-Bedingung, ca. 0,10 $/Monat) |
+| 2026-11-04 | Datensicherung: App sichert automatisch höchstens stündlich und nur bei Änderung, dazu manuell (höchstens einmal pro Minute); ältere Fassungen 7 Tage, höchstens 200 |
+| 2026-11-04 | Kill-Switch: WARN (Alarm-Mail) auch, wenn ab 100 % kein Dienst gefunden wird – sonst schützt er unbemerkt nichts (z. B. falsche REGION) |
+| 2026-11-04 | Pfeffer: Zu Beginn der Sicherheitsphase legt Kevin allein eine Offline-Kopie im Passwortmanager ab; sie schützt auch gegen das Löschen des ganzen Secrets. Ablauf zum Sichern und Wiederherstellen in [gcp-einrichtung.md](gcp-einrichtung.md); der Schutz in OpenTofu (`prevent_destroy`, 30 Tage für zerstörte Versionen) ist per `tofu test` abgesichert |
+| 2026-11-04 | Diagnose-Log aus der App ([diagnose-entwurf.md](diagnose-entwurf.md)): unverschlüsselt, ohne Inhalte (nur feste Ereignisse, typisierte Felder, Stapel ohne Meldungstext), nur auf Knopfdruck, nur freigeschaltete Konten, eigener Bucket in der EU, 14 Tage; Claude darf diese Logs lesen |

@@ -25,7 +25,8 @@ func TestVerarbeite(t *testing.T) {
 		name         string
 		daten        string
 		sperrFehler  error
-		neuGesperrt  int // so viele Dienste sperrt die Attrappe neu
+		gefunden     int // so viele Dienste findet die Attrappe (ohne Kill-Switch)
+		neuGesperrt  int // so viele davon sperrt sie neu
 		wantAktion   Aktion
 		wantGetrennt bool
 		wantErr      bool
@@ -33,17 +34,20 @@ func TestVerarbeite(t *testing.T) {
 		// kommt keine Alarm-Mail.
 		wantStufe slog.Level
 	}{
-		{"echte Meldung unter Budget: nichts", `{"budgetDisplayName":"b","costAmount":3.5,"budgetAmount":20,"currencyCode":"EUR","alertThresholdExceeded":0.25}`, nil, 0, Nichts, false, false, slog.LevelInfo},
-		{"Meldung über Budget: sperren", `{"costAmount":21,"budgetAmount":20}`, nil, 2, DiensteSperren, false, false, slog.LevelWarn},
+		{"echte Meldung unter Budget: nichts", `{"budgetDisplayName":"b","costAmount":3.5,"budgetAmount":20,"currencyCode":"EUR","alertThresholdExceeded":0.25}`, nil, 0, 0, Nichts, false, false, slog.LevelInfo},
+		{"Meldung über Budget: sperren", `{"costAmount":21,"budgetAmount":20}`, nil, 2, 2, DiensteSperren, false, false, slog.LevelWarn},
 		// Budget meldet mehrmals am Tag. Ist schon alles gesperrt, soll nicht jede
 		// Meldung eine Mail auslösen.
-		{"erneute Meldung über Budget, alles schon gesperrt: nur INFO", `{"costAmount":21,"budgetAmount":20}`, nil, 0, DiensteSperren, false, false, slog.LevelInfo},
-		{"Meldung weit über Budget: trennen, auch ohne neu gesperrte Dienste", `{"costAmount":31,"budgetAmount":20}`, nil, 0, AbrechnungTrennen, true, false, slog.LevelWarn},
-		{"Fehler beim Sperren wird als ERROR geloggt", `{"costAmount":21,"budgetAmount":20}`, sperrKaputt, 0, DiensteSperren, false, true, slog.LevelError},
-		{"lehnt kaputtes JSON ab", `{kaputt`, nil, 0, Nichts, false, true, slog.LevelError},
-		{"lehnt Meldung ohne Budget ab", `{"costAmount":21}`, nil, 0, Nichts, false, true, slog.LevelError},
-		{"lehnt Meldung ohne Kosten ab", `{"budgetAmount":20}`, nil, 0, Nichts, false, true, slog.LevelError},
-		{"Kosten 0 sind gültig, wenn angegeben", `{"costAmount":0,"budgetAmount":20}`, nil, 0, Nichts, false, false, slog.LevelInfo},
+		{"erneute Meldung über Budget, alles schon gesperrt: nur INFO", `{"costAmount":21,"budgetAmount":20}`, nil, 1, 0, DiensteSperren, false, false, slog.LevelInfo},
+		// Ohne gefundenen Dienst schützt der Kill-Switch nichts (z. B. falsche
+		// REGION): Das muss eine Mail auslösen.
+		{"Meldung über Budget, aber kein Dienst gefunden: WARN", `{"costAmount":21,"budgetAmount":20}`, nil, 0, 0, DiensteSperren, false, false, slog.LevelWarn},
+		{"Meldung weit über Budget: trennen, auch ohne neu gesperrte Dienste", `{"costAmount":31,"budgetAmount":20}`, nil, 1, 0, AbrechnungTrennen, true, false, slog.LevelWarn},
+		{"Fehler beim Sperren wird als ERROR geloggt", `{"costAmount":21,"budgetAmount":20}`, sperrKaputt, 0, 0, DiensteSperren, false, true, slog.LevelError},
+		{"lehnt kaputtes JSON ab", `{kaputt`, nil, 0, 0, Nichts, false, true, slog.LevelError},
+		{"lehnt Meldung ohne Budget ab", `{"costAmount":21}`, nil, 0, 0, Nichts, false, true, slog.LevelError},
+		{"lehnt Meldung ohne Kosten ab", `{"budgetAmount":20}`, nil, 0, 0, Nichts, false, true, slog.LevelError},
+		{"Kosten 0 sind gültig, wenn angegeben", `{"costAmount":0,"budgetAmount":20}`, nil, 0, 0, Nichts, false, false, slog.LevelInfo},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -53,7 +57,7 @@ func TestVerarbeite(t *testing.T) {
 			slog.SetDefault(slog.New(stufenRekorder{&stufen}))
 			t.Cleanup(func() { slog.SetDefault(alt) })
 
-			p := &attrappe{sperrFehler: tt.sperrFehler, dienste: tt.neuGesperrt}
+			p := &attrappe{sperrFehler: tt.sperrFehler, sperrung: Sperrung{Gefunden: tt.gefunden, Gesperrt: tt.neuGesperrt}}
 			erg, err := Verarbeite(context.Background(), []byte(tt.daten), StandardSchwellen, p)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("Fehler = %v, erwartet Fehler: %v", err, tt.wantErr)

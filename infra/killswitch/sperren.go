@@ -22,8 +22,17 @@ type CloudRun interface {
 	Sperre(ctx context.Context, name string) error
 }
 
+// Sperrung zählt, was SperreAlle vorgefunden und getan hat.
+type Sperrung struct {
+	// Gefunden zählt alle Dienste außer dem eigenen, auch schon gesperrte.
+	// 0 heißt: Der Kill-Switch schützt nichts (z. B. falsche REGION).
+	Gefunden int
+	// Gesperrt zählt die Dienste, die jetzt neu auf "nur intern" stehen.
+	Gesperrt int
+}
+
 // SperreAlle stellt alle offenen Cloud-Run-Dienste auf "nur intern" und gibt
-// zurück, wie viele es waren. Anfragen aus dem Internet werden dann
+// zurück, wie viele Dienste es gefunden und gesperrt hat. Anfragen aus dem Internet werden dann
 // abgewiesen, ohne dass eine Instanz startet – es entstehen keine
 // Rechenkosten mehr.
 //
@@ -33,26 +42,30 @@ type CloudRun interface {
 //   - Ein Fehler bei einem Dienst hält die anderen nicht auf; alle Fehler
 //     werden gesammelt zurückgegeben.
 //   - Scheitert schon das Auflisten, wird nichts gesperrt und der Fehler gemeldet.
-func SperreAlle(ctx context.Context, cr CloudRun, eigenerDienst string) (int, error) {
+func SperreAlle(ctx context.Context, cr CloudRun, eigenerDienst string) (Sperrung, error) {
+	var s Sperrung
 	dienste, err := cr.Dienste(ctx)
 	if err != nil {
-		return 0, fmt.Errorf("Dienste auflisten: %w", err)
+		return s, fmt.Errorf("Dienste auflisten: %w", err)
 	}
 
-	gesperrt := 0
 	var fehler []error
 	for _, d := range dienste {
-		if kurzname(d.Name) == eigenerDienst || d.Intern {
+		if kurzname(d.Name) == eigenerDienst {
+			continue
+		}
+		s.Gefunden++
+		if d.Intern {
 			continue
 		}
 		if err := cr.Sperre(ctx, d.Name); err != nil {
 			fehler = append(fehler, fmt.Errorf("%s: %w", d.Name, err))
 			continue
 		}
-		gesperrt++
+		s.Gesperrt++
 	}
 	// errors.Join gibt nil zurück, wenn die Liste leer ist.
-	return gesperrt, errors.Join(fehler...)
+	return s, errors.Join(fehler...)
 }
 
 // kurzname macht aus "projects/p/locations/r/services/name" den Namen "name".

@@ -18,7 +18,9 @@ import (
 	"github.com/FairPlayer4/avlreminder-backend/server/gen/avlreminder/v1/avlreminderv1connect"
 	"github.com/FairPlayer4/avlreminder-backend/server/internal/anmeldung"
 	"github.com/FairPlayer4/avlreminder-backend/server/internal/datensicherung"
+	"github.com/FairPlayer4/avlreminder-backend/server/internal/diagnose"
 	"github.com/FairPlayer4/avlreminder-backend/server/internal/geraeteschluessel"
+	"github.com/FairPlayer4/avlreminder-backend/server/internal/kontingent"
 	"github.com/FairPlayer4/avlreminder-backend/server/internal/sitzung"
 	"github.com/FairPlayer4/avlreminder-backend/server/internal/speicher"
 )
@@ -37,8 +39,13 @@ type Konfiguration struct {
 	Pruefer     AnmeldePruefer
 	Speicher    speicher.Speicher
 	Sicherungen datensicherung.Ablage
-	Pfeffer     []byte           // geheimer Wert für die Kennung (HMAC der Google-Konto-ID)
-	Jetzt       func() time.Time // nil = time.Now
+	Diagnosen   diagnose.Ablage
+	Kontingente kontingent.Zaehler // Tageszähler je Konto (Diagnosen)
+	// DiagnoseErlaubt sagt, ob ein Konto Diagnosen senden darf (freigeschaltete
+	// Konten, E-D-3). nil = keines.
+	DiagnoseErlaubt func(kontoID string) bool
+	Pfeffer         []byte           // geheimer Wert für die Kennung (HMAC der Google-Konto-ID)
+	Jetzt           func() time.Time // nil = time.Now
 	// Höchstens so viele Aufrufe des Datensicherungs-Dienstes gleichzeitig;
 	// 0 = StandardGleichzeitigeSicherungen.
 	GleichzeitigeSicherungen int
@@ -47,14 +54,17 @@ type Konfiguration struct {
 // NeuerHandler liefert den HTTP-Handler mit allen Diensten. Vor jedem Aufruf
 // läuft der Sitzungs-Interceptor; offen sind nur Anmelden und SitzungErneuern.
 func NeuerHandler(k Konfiguration) (http.Handler, error) {
-	if k.Pruefer == nil || k.Speicher == nil || k.Sicherungen == nil {
-		return nil, errors.New("Prüfer, Speicher und Sicherungen sind Pflicht")
+	if k.Pruefer == nil || k.Speicher == nil || k.Sicherungen == nil || k.Diagnosen == nil || k.Kontingente == nil {
+		return nil, errors.New("Prüfer, Speicher, Sicherungen, Diagnosen und Kontingente sind Pflicht")
 	}
 	if len(k.Pfeffer) < 32 {
 		return nil, errors.New("Pfeffer muss mindestens 32 Bytes lang sein")
 	}
 	if k.Jetzt == nil {
 		k.Jetzt = time.Now
+	}
+	if k.DiagnoseErlaubt == nil {
+		k.DiagnoseErlaubt = func(string) bool { return false }
 	}
 	if k.GleichzeitigeSicherungen <= 0 {
 		k.GleichzeitigeSicherungen = StandardGleichzeitigeSicherungen
@@ -83,6 +93,13 @@ func NeuerHandler(k Konfiguration) (http.Handler, error) {
 	// Reihenfolge: erst die Sitzung (ohne den Inhalt zu lesen), dann die Plätze.
 	// So belegen Anfragen ohne Anmeldung weder Plätze noch Speicher.
 	mux.Handle(pfad, interceptor.VorDemLesen(begrenze(k.GleichzeitigeSicherungen, sicherungen)))
+
+	// Diagnosen sind bis zu 256 KiB groß; auch hier Sitzung und Freischaltung vor
+	// dem Lesen. Sonst könnte jedes angemeldete Konto beliebig oft 256 KiB in den
+	// Speicher schieben, ohne je ans Tageslimit zu stoßen.
+	pfad, diagnosen := avlreminderv1connect.NewDiagnoseDienstHandler(d,
+		append(optionen, connect.WithReadMaxBytes(MaxDiagnoseanfrage))...)
+	mux.Handle(pfad, interceptor.VorDemLesen(nurFreigeschaltet(k.DiagnoseErlaubt, diagnosen)))
 	return mux, nil
 }
 

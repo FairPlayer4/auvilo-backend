@@ -1,11 +1,15 @@
 package com.avlreminder.verbindung
 
+import com.avlreminder.protokoll.DiagnoseNichtFreigeschaltet
+import com.avlreminder.protokoll.DiagnoseTageslimit
 import com.avlreminder.protokoll.SicherungZuGross
 import com.avlreminder.protokoll.VersionVeraltet
 import com.avlreminder.schnittstelle.v1.BackupHolenResponse
 import com.avlreminder.schnittstelle.v1.BackupLoeschenResponse
 import com.avlreminder.schnittstelle.v1.BackupSpeichernRequest
 import com.avlreminder.schnittstelle.v1.BackupSpeichernResponse
+import com.avlreminder.schnittstelle.v1.DiagnoseSendenRequest
+import com.avlreminder.schnittstelle.v1.DiagnoseSendenResponse
 import com.avlreminder.schnittstelle.v1.SicherungHolenResponse
 import com.avlreminder.schnittstelle.v1.SicherungLoeschenResponse
 import com.avlreminder.schnittstelle.v1.SicherungSpeichernRequest
@@ -179,12 +183,23 @@ class AdapterTest {
         assertEquals("Bearer $TOKEN", anfragen.single().autorisierung)
     }
 
+    @Test
+    fun `sendet die Diagnose mit Sitzung`() {
+        antwort = Antwort.Ok(DiagnoseSendenResponse.getDefaultInstance())
+        runBlocking { ServerDiagnoseAblage(verbindung(), TOKEN).senden(CHIFFRAT) }
+        val a = anfragen.single()
+        assertEquals("/avlreminder.v1.DiagnoseDienst/DiagnoseSenden", a.pfad)
+        assertEquals("Bearer $TOKEN", a.autorisierung)
+        assertArrayEquals(CHIFFRAT, DiagnoseSendenRequest.parseFrom(a.inhalt).nutzlast.toByteArray())
+    }
+
     companion object {
         private const val TOKEN = "test-token"
         private val CHIFFRAT = byteArrayOf(1, 2, 3, 0, -1)
 
         private fun sicherung(v: Verbindung) = ServerSicherungsAblage(v, TOKEN)
         private fun backup(v: Verbindung) = ServerBackupAblage(v, TOKEN)
+        private suspend fun diagnose(v: Verbindung): Any? = ServerDiagnoseAblage(v, TOKEN).senden(CHIFFRAT).let { "gesendet" }
 
         @JvmStatic
         fun fehlerfaelle() = listOf(
@@ -206,6 +221,12 @@ class AdapterTest {
             Fall("Backup speichern: zu groß bleibt Serverfehler", Code.RESOURCE_EXHAUSTED, { backup(it).speichern(CHIFFRAT, 1) }, Serverfehler::class),
             Fall("Backup speichern: nicht gefunden bleibt Serverfehler", Code.NOT_FOUND, { backup(it).speichern(CHIFFRAT, 1) }, Serverfehler::class),
             Fall("Backup löschen: Fehler bleibt Serverfehler", Code.UNAUTHENTICATED, { backup(it).loeschen() }, Serverfehler::class),
+            // Diagnose
+            Fall("Diagnose senden: keine Erlaubnis heißt nicht freigeschaltet", Code.PERMISSION_DENIED, { diagnose(it) }, DiagnoseNichtFreigeschaltet::class),
+            Fall("Diagnose senden: erschöpft heißt Tageslimit", Code.RESOURCE_EXHAUSTED, { diagnose(it) }, DiagnoseTageslimit::class),
+            Fall("Diagnose senden: ungültige Sitzung bleibt Serverfehler", Code.UNAUTHENTICATED, { diagnose(it) }, Serverfehler::class),
+            Fall("Diagnose senden: ungültige Anfrage bleibt Serverfehler", Code.INVALID_ARGUMENT, { diagnose(it) }, Serverfehler::class),
+            Fall("Diagnose senden: Überlastung bleibt Serverfehler", Code.UNAVAILABLE, { diagnose(it) }, Serverfehler::class),
         )
 
         private const val HTML_404 = "<html><body>404 Not Found</body></html>"
@@ -216,6 +237,9 @@ class AdapterTest {
             RohFall("Sicherung holen: Text mit 503", 503, "text/plain", "Service Unavailable") { sicherung(it).holen() },
             RohFall("Backup holen: HTML-Seite mit 404", 404, "text/html", HTML_404) { backup(it).holen() },
             RohFall("Backup holen: Text mit 503", 503, "text/plain", "Service Unavailable") { backup(it).holen() },
+            // Ein 403 ohne Connect-Fehler deutet Connect selbst als permission_denied
+            // (bekannte Grenze, siehe ServerDiagnoseAblage); darum hier 503.
+            RohFall("Diagnose senden: Text mit 503", 503, "text/plain", "Service Unavailable") { diagnose(it) },
         )
     }
 }

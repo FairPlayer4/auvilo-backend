@@ -47,7 +47,7 @@ func (p *gcpPlattform) Schliessen() error {
 // DiensteSperren erfüllt Plattform. Die eigentliche Logik steht in
 // SperreAlle (sperren.go); hier sind nur die Cloud-Run-Aufrufe.
 // Rückgängig: Ingress wieder auf "all" stellen (z. B. per gcloud).
-func (p *gcpPlattform) DiensteSperren(ctx context.Context) (int, error) {
+func (p *gcpPlattform) DiensteSperren(ctx context.Context) (Sperrung, error) {
 	return SperreAlle(ctx, p, p.eigenerDienst)
 }
 

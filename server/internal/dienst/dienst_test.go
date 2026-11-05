@@ -15,7 +15,9 @@ import (
 	"github.com/FairPlayer4/avlreminder-backend/server/gen/avlreminder/v1/avlreminderv1connect"
 	"github.com/FairPlayer4/avlreminder-backend/server/internal/anmeldung"
 	"github.com/FairPlayer4/avlreminder-backend/server/internal/datensicherung"
+	"github.com/FairPlayer4/avlreminder-backend/server/internal/diagnose"
 	"github.com/FairPlayer4/avlreminder-backend/server/internal/geraeteschluessel"
+	"github.com/FairPlayer4/avlreminder-backend/server/internal/kontingent"
 	"github.com/FairPlayer4/avlreminder-backend/server/internal/speicher"
 	"github.com/FairPlayer4/avlreminder-backend/server/internal/testhilfe"
 )
@@ -34,8 +36,12 @@ type testServer struct {
 	geraete  avlreminderv1connect.GeraeteDienstClient
 	backup   avlreminderv1connect.SchluesselDienstClient
 	sicherer avlreminderv1connect.DatensicherungDienstClient
+	diagnose avlreminderv1connect.DiagnoseDienstClient
 	speicher *speicher.Arbeitsspeicher
 	jetzt    time.Time // die Uhr des Servers; Tests stellen sie vor
+
+	diagnosen      *diagnose.Arbeitsspeicher
+	freigeschaltet map[string]bool // Konten, die Diagnosen senden dürfen
 }
 
 func neuerTestServer(t *testing.T) *testServer {
@@ -47,7 +53,13 @@ func neuerTestServer(t *testing.T) *testServer {
 // Grenze für gleichzeitige Sicherungen (0 = Standard).
 func neuerTestServerMit(t *testing.T, sicherungen datensicherung.Ablage, gleichzeitig int) *testServer {
 	t.Helper()
-	ts := &testServer{google: testhilfe.NeuesGoogle(t, clientID), speicher: speicher.NeuerArbeitsspeicher(), jetzt: start}
+	ts := &testServer{
+		google:         testhilfe.NeuesGoogle(t, clientID),
+		speicher:       speicher.NeuerArbeitsspeicher(),
+		jetzt:          start,
+		diagnosen:      diagnose.NeuerArbeitsspeicher(),
+		freigeschaltet: map[string]bool{},
+	}
 	uhr := func() time.Time { return ts.jetzt }
 	pruefer, err := anmeldung.NeuerPruefer(ts.google.Schluessel(), []string{clientID}, uhr)
 	if err != nil {
@@ -57,6 +69,9 @@ func neuerTestServerMit(t *testing.T, sicherungen datensicherung.Ablage, gleichz
 		Pruefer:                  pruefer,
 		Speicher:                 ts.speicher,
 		Sicherungen:              sicherungen,
+		Diagnosen:                ts.diagnosen,
+		Kontingente:              kontingent.NeuerArbeitsspeicher(),
+		DiagnoseErlaubt:          func(k string) bool { return ts.freigeschaltet[k] },
 		Pfeffer:                  []byte("0123456789abcdef0123456789abcdef"),
 		Jetzt:                    uhr,
 		GleichzeitigeSicherungen: gleichzeitig,
@@ -70,6 +85,7 @@ func neuerTestServerMit(t *testing.T, sicherungen datensicherung.Ablage, gleichz
 	ts.geraete = avlreminderv1connect.NewGeraeteDienstClient(http.DefaultClient, srv.URL)
 	ts.backup = avlreminderv1connect.NewSchluesselDienstClient(http.DefaultClient, srv.URL)
 	ts.sicherer = avlreminderv1connect.NewDatensicherungDienstClient(http.DefaultClient, srv.URL)
+	ts.diagnose = avlreminderv1connect.NewDiagnoseDienstClient(http.DefaultClient, srv.URL)
 	return ts
 }
 
@@ -348,6 +364,8 @@ func TestNeuerHandlerPrueftDieKonfiguration(t *testing.T) {
 			Pruefer:     &anmeldung.Pruefer{},
 			Speicher:    speicher.NeuerArbeitsspeicher(),
 			Sicherungen: datensicherung.NeuerArbeitsspeicher(),
+			Diagnosen:   diagnose.NeuerArbeitsspeicher(),
+			Kontingente: kontingent.NeuerArbeitsspeicher(),
 			Pfeffer:     []byte("0123456789abcdef0123456789abcdef"),
 		}
 	}
@@ -364,6 +382,8 @@ func TestNeuerHandlerPrueftDieKonfiguration(t *testing.T) {
 		{"lehnt fehlenden Prüfer ab", func(k *Konfiguration) { k.Pruefer = nil }},
 		{"lehnt fehlenden Speicher ab", func(k *Konfiguration) { k.Speicher = nil }},
 		{"lehnt fehlende Ablage für Sicherungen ab", func(k *Konfiguration) { k.Sicherungen = nil }},
+		{"lehnt fehlende Ablage für Diagnosen ab", func(k *Konfiguration) { k.Diagnosen = nil }},
+		{"lehnt fehlenden Tageszähler ab", func(k *Konfiguration) { k.Kontingente = nil }},
 	}
 	for _, fall := range faelle {
 		t.Run(fall.name, func(t *testing.T) {

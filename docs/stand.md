@@ -1,6 +1,6 @@
 # Stand und nächste Schritte
 
-Stand: 2026-11-03. Bei jedem größeren Schritt aktualisieren.
+Stand: 2026-11-04. Bei jedem größeren Schritt aktualisieren.
 
 ## In GCP (Projekt `avlreminder-exp-1ef2`, Region `europe-west1`)
 Etappe **B0** ist angelegt (OpenTofu, `infra/`):
@@ -10,7 +10,8 @@ Etappe **B0** ist angelegt (OpenTofu, `infra/`):
   25/50/90/100 % und bei Prognose 100 %
 - **Kill-Switch** (Cloud Function `killswitch`, Go): ab 100 % werden alle
   Cloud-Run-Dienste auf „nur intern“ gestellt, ab 150 % wird das Projekt vom
-  Rechnungskonto getrennt
+  Rechnungskonto getrennt. Er wird per `tofu apply` aus dem **lokalen** Stand gebaut,
+  nicht über `main`: nur von einem geprüften, committeten Stand anwenden.
 - **Alarm per E-Mail**, wenn der Kill-Switch eingreift (WARNING) oder scheitert
   (ERROR): Log-Alarmregel in Cloud Monitoring (`infra/alarm.tf`), ca. 0,10 $/Monat.
   Empfänger in `infra/werte.auto.tfvars` (`alarm_email`). Getestet am 2026-11-01:
@@ -52,6 +53,14 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
 - **Bekannte Grenze:** Ab 100 % sperrt der Kill-Switch nur Cloud-Run-**Dienste** in
   `var.region`. Cloud-Run-Jobs und Dienste in anderen Regionen bleiben offen; dafür
   greift erst das Trennen ab 150 %. Kommen solche dazu, den Kill-Switch erweitern.
+  Ebenso kostet Speicher (Bucket der Datensicherungen) nach der Sperre weiter, bis
+  zum Trennen; die Lebenszyklusregeln greifen erst verzögert. Ein Upload-Limit je
+  Konto und Zeit im Server kommt vor echten Daten
+  ([b2b-entwurf.md](b2b-entwurf.md), „Vor echten Daten“).
+- **Bekannte Grenze (Absenz-Alarm):** schlägt erst an, nachdem der Kill-Switch
+  einmal aufgerufen wurde. Nach einem Neuaufbau einmal eine Meldung unter der
+  Schwelle schicken (`gcloud pubsub topics publish budget-meldungen
+  --message='{"costAmount":1,"budgetAmount":20}'`) und den Aufruf im Log prüfen.
 - **Bekannte Grenze (Deploy-Konto):** Es darf den Dienst `server` ändern
   (`roles/run.developer`) und könnte damit technisch mehr als das Image setzen:
   den vom Kill-Switch gesperrten Ingress wieder öffnen, Mindestinstanzen, CPU
@@ -62,7 +71,7 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
 - **Bekannte Grenze (Kill-Switch):** Er darf Dienste ändern und dabei die
   eingetragenen Laufzeitkonten benutzen (actAs, nötig fürs Sperren). Eine
   kompromittierte Abhängigkeit im Kill-Switch könnte so ein fremdes Image als
-  Konto `server` starten (Firestore, Pfeffer). Vor echten Daten (B6) prüfen, ob
+  Konto `server` starten (Firestore, Pfeffer). Vor echten Daten (nicht erst B6) prüfen, ob
   das Sperren ohne actAs geht (Review Lauf 3).
 - Go-Tests: Entscheidung, Ausführung, Verarbeitung und Sperr-Logik (`sperren.go`)
   sind getestet. `gcp.go` enthält nur noch die Cloud-Aufrufe und wird durch den
@@ -142,19 +151,45 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
    **Review Lauf 5 am 2026-11-03** (`.review/runs/2026-11-03.md`), Fragen wie
    vorgeschlagen entschieden (anforderungen.md Kap. 11): Sitzung vor den
    Sicherungsplätzen geprüft, gesehene Zähler gemerkt, `Sicherungsablauf.loeschen`
-   behält den Zähler, Kill-Switch-Mail nur bei echtem Eingriff (wirkt nach dem
-   nächsten Deploy über `main`), Grenzen und „Vor echten Daten“ ergänzt.
+   behält den Zähler, Kill-Switch-Mail nur bei echtem Eingriff (aktiv seit
+   `tofu apply` in Schritt 5), Grenzen und „Vor echten Daten“ ergänzt.
    **Schritt 5 (Infrastruktur), Konfiguration am 2026-11-03:** Bucket
    `…-datensicherung` (`infra/datensicherung.tf`: Versionierung, ältere Fassungen
-   7 Tage/höchstens 100, ohne Soft Delete, nur Server-Konto mit `objectUser`),
+   7 Tage/höchstens 200 (am 2026-11-04 von 100 erhöht), ohne Soft Delete, nur Server-Konto mit `objectUser`),
    `SICHERUNG_BUCKET` und `GOMEMLIMIT=192MiB` am Server (Parallelität bleibt 80,
    Begründung in `server.tf`), Build-Konto liest nur Quellen und `gcf-v2-*` und
    schreibt nur ins Repo `funktionen`, Absenz-Alarm „Kill-Switch wird nicht mehr
    aufgerufen“ (23,5 h), `pruefe-regionen.sh` prüft Listen, neue tofu-Tests.
    Image-Scan (SE3): kein eigener Scanner (anforderungen.md Kap. 11).
-   **Weiter mit:** `tofu apply` (nach Kevins Go), danach PR nach `main` (Deploy des
-   Servers mit Datensicherung und des Kill-Switch), Test in der Cloud mit dem
-   Test-Client, dann Schritt 6 (Review-Lauf).
+   Am selben Tag angewendet (`tofu apply`, 7 neu, 2 geändert, 3 entfernt; Kill-Switch
+   mit dem engeren Build-Konto neu gebaut) und per PR #8 deployt.
+   **In der Cloud getestet** am 2026-11-03 (Geräte `cloud-pc`, `cloud-handy`,
+   Sitzung per `erneuern`, Dateien ohne echte Inhalte): `cloud-pc` sichert zweimal
+   (125 B und 2 MB, zwei Fassungen im Bucket); `cloud-handy` stellt byte-gleich
+   wieder her und sichert selbst; `cloud-pc` fragt dann nach („nein“ lässt die
+   Sicherung stehen, „ja“ überschreibt mit Zähler 4); 9 MB lehnt der Client vor dem
+   Hochladen ab; `sicherung-loeschen` entfernt alle Fassungen, danach „keine
+   Datensicherung“ und Neuanlage. Ohne Sitzung antwortet der Dienst
+   `unauthenticated`. Server-Log nur Gerät, Bytes, Version.
+   **Schritt 6 (Review Lauf 6) am 2026-11-03** (`.review/runs/2026-11-03-2.md`).
+   Am 2026-11-04 entschieden und umgesetzt: App sichert höchstens stündlich plus
+   manuell, ältere Fassungen höchstens 200; Kill-Switch warnt (Mail), wenn ab 100 %
+   kein Dienst gefunden wird. Beides wirkt erst nach `tofu apply` (Bucket-Regel und
+   Neubau des Kill-Switch aus dem lokalen Stand).
+   Pfeffer: Offline-Kopie zu Beginn der Sicherheitsphase (Ablauf in
+   [gcp-einrichtung.md](gcp-einrichtung.md)), tofu-Test für den Schutz.
+   Diagnose-Log aus der App: Entwurf [diagnose-entwurf.md](diagnose-entwurf.md)
+   (bestätigt am 2026-11-04). Server, `infra/diagnose.tf` (Bucket `…-diagnose`,
+   14 Tage, Server darf nur anlegen; Firestore-TTL der Tageszähler) und
+   `werkzeuge/diagnose-holen.sh` am 2026-11-04 umgesetzt; Infrastruktur am selben
+   Tag angewendet (3 neu, 1 geändert). Test-Client: `diagnose-senden` (feste
+   Test-Diagnose; nennt bei „nicht freigeschaltet“ die Konto-ID), Packen und Senden
+   in `protokoll` (`Diagnose`), Adapter in `verbindung`. **Offen:** Deploy über PR
+   nach `main`, dann Kevins Konto-ID in `diagnose_konten` (`infra/werte.auto.tfvars`)
+   eintragen, `tofu apply`, und in der Cloud testen: `diagnose-senden`, danach
+   `werkzeuge/diagnose-holen.sh`.
+   **Weiter mit:** Upload-Limit und Sperren ohne actAs vor echten Daten; Schritt 7 (App-Einbindung, eigener Entwurf im App-Repo). Offen aus
+   Lauf 5: Empfehlungen E5–E7; aus Lauf 6: E1–E6.
 5. Für den B3-Entwurf aus Lauf 4: A2 (Mitgliedschaft: Server-Liste oder signiertes
    Log), A4 (Umschläge an Kontext binden, Keyset-Typen prüfen), A5 (Speicher und
    Dienste aufteilen; Anfang in B2b). A3 (Formate festschreiben) kommt in B2b.
@@ -170,10 +205,11 @@ cd infra/killswitch && go test -cover ./...
 
 Server lokal gegen Firestore-Emulator und fake-gcs-server (beide vorher starten,
 Bucket `lokal` anlegen, siehe [entwicklungsumgebung.md](entwicklungsumgebung.md));
-`PFEFFER` ist ein Zufallswert nur für diesen Lauf:
+`PFEFFER` ist ein Zufallswert nur für diesen Lauf. Für `diagnose-senden` zusätzlich
+`DIAGNOSE_KONTEN=<eigene Konto-ID>` setzen, sonst ist niemand freigeschaltet:
 
 ```bash
-cd server && FIRESTORE_EMULATOR_HOST=localhost:8086 STORAGE_EMULATOR_HOST=localhost:4443 SICHERUNG_BUCKET=lokal PROJEKT=lokal GOOGLE_CLIENT_IDS=82416816442-vka4ve2no02681umqkn8b0rk37ri37qd.apps.googleusercontent.com PFEFFER=$(openssl rand -base64 32) go run ./cmd/server
+cd server && FIRESTORE_EMULATOR_HOST=localhost:8086 STORAGE_EMULATOR_HOST=localhost:4443 SICHERUNG_BUCKET=lokal DIAGNOSE_BUCKET=lokal PROJEKT=lokal GOOGLE_CLIENT_IDS=82416816442-vka4ve2no02681umqkn8b0rk37ri37qd.apps.googleusercontent.com PFEFFER=$(openssl rand -base64 32) go run ./cmd/server
 ```
 
 Test-Client (Kotlin, B2) bauen, dann als Gerät anmelden und Schlüssel einrichten
@@ -198,6 +234,12 @@ Kill-Switch von Hand auslösen (sperrt alle Cloud-Run-Dienste!):
 
 ```bash
 gcloud pubsub topics publish budget-meldungen --message='{"costAmount":21,"budgetAmount":20}'
+```
+
+Nach einer Sperre wieder öffnen (erst, wenn die Ursache geklärt ist):
+
+```bash
+gcloud run services update server --region=europe-west1 --ingress=all
 ```
 
 Logs lesen (liegen im EU-Bucket, nicht im Standard-Bucket):
