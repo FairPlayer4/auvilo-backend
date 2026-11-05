@@ -131,7 +131,7 @@ func TestNichtFreigeschaltetesGeraetDarfNichtsAendern(t *testing.T) {
 			}
 			_, err := ts.geraete.GeraeteAuflisten(context.Background(), mitSitzung(&v1.GeraeteAuflistenRequest{}, k.handySitzung))
 			if connect.CodeOf(err) != connect.CodeUnauthenticated {
-				return fmt.Errorf("Handy nach dem Sperren: %v, erwartet unauthenticated", err)
+				return fmt.Errorf("Handy nach dem Sperren: Code %v, erwartet unauthenticated", connect.CodeOf(err))
 			}
 			return nil
 		}},
@@ -153,7 +153,7 @@ func TestNichtFreigeschaltetesGeraetDarfNichtsAendern(t *testing.T) {
 				return err
 			}
 			if b, err := ts.backupHolen(k.handySitzung); err != nil || string(b.Chiffrat) != "backup-laptop" {
-				return fmt.Errorf("Backup danach = %v, Fehler %v", b, err)
+				return fmt.Errorf("Backup danach = %v, Fehler %w", b, err)
 			}
 			return nil
 		}},
@@ -162,7 +162,7 @@ func TestNichtFreigeschaltetesGeraetDarfNichtsAendern(t *testing.T) {
 				return err
 			}
 			if _, err := ts.backupHolen(k.handySitzung); connect.CodeOf(err) != connect.CodeNotFound {
-				return fmt.Errorf("Backup nach dem Löschen: %v, erwartet not_found", err)
+				return fmt.Errorf("Backup nach dem Löschen: Code %v, erwartet not_found", connect.CodeOf(err))
 			}
 			return nil
 		}},
@@ -175,7 +175,7 @@ func TestNichtFreigeschaltetesGeraetDarfNichtsAendern(t *testing.T) {
 				return err
 			}
 			if s, err := ts.sicherungHolen(k.handySitzung); err != nil || string(s.Chiffrat) != "sicherung-laptop" {
-				return fmt.Errorf("Sicherung danach = %v, Fehler %v", s, err)
+				return fmt.Errorf("Sicherung danach = %v, Fehler %w", s, err)
 			}
 			return nil
 		}},
@@ -184,7 +184,7 @@ func TestNichtFreigeschaltetesGeraetDarfNichtsAendern(t *testing.T) {
 				return err
 			}
 			if _, err := ts.sicherungHolen(k.handySitzung); connect.CodeOf(err) != connect.CodeNotFound {
-				return fmt.Errorf("Sicherung nach dem Löschen: %v, erwartet not_found", err)
+				return fmt.Errorf("Sicherung nach dem Löschen: Code %v, erwartet not_found", connect.CodeOf(err))
 			}
 			return nil
 		}},
