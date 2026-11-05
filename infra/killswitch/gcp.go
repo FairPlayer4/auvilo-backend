@@ -69,7 +69,11 @@ func (p *gcpPlattform) Dienste(ctx context.Context) ([]Dienst, error) {
 		// er als offen. Sperre liest sie noch einmal und meldet den Fehler, falls
 		// es wieder scheitert; die anderen Dienste werden trotzdem gesperrt.
 		pol, err := p.richtlinie(ctx, d.Name)
-		dienste = append(dienste, Dienst{Name: d.Name, Gesperrt: err == nil && !istOeffentlich(pol)})
+		dienste = append(dienste, Dienst{
+			Name:               d.Name,
+			Gesperrt:           err == nil && !istOeffentlich(pol),
+			OhneAufrufpruefung: d.GetInvokerIamDisabled(),
+		})
 	}
 }
 

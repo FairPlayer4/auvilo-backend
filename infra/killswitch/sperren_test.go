@@ -40,6 +40,7 @@ func TestSperreAlle(t *testing.T) {
 	web := Dienst{Name: pfad + "web"}
 	killswitch := Dienst{Name: pfad + "killswitch"}
 	schonGesperrt := Dienst{Name: pfad + "gesperrt", Gesperrt: true}
+	ohnePruefung := Dienst{Name: pfad + "ohne-pruefung", Gesperrt: true, OhneAufrufpruefung: true}
 	listKaputt := errors.New("List-Fehler")
 	apiKaputt := errors.New("Update-Fehler")
 
@@ -63,6 +64,9 @@ func TestSperreAlle(t *testing.T) {
 		// zu: kein Eingriff, sonst gäbe es eine WARN-Mail ohne Grund.
 		{"inzwischen gesperrter Dienst zählt nicht als neu gesperrt", cloudRunAttrappe{dienste: []Dienst{api, web}, schonZu: map[string]bool{api.Name: true}}, "killswitch", []string{web.Name}, Sperrung{Gefunden: 2, Gesperrt: 1}, nil},
 		{"Fehler bei einem Dienst hält die anderen nicht auf", cloudRunAttrappe{dienste: []Dienst{api, web}, fehlerBei: map[string]error{api.Name: apiKaputt}}, "killswitch", []string{web.Name}, Sperrung{Gefunden: 2, Gesperrt: 1}, apiKaputt},
+		// KRITISCH: Ohne Aufrufprüfung ist ein Dienst ohne allUsers trotzdem
+		// offen; das muss als Fehler (Mail) auffallen, nicht als „gesperrt“.
+		{"Dienst ohne Aufrufprüfung ist ein Fehler, die anderen werden gesperrt", cloudRunAttrappe{dienste: []Dienst{ohnePruefung, api}}, "killswitch", []string{api.Name}, Sperrung{Gefunden: 2, Gesperrt: 1}, ErrOhneAufrufpruefung},
 		{"scheitert das Auflisten, wird nichts gesperrt", cloudRunAttrappe{dienste: []Dienst{api}, listFehler: listKaputt}, "killswitch", nil, Sperrung{}, listKaputt},
 		{"ohne eigenen Namen werden alle offenen gesperrt", cloudRunAttrappe{dienste: []Dienst{api}}, "", []string{api.Name}, Sperrung{Gefunden: 1, Gesperrt: 1}, nil},
 	}

@@ -13,6 +13,10 @@ import (
 type Dienst struct {
 	Name     string // voller Name, z. B. "projects/p/locations/r/services/api"
 	Gesperrt bool   // niemand aus dem Internet darf ihn aufrufen (oeffentlich fehlt)
+	// OhneAufrufpruefung: Cloud Run prüft das Aufrufrecht gar nicht
+	// (invokerIamDisabled). Dann ist der Dienst ohne "allUsers" offen, und
+	// die IAM-Richtlinie zu ändern sperrt nichts.
+	OhneAufrufpruefung bool
 }
 
 // CloudRun kapselt die beiden Cloud-Run-Aufrufe, die das Sperren braucht.
@@ -82,6 +86,10 @@ func ohneOeffentlich(p *iampb.Policy) bool {
 	return geaendert
 }
 
+// ErrOhneAufrufpruefung meldet einen Dienst, der das Aufrufrecht nicht prüft
+// (invokerIamDisabled) und damit auch ohne "allUsers" offen ist.
+var ErrOhneAufrufpruefung = errors.New("Aufrufprüfung abgeschaltet (invokerIamDisabled): Dienst ist offen und lässt sich so nicht sperren")
+
 // Sperrung zählt, was SperreAlle vorgefunden und getan hat.
 type Sperrung struct {
 	// Gefunden zählt alle Dienste außer dem eigenen, auch schon gesperrte.
@@ -115,6 +123,13 @@ func SperreAlle(ctx context.Context, cr CloudRun, eigenerDienst string) (Sperrun
 			continue
 		}
 		s.Gefunden++
+		// KRITISCH: Ohne Aufrufprüfung kann der Kill-Switch den Dienst nicht
+		// sperren (dafür müsste er ihn ändern, und das darf er bewusst nicht).
+		// Ein Fehler löst die Alarm-Mail aus, statt still „gesperrt“ zu melden.
+		if d.OhneAufrufpruefung {
+			fehler = append(fehler, fmt.Errorf("%s: %w", d.Name, ErrOhneAufrufpruefung))
+			continue
+		}
 		if d.Gesperrt {
 			continue
 		}
