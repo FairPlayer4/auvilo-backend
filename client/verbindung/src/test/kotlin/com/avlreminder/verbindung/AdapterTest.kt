@@ -111,13 +111,24 @@ class AdapterTest {
     }
 
     // KRITISCH: Ein 404 ohne Connect-Code (falsche Adresse, Proxy) darf nicht als
-    // „keine Sicherung“ gelten, sonst richtete ein Gerät sich neu ein.
+    // „keine Sicherung“ gelten, sonst richtete ein Gerät sich neu ein. Ein 403 ohne
+    // Connect-Code (Kill-Switch) darf nicht als „nicht freigeschaltet“ gelten, sonst
+    // führte die App ein freigeschaltetes Gerät in die Freischaltung.
     @ParameterizedTest(name = "{0}")
     @MethodSource("rohfaelle")
     fun `Antworten ohne Connect-Fehler bleiben Serverfehler`(fall: RohFall) {
         antwort = Antwort.Roh(fall.status, fall.typ, fall.text)
         val e = runCatching { runBlocking { fall.aufruf(verbindung()) } }.exceptionOrNull()
-        assertTrue(e is Serverfehler, "erwartet Serverfehler, bekommen $e")
+        assertTrue(fall.erwartet.isInstance(e), "erwartet ${fall.erwartet.simpleName}, bekommen $e")
+        if (e is Serverfehler) assertEquals(false, e.vomDienst, "Antwort ohne Connect-Fehler gilt als vom Dienst")
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("connectFehlerMit403")
+    fun `Connect-Fehler mit 403 heißt weiter nicht freigeschaltet`(fall: RohFall) {
+        antwort = Antwort.Roh(fall.status, fall.typ, fall.text)
+        val e = runCatching { runBlocking { fall.aufruf(verbindung()) } }.exceptionOrNull()
+        assertTrue(fall.erwartet.isInstance(e), "erwartet ${fall.erwartet.simpleName}, bekommen $e")
     }
 
     data class RohFall(
@@ -125,6 +136,7 @@ class AdapterTest {
         val status: Int,
         val typ: String,
         val text: String,
+        val erwartet: KClass<out Throwable> = Serverfehler::class,
         val aufruf: suspend (Verbindung) -> Any?,
     ) {
         override fun toString() = name
@@ -201,6 +213,10 @@ class AdapterTest {
         val b = runBlocking { ServerBackupAblage(verbindung(), TOKEN).holen() }!!
         assertArrayEquals(CHIFFRAT, b.chiffrat)
         assertEquals(5, b.version)
+        // Backup- und Sicherungsantwort sind feldgleich; nur der Pfad zeigt, dass
+        // der richtige Dienst gefragt wurde.
+        assertEquals("/avlreminder.v1.SchluesselDienst/BackupHolen", anfragen.single().pfad)
+        assertEquals("Bearer $TOKEN", anfragen.single().autorisierung)
     }
 
     @Test
@@ -296,9 +312,27 @@ class AdapterTest {
             RohFall("Sicherung holen: Text mit 503", 503, "text/plain", "Service Unavailable") { sicherung(it).holen() },
             RohFall("Backup holen: HTML-Seite mit 404", 404, "text/html", HTML_404) { backup(it).holen() },
             RohFall("Backup holen: Text mit 503", 503, "text/plain", "Service Unavailable") { backup(it).holen() },
-            // Ein 403 ohne Connect-Fehler deutet Connect selbst als permission_denied
-            // (bekannte Grenze, siehe ServerDiagnoseAblage); darum hier 503.
             RohFall("Diagnose senden: Text mit 503", 503, "text/plain", "Service Unavailable") { diagnose(it) },
+            // So antwortet Google, wenn der Kill-Switch allUsers entfernt hat.
+            RohFall("Sicherung speichern: HTML-Seite mit 403", 403, "text/html", HTML_403) { sicherung(it).speichern(CHIFFRAT, 1) },
+            RohFall("Sicherung löschen: HTML-Seite mit 403", 403, "text/html", HTML_403) { sicherung(it).loeschen() },
+            RohFall("Backup speichern: HTML-Seite mit 403", 403, "text/html", HTML_403) { backup(it).speichern(CHIFFRAT, SCHLUESSEL, 1) },
+            RohFall("Backup löschen: HTML-Seite mit 403", 403, "text/html", HTML_403) { backup(it).loeschen() },
+            RohFall("Mit Wiederherstellung freischalten: HTML-Seite mit 403", 403, "text/html", HTML_403) { geraete(it).mitWiederherstellung(CHIFFRAT) },
+            RohFall("Gerät freischalten: HTML-Seite mit 403", 403, "text/html", HTML_403) { geraete(it).freischalten("x") },
+            RohFall("Diagnose senden: HTML-Seite mit 403", 403, "text/html", HTML_403) { diagnose(it) },
+        )
+
+        private const val HTML_403 = "<html><body>403 Forbidden</body></html>"
+        private const val JSON_403 = """{"code":"permission_denied","message":"nicht freigeschaltet"}"""
+
+        // Gegenprobe: Derselbe Status mit Connect-Fehler (so antwortet der Dienst
+        // selbst) heißt weiter „nicht freigeschaltet“.
+        @JvmStatic
+        fun connectFehlerMit403() = listOf(
+            RohFall("Sicherung speichern: Connect-Fehler mit 403", 403, "application/json", JSON_403, GeraetNichtFreigeschaltet::class) { sicherung(it).speichern(CHIFFRAT, 1) },
+            RohFall("Backup löschen: Connect-Fehler mit 403", 403, "application/json; charset=utf-8", JSON_403, GeraetNichtFreigeschaltet::class) { backup(it).loeschen() },
+            RohFall("Diagnose senden: Connect-Fehler mit 403", 403, "application/json", JSON_403, DiagnoseNichtFreigeschaltet::class) { diagnose(it) },
         )
     }
 }
