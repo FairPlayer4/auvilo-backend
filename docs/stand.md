@@ -74,10 +74,19 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
   (`allUsers` entfernen) und darf nur Dienste auflisten und deren Richtlinie
   lesen und setzen. Er kann keinen Dienst ändern und kein Image starten.
   **Grenze:** Kompromittierter Code im Kill-Switch könnte Dienste sperren oder
-  Aufrufrechte vergeben; die Dienste prüfen die Anmeldung ohnehin selbst.
+  Rechte auf Dienste vergeben, auch sich selbst (z. B. `run.admin`, dann könnte
+  er Dienste löschen). Ein fremdes Image starten kann er auch so nicht (kein
+  actAs); die Dienste prüfen die Anmeldung ohnehin selbst.
+  **Noch nicht in der Cloud getestet** (Stand Review-Lauf 8): Der Test vom
+  2026-11-01 galt dem alten Weg über den Ingress. Vor echten Daten einmal mit
+  einem Testdienst durchspielen (Meldung 21/20, `allUsers` weg, andere Bindungen
+  bleiben, Mail kommt; danach Testdienst löschen).
 - **Löschschutz** (seit 2026-11-05, vor echten Daten): Firestore, der Dienst
-  `server` und der Bucket der Datensicherungen lassen sich weder mit `tofu destroy`
-  noch aus Versehen löschen. Das Projekt zu löschen geht weiterhin (Q7).
+  `server` und der Bucket der Datensicherungen lassen sich nicht mit `tofu destroy`
+  löschen. In GCP selbst schützt nur Firestore (`delete_protection_state`): Den
+  Dienst (ohne Daten) und den Bucket (mit den Sicherungen, ohne Soft Delete, also
+  endgültig) kann ein Owner in der Konsole oder mit `gcloud` weiter löschen. Das
+  Projekt zu löschen geht weiterhin (Q7).
 - Go-Tests: Entscheidung, Ausführung, Verarbeitung und Sperr-Logik (`sperren.go`)
   sind getestet. `gcp.go` enthält nur noch die Cloud-Aufrufe und wird durch den
   Test in der Cloud geprüft.
@@ -257,6 +266,14 @@ Variable bricht `tofu plan` mit „gesperrt“ ab):
 
 ```bash
 tofu -chdir=infra apply -var=gesperrte_dienste_oeffnen=true
+```
+
+Die Variable öffnet **alle** gesperrten Dienste. Soll während der Sperre etwas
+anderes geändert werden und der Dienst zu bleiben, nur die betroffenen
+Ressourcen anwenden, z. B.:
+
+```bash
+tofu -chdir=infra apply -target=google_cloud_run_v2_service.server
 ```
 
 Logs lesen (liegen im EU-Bucket, nicht im Standard-Bucket):
