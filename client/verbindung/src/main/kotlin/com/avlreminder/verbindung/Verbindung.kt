@@ -7,6 +7,8 @@ import com.avlreminder.protokoll.DiagnoseAblage
 import com.avlreminder.protokoll.DiagnoseNichtFreigeschaltet
 import com.avlreminder.protokoll.DiagnoseTageslimit
 import com.avlreminder.protokoll.DiagnoseZuGross
+import com.avlreminder.protokoll.GeraeteFreischaltung
+import com.avlreminder.protokoll.GeraetNichtFreigeschaltet
 import com.avlreminder.protokoll.GeholteSicherung
 import com.avlreminder.protokoll.GeholtesBackup
 import com.avlreminder.protokoll.SicherungTageslimit
@@ -20,7 +22,9 @@ import com.avlreminder.schnittstelle.v1.BackupSpeichernRequest
 import com.avlreminder.schnittstelle.v1.DatensicherungDienstClient
 import com.avlreminder.schnittstelle.v1.DiagnoseDienstClient
 import com.avlreminder.schnittstelle.v1.DiagnoseSendenRequest
+import com.avlreminder.schnittstelle.v1.GeraetFreischaltenRequest
 import com.avlreminder.schnittstelle.v1.GeraeteDienstClient
+import com.avlreminder.schnittstelle.v1.MitWiederherstellungFreischaltenRequest
 import com.avlreminder.schnittstelle.v1.SchluesselDienstClient
 import com.avlreminder.schnittstelle.v1.SicherungHolenRequest
 import com.avlreminder.schnittstelle.v1.SicherungLoeschenRequest
@@ -69,6 +73,14 @@ class Serverfehler(val ursache: ConnectException) : Exception("Server: ${ursache
     val code: Code get() = ursache.code
 }
 
+/**
+ * permission_denied heißt bei den ändernden Aufrufen: Dieses Gerät ist noch
+ * nicht freigeschaltet (geraete.proto, E-B2b-13). Gleiche Grenze wie bei
+ * [ServerDiagnoseAblage]: Ein 403 ohne Connect-Fehler landet ebenfalls hier.
+ */
+private fun Serverfehler.nichtFreigeschaltetOder(): Exception =
+    if (code == Code.PERMISSION_DENIED) GeraetNichtFreigeschaltet() else this
+
 /** Die Backup-Ablage des Servers für die Einrichtung (protokoll). */
 class ServerBackupAblage(private val verbindung: Verbindung, private val token: String) : BackupAblage {
     override suspend fun holen(): GeholtesBackup? =
@@ -79,20 +91,53 @@ class ServerBackupAblage(private val verbindung: Verbindung, private val token: 
             if (e.code == Code.NOT_FOUND) null else throw e
         }
 
-    override suspend fun speichern(chiffrat: ByteArray, erwartet: Long): Long =
+    override suspend fun speichern(chiffrat: ByteArray, freischaltschluessel: ByteArray, erwartet: Long): Long =
         try {
             val anfrage = BackupSpeichernRequest.newBuilder()
                 .setChiffrat(ByteString.copyFrom(chiffrat))
+                .setFreischaltschluessel(ByteString.copyFrom(freischaltschluessel))
                 .setErwarteteVersion(erwartet)
                 .build()
             verbindung.schluessel.backupSpeichern(anfrage, mitSitzung(token)).ergebnis().version
         } catch (e: Serverfehler) {
-            if (e.code == Code.FAILED_PRECONDITION) throw VersionVeraltet() else throw e
+            if (e.code == Code.FAILED_PRECONDITION) throw VersionVeraltet() else throw e.nichtFreigeschaltetOder()
         }
 
     /** Löscht das Schlüssel-Backup des Kontos (gibt es keins, ist das kein Fehler). */
     suspend fun loeschen() {
-        verbindung.schluessel.backupLoeschen(BackupLoeschenRequest.getDefaultInstance(), mitSitzung(token)).ergebnis()
+        try {
+            verbindung.schluessel.backupLoeschen(BackupLoeschenRequest.getDefaultInstance(), mitSitzung(token)).ergebnis()
+        } catch (e: Serverfehler) {
+            throw e.nichtFreigeschaltetOder()
+        }
+    }
+}
+
+/**
+ * Freischaltung von Geräten (geraete.proto, E-B2b-13).
+ *
+ * KRITISCH: Nur permission_denied heißt „nicht freigeschaltet“ bzw. „Signatur
+ * passt nicht“. not_found (fremdes Gerät) und failed_precondition (gesperrt, kein
+ * Backup mit Freischaltschlüssel) bleiben Serverfehler mit eigener Meldung.
+ */
+class ServerGeraete(private val verbindung: Verbindung, private val token: String) : GeraeteFreischaltung {
+    override suspend fun mitWiederherstellung(signatur: ByteArray) {
+        try {
+            val anfrage = MitWiederherstellungFreischaltenRequest.newBuilder().setSignatur(ByteString.copyFrom(signatur)).build()
+            verbindung.geraete.mitWiederherstellungFreischalten(anfrage, mitSitzung(token)).ergebnis()
+        } catch (e: Serverfehler) {
+            throw e.nichtFreigeschaltetOder()
+        }
+    }
+
+    /** Schaltet ein anderes Gerät des Kontos frei; dieses Gerät muss selbst freigeschaltet sein. */
+    suspend fun freischalten(geraetId: String) {
+        try {
+            val anfrage = GeraetFreischaltenRequest.newBuilder().setGeraetId(geraetId).build()
+            verbindung.geraete.geraetFreischalten(anfrage, mitSitzung(token)).ergebnis()
+        } catch (e: Serverfehler) {
+            throw e.nichtFreigeschaltetOder()
+        }
     }
 }
 
@@ -128,12 +173,16 @@ class ServerSicherungsAblage(private val verbindung: Verbindung, private val tok
                 // Gesendeten unterscheidet: Bis 8 MiB lehnt er nur wegen des Limits ab.
                 Code.RESOURCE_EXHAUSTED ->
                     if (chiffrat.size > Datensicherung.MAX_CHIFFRAT) throw SicherungZuGross(chiffrat.size) else throw SicherungTageslimit()
-                else -> throw e
+                else -> throw e.nichtFreigeschaltetOder()
             }
         }
 
     override suspend fun loeschen() {
-        verbindung.sicherung.sicherungLoeschen(SicherungLoeschenRequest.getDefaultInstance(), mitSitzung(token)).ergebnis()
+        try {
+            verbindung.sicherung.sicherungLoeschen(SicherungLoeschenRequest.getDefaultInstance(), mitSitzung(token)).ergebnis()
+        } catch (e: Serverfehler) {
+            throw e.nichtFreigeschaltetOder()
+        }
     }
 }
 

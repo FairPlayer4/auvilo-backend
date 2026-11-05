@@ -33,8 +33,12 @@ type Geraet struct {
 	KontoID    string
 	Schluessel []byte // öffentlicher Geräteschlüssel, PKIX/DER
 	Gesperrt   bool
-	Erstellt   time.Time
-	GesperrtAm time.Time // Nullwert, solange nicht gesperrt
+	// Freigeschaltet: Das Gerät darf sperren, freischalten, speichern und
+	// löschen (E-B2b-13, docs/b2b-entwurf.md). Legt Anmelden fest, danach
+	// ändert es nur GeraetFreischalten.
+	Freigeschaltet bool
+	Erstellt       time.Time
+	GesperrtAm     time.Time // Nullwert, solange nicht gesperrt
 }
 
 // Sitzung ist eine ausgestellte Sitzung. Das Token selbst wird nie gespeichert,
@@ -55,16 +59,21 @@ type NeueSitzung struct {
 
 // AnmeldeErgebnis ist das Ergebnis von Anmelden.
 type AnmeldeErgebnis struct {
-	KontoID    string
-	NeuesKonto bool
+	KontoID        string
+	NeuesKonto     bool
+	Freigeschaltet bool // gilt für das angemeldete Gerät
 }
 
 // Backup ist das verschlüsselte Schlüssel-Backup eines Kontos (B2). Der Server
 // kann es nicht lesen; er kennt nur Größe, Version und Änderungszeitpunkt.
 type Backup struct {
-	Chiffrat  []byte
-	Version   int64 // zählt ab 1; 0 heißt "es gibt keins"
-	Geaendert time.Time
+	Chiffrat []byte
+	// Freischaltschluessel ist der öffentliche Ed25519-Schlüssel, mit dem sich
+	// ein neues Gerät freischaltet (Paket freischaltung). Leer bei Backups aus
+	// der Zeit davor.
+	Freischaltschluessel []byte
+	Version              int64 // zählt ab 1; 0 heißt "es gibt keins"
+	Geaendert            time.Time
 }
 
 // Speicher ist alles, was die Dienste vom Speicher brauchen.
@@ -76,6 +85,12 @@ type Speicher interface {
 	// KRITISCH: Ein gesperrtes Gerät bleibt gesperrt (ErrGeraetGesperrt), auch
 	// wenn der Google-Login stimmt. Ein Geräteschlüssel, der schon zu einem
 	// anderen Konto gehört, wird abgelehnt (ErrGeraetFremd).
+	//
+	// KRITISCH (E-B2b-13): Ein neues Gerät ist genau dann freigeschaltet, wenn
+	// das Konto kein freigeschaltetes, ungesperrtes Gerät hat und kein Backup
+	// mit Freischaltschlüssel – wenn es also nichts zu schützen gibt. Wer nur
+	// den Google-Login hat, bekommt sonst ein Gerät, das nichts ändern darf.
+	// Ein vorhandenes Gerät behält sein Merkmal.
 	Anmelden(ctx context.Context, kennung string, geraet Geraet, sitzung NeueSitzung) (AnmeldeErgebnis, error)
 
 	// Geraet liefert ein Gerät oder ErrNichtGefunden.
@@ -101,6 +116,12 @@ type Speicher interface {
 	// ErrNichtGefunden – so verrät der Server nicht, ob es die ID gibt.
 	GeraetSperren(ctx context.Context, kontoID, geraetID string, jetzt time.Time) error
 
+	// GeraetFreischalten schaltet ein Gerät des Kontos frei. Wiederholbar.
+	//
+	// KRITISCH: Nur Geräte des angegebenen Kontos (sonst ErrNichtGefunden, wie
+	// beim Sperren). Ein gesperrtes Gerät bleibt draußen (ErrGeraetGesperrt).
+	GeraetFreischalten(ctx context.Context, kontoID, geraetID string) error
+
 	// BackupSpeichern legt das Backup des Kontos ab oder ersetzt es und
 	// liefert die neue Version (erwartet + 1).
 	//
@@ -108,12 +129,13 @@ type Speicher interface {
 	// erwartet ist (0 = es gibt noch keins), geprüft in derselben Transaktion.
 	// Sonst ErrVersionVeraltet und nichts ändert sich. So überschreibt ein Gerät
 	// nie unbemerkt ein Backup, das ein anderes Gerät inzwischen geändert hat.
-	BackupSpeichern(ctx context.Context, kontoID string, chiffrat []byte, erwartet int64, jetzt time.Time) (int64, error)
+	// Der Freischaltschlüssel wird mit dem Backup gespeichert und ersetzt.
+	BackupSpeichern(ctx context.Context, kontoID string, chiffrat, freischaltschluessel []byte, erwartet int64, jetzt time.Time) (int64, error)
 
 	// BackupHolen liefert das Backup des Kontos oder ErrNichtGefunden.
 	BackupHolen(ctx context.Context, kontoID string) (Backup, error)
 
-	// BackupLoeschen entfernt das Backup des Kontos. Gibt es keins, ist das
+	// BackupLoeschen entfernt das Backup des Kontos samt Freischaltschlüssel. Gibt es keins, ist das
 	// kein Fehler. Danach beginnt ein neues Backup wieder mit Version 1.
 	BackupLoeschen(ctx context.Context, kontoID string) error
 }

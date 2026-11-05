@@ -4,10 +4,12 @@ go 1.27
 
 require (
 	cloud.google.com/go/billing v1.28.1
+	cloud.google.com/go/iam v1.14.0
 	cloud.google.com/go/run v1.24.1
 	github.com/GoogleCloudPlatform/functions-framework-go v1.9.2
 	github.com/cloudevents/sdk-go/v2 v2.16.2
 	google.golang.org/api v0.310.0
+	google.golang.org/protobuf v1.36.12
 )
 
 require (
@@ -15,7 +17,6 @@ require (
 	cloud.google.com/go/auth v0.24.1-0.20261001053825-dbc26066f70a // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.3.0 // indirect
 	cloud.google.com/go/compute/metadata v0.10.0 // indirect
-	cloud.google.com/go/iam v1.14.0 // indirect
 	cloud.google.com/go/longrunning v1.3.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/felixge/httpsnoop v1.1.0 // indirect
@@ -48,5 +49,4 @@ require (
 	google.golang.org/genproto/googleapis/api v0.0.0-20261012220534-4341edf3f941 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20261019180522-ce908d29299b // indirect
 	google.golang.org/grpc v1.84.0 // indirect
-	google.golang.org/protobuf v1.36.12 // indirect
 )

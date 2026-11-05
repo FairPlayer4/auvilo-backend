@@ -1,12 +1,15 @@
 package com.avlreminder.protokoll
 
+import com.google.crypto.tink.subtle.Ed25519Verify
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertInstanceOf
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertSame
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.params.ParameterizedTest
@@ -14,9 +17,17 @@ import org.junit.jupiter.params.provider.MethodSource
 
 class EinrichtungTest {
 
-    /** Server-Ablage im Speicher, mit derselben Versionsprüfung wie der Server. */
-    class FalscheAblage(var backup: GeholtesBackup? = null) : BackupAblage {
+    /**
+     * Server im Speicher, mit derselben Versionsprüfung wie der Server und
+     * echter Prüfung der Freischalt-Signatur (für das Gerät [GERAET]).
+     */
+    class FalscheAblage(
+        var backup: GeholtesBackup? = null,
+        var freischaltschluessel: ByteArray? = null,
+    ) : BackupAblage, GeraeteFreischaltung {
         var gespeichert = 0
+        var freigeschaltet = false
+        var freischaltVersuche = 0
 
         /** Läuft vor dem Speichern, z. B. ein anderes Gerät, das schneller ist. */
         var vorDemSpeichern: (() -> Unit)? = null
@@ -29,14 +40,27 @@ class EinrichtungTest {
 
         override suspend fun holen() = backup
 
-        override suspend fun speichern(chiffrat: ByteArray, erwartet: Long): Long {
+        override suspend fun speichern(chiffrat: ByteArray, freischaltschluessel: ByteArray, erwartet: Long): Long {
             vorDemSpeichern?.invoke()?.also { vorDemSpeichern = null }
             if (nichtErreichbar) throw Netzfehler()
             if ((backup?.version ?: 0L) != erwartet) throw VersionVeraltet()
             gespeichert++
             backup = GeholtesBackup(chiffrat, erwartet + 1)
+            this.freischaltschluessel = freischaltschluessel
             if (antwortGehtVerloren) throw Netzfehler()
             return erwartet + 1
+        }
+
+        override suspend fun mitWiederherstellung(signatur: ByteArray) {
+            freischaltVersuche++
+            if (nichtErreichbar) throw Netzfehler()
+            val schluessel = freischaltschluessel ?: throw GeraetNichtFreigeschaltet()
+            try {
+                Ed25519Verify(schluessel).verify(signatur, Wiederherstellungsschluessel.freischaltNachricht(GERAET))
+            } catch (_: java.security.GeneralSecurityException) {
+                throw GeraetNichtFreigeschaltet()
+            }
+            freigeschaltet = true
         }
     }
 
@@ -58,6 +82,7 @@ class EinrichtungTest {
         vararg eingaben: String?,
         val bestaetigt: Boolean = true,
         val beimAnzeigen: () -> Unit = {},
+        val freigeschaltet: Boolean = false,
     ) {
         var angezeigt: Wiederherstellungsschluessel? = null
         private val rest = eingaben.toMutableList()
@@ -65,6 +90,9 @@ class EinrichtungTest {
         fun ausfuehren() = runBlocking {
             Einrichtung(
                 KONTO,
+                GERAET,
+                freigeschaltet,
+                server,
                 server,
                 lokal,
                 frageSchluessel = { rest.removeFirst() },
@@ -93,6 +121,9 @@ class EinrichtungTest {
         // Lokal liegt derselbe Bund, nichts mehr offen.
         assertSame(ergebnis.bund, lauf.lokal.stand!!.bund)
         assertNull(lauf.lokal.stand!!.offenesBackup)
+        // Mit dem Backup geht der Freischaltschlüssel des angezeigten Schlüssels hoch.
+        assertArrayEquals(lauf.angezeigt!!.freischaltschluessel(), lauf.server.freischaltschluessel)
+        assertEquals(0, lauf.server.freischaltVersuche)
     }
 
     // KRITISCH: Erst anzeigen, dann lokal ablegen, dann hochladen. Sonst kann ein
@@ -137,7 +168,8 @@ class EinrichtungTest {
         server.nichtErreichbar = false
         val zweiter = Lauf(server, erster.lokal)
         assertInstanceOf(Eingerichtet.Neu::class.java, zweiter.ausfuehren())
-        assertArrayEquals(offen, server.backup!!.chiffrat)
+        assertArrayEquals(offen.chiffrat, server.backup!!.chiffrat)
+        assertArrayEquals(erster.angezeigt!!.freischaltschluessel(), server.freischaltschluessel)
         assertNull(zweiter.angezeigt, "kein zweiter Wiederherstellungsschlüssel")
     }
 
@@ -146,13 +178,18 @@ class EinrichtungTest {
     @Test
     fun `überschreibt kein Backup, das ein anderes Gerät gerade angelegt hat`() {
         val server = FalscheAblage()
-        server.vorDemSpeichern = { server.backup = vorhanden.backup }
+        server.vorDemSpeichern = {
+            server.backup = vorhanden.backup
+            server.freischaltschluessel = vorhanden.freischaltschluessel
+        }
         val lauf = Lauf(server, FalscherLokalerSpeicher(), vorhanden.text)
         val ergebnis = lauf.ausfuehren()
 
         assertInstanceOf(Eingerichtet.AusBackup::class.java, ergebnis)
         assertEquals(vorhanden.fingerabdruck, ergebnis.bund.person.oeffentlich.fingerabdruck())
         assertSame(vorhanden.backup, server.backup)
+        assertSame(vorhanden.freischaltschluessel, server.freischaltschluessel)
+        assertTrue(server.freigeschaltet, "mit dem Schlüssel des anderen Geräts freigeschaltet")
         // Lokal liegt jetzt der Bund des anderen Geräts, nichts offen.
         assertEquals(vorhanden.fingerabdruck, lauf.lokal.stand!!.bund.person.oeffentlich.fingerabdruck())
         assertNull(lauf.lokal.stand!!.offenesBackup)
@@ -161,34 +198,57 @@ class EinrichtungTest {
     // --- Weitere Geräte ----------------------------------------------------
 
     @Test
-    fun `mit Backup holt das Gerät die Schlüssel, legt sie ab und lädt nichts hoch`() {
-        val lauf = Lauf(FalscheAblage(vorhanden.backup), FalscherLokalerSpeicher(), vorhanden.text)
+    fun `mit Backup holt das Gerät die Schlüssel, schaltet sich frei, legt sie ab und lädt nichts hoch`() {
+        val lauf = Lauf(vorhanden.server(), FalscherLokalerSpeicher(), vorhanden.text)
         val ergebnis = lauf.ausfuehren()
 
         assertInstanceOf(Eingerichtet.AusBackup::class.java, ergebnis)
         assertEquals(vorhanden.fingerabdruck, ergebnis.bund.person.oeffentlich.fingerabdruck())
         assertSame(ergebnis.bund, lauf.lokal.stand!!.bund)
+        assertTrue(lauf.server.freigeschaltet)
         assertEquals(0, lauf.server.gespeichert)
         assertNull(lauf.angezeigt)
     }
 
     @Test
+    fun `ein schon freigeschaltetes Gerät schaltet sich nicht noch einmal frei`() {
+        val lauf = Lauf(vorhanden.server(), FalscherLokalerSpeicher(), vorhanden.text, freigeschaltet = true)
+        assertInstanceOf(Eingerichtet.AusBackup::class.java, lauf.ausfuehren())
+        assertEquals(0, lauf.server.freischaltVersuche)
+    }
+
+    // KRITISCH: Scheitert die Freischaltung, legt das Gerät nichts ab. Der nächste
+    // Lauf fragt wieder nach dem Schlüssel und schaltet dann frei.
+    @Test
+    fun `legt nichts ab, wenn die Freischaltung scheitert`() {
+        val server = vorhanden.server().apply { nichtErreichbar = true }
+        val erster = Lauf(server, FalscherLokalerSpeicher(), vorhanden.text)
+        assertThrows<Netzfehler> { erster.ausfuehren() }
+        assertNull(erster.lokal.stand)
+        assertFalse(server.freigeschaltet)
+
+        server.nichtErreichbar = false
+        assertInstanceOf(Eingerichtet.AusBackup::class.java, Lauf(server, erster.lokal, vorhanden.text).ausfuehren())
+        assertTrue(server.freigeschaltet)
+    }
+
+    @Test
     fun `nimmt den richtigen Schlüssel nach einem Tippfehler an`() {
-        val ergebnis = Lauf(FalscheAblage(vorhanden.backup), FalscherLokalerSpeicher(), "AAAA-BBBB", vorhanden.text.lowercase()).ausfuehren()
+        val ergebnis = Lauf(vorhanden.server(), FalscherLokalerSpeicher(), "AAAA-BBBB", vorhanden.text.lowercase()).ausfuehren()
         assertEquals(vorhanden.fingerabdruck, ergebnis.bund.person.oeffentlich.fingerabdruck())
     }
 
     // Gegenstück zu „lehnt nach drei Tippfehlern ab“: Der dritte Versuch zählt noch.
     @Test
     fun `nimmt den richtigen Schlüssel im dritten Versuch an`() {
-        val ergebnis = Lauf(FalscheAblage(vorhanden.backup), FalscherLokalerSpeicher(), "falsch", fremdes.text, vorhanden.text).ausfuehren()
+        val ergebnis = Lauf(vorhanden.server(), FalscherLokalerSpeicher(), "falsch", fremdes.text, vorhanden.text).ausfuehren()
         assertEquals(vorhanden.fingerabdruck, ergebnis.bund.person.oeffentlich.fingerabdruck())
     }
 
     @Test
     fun `ein eingerichtetes Gerät fragt den Server nicht`() {
         val bund = Schluesselbund.erzeugen()
-        val server = FalscheAblage(vorhanden.backup).apply { nichtErreichbar = true }
+        val server = vorhanden.server().apply { nichtErreichbar = true }
         val ergebnis = Lauf(server, FalscherLokalerSpeicher(LokalerStand(bund, null))).ausfuehren()
         assertInstanceOf(Eingerichtet.Vorhanden::class.java, ergebnis)
         assertSame(bund, ergebnis.bund)
@@ -198,7 +258,7 @@ class EinrichtungTest {
 
     data class Ablehnung(
         val name: String,
-        val backup: GeholtesBackup?,
+        val konto: Vorhanden?,
         val eingaben: List<String?>,
         val bestaetigt: Boolean = true,
     ) {
@@ -206,23 +266,31 @@ class EinrichtungTest {
     }
 
     // KRITISCH: Zu jeder Annahme oben die Ablehnung. Danach gibt es keinen
-    // Schlüsselbund, lokal liegt nichts, und am Backup auf dem Server ändert sich nichts.
+    // Schlüsselbund, lokal liegt nichts, am Backup auf dem Server ändert sich
+    // nichts, und das Gerät ist nicht freigeschaltet.
     @ParameterizedTest(name = "{0}")
     @MethodSource("ablehnungen")
     fun `lehnt ab`(fall: Ablehnung) {
-        val lauf = Lauf(FalscheAblage(fall.backup), FalscherLokalerSpeicher(), *fall.eingaben.toTypedArray(), bestaetigt = fall.bestaetigt)
+        val server = fall.konto?.server() ?: FalscheAblage()
+        val vorher = server.backup
+        val lauf = Lauf(server, FalscherLokalerSpeicher(), *fall.eingaben.toTypedArray(), bestaetigt = fall.bestaetigt)
         assertThrows<EinrichtungAbgebrochen> { lauf.ausfuehren() }
         assertEquals(0, lauf.server.gespeichert)
-        assertSame(fall.backup, lauf.server.backup)
+        assertSame(vorher, lauf.server.backup)
         assertNull(lauf.lokal.stand)
+        assertFalse(lauf.server.freigeschaltet)
     }
 
     @Test
     fun `fragt nach dem Abbruch nicht weiter`() {
         val eingaben = mutableListOf<String?>(null, vorhanden.text)
+        val server = vorhanden.server()
         val e = Einrichtung(
             KONTO,
-            FalscheAblage(vorhanden.backup),
+            GERAET,
+            false,
+            server,
+            server,
             FalscherLokalerSpeicher(),
             frageSchluessel = { eingaben.removeFirst() },
             zeigeWiederherstellung = { true },
@@ -239,23 +307,28 @@ class EinrichtungTest {
         val text = schluessel.alsText()
         val fingerabdruck = bund.person.oeffentlich.fingerabdruck()
         val backup = GeholtesBackup(bund.backupVerschluesseln(schluessel, kontoId), 1)
+        val freischaltschluessel = schluessel.freischaltschluessel()
+
+        /** Ein Server, auf dem dieses Backup samt Freischaltschlüssel liegt. */
+        fun server() = FalscheAblage(backup, freischaltschluessel)
     }
 
     companion object {
         private const val KONTO = "konto-a"
+        private const val GERAET = "d0e5518e666349cb0a3637c6b536b1cd"
         private val vorhanden = Vorhanden(KONTO)
         private val fremdes = Vorhanden("konto-b")
 
         @JvmStatic
         fun ablehnungen() = listOf(
-            Ablehnung("lehnt nach drei Tippfehlern ab", vorhanden.backup, listOf("falsch", "auch falsch", "immer noch falsch")),
-            Ablehnung("lehnt den Wiederherstellungsschlüssel eines anderen Kontos ab", vorhanden.backup, List(3) { fremdes.text }),
+            Ablehnung("lehnt nach drei Tippfehlern ab", vorhanden, listOf("falsch", "auch falsch", "immer noch falsch")),
+            Ablehnung("lehnt den Wiederherstellungsschlüssel eines anderen Kontos ab", vorhanden, List(3) { fremdes.text }),
             Ablehnung(
                 "lehnt ein vom Server untergeschobenes Backup eines anderen Kontos ab, selbst mit dessen Schlüssel",
-                fremdes.backup,
+                fremdes,
                 List(3) { fremdes.text },
             ),
-            Ablehnung("lehnt ab, wenn der Mensch abbricht", vorhanden.backup, listOf(null)),
+            Ablehnung("lehnt ab, wenn der Mensch abbricht", vorhanden, listOf(null)),
             Ablehnung("speichert nichts, wenn der Mensch den neuen Schlüssel nicht bestätigt", null, emptyList(), bestaetigt = false),
         )
     }

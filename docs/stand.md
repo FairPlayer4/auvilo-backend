@@ -8,8 +8,8 @@ Etappe **B0** ist angelegt (OpenTofu, `infra/`):
   `container` mit Aufräumregeln
 - Budget 20 €/Monat nur für dieses Projekt, Kosten **vor** Guthaben; E-Mail bei
   25/50/90/100 % und bei Prognose 100 %
-- **Kill-Switch** (Cloud Function `killswitch`, Go): ab 100 % werden alle
-  Cloud-Run-Dienste auf „nur intern“ gestellt, ab 150 % wird das Projekt vom
+- **Kill-Switch** (Cloud Function `killswitch`, Go): ab 100 % wird allen
+  Cloud-Run-Diensten das öffentliche Aufrufrecht (`allUsers`) entzogen, ab 150 % wird das Projekt vom
   Rechnungskonto getrennt. Er wird per `tofu apply` aus dem **lokalen** Stand gebaut,
   nicht über `main`: nur von einem geprüften, committeten Stand anwenden.
 - **Alarm per E-Mail**, wenn der Kill-Switch eingreift (WARNING) oder scheitert
@@ -64,16 +64,20 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
   --message='{"costAmount":1,"budgetAmount":20}'`) und den Aufruf im Log prüfen.
 - **Bekannte Grenze (Deploy-Konto):** Es darf den Dienst `server` ändern
   (`roles/run.developer`) und könnte damit technisch mehr als das Image setzen:
-  den vom Kill-Switch gesperrten Ingress wieder öffnen, Mindestinstanzen, CPU
+  den Ingress, Mindestinstanzen, CPU
   dauerhaft, bis zu 100 Instanzen, oder den Dienst löschen. Mindestinstanzen
   kosten auch nach dem Sperren weiter, bis ab 150 % getrennt wird. Der Deploy
-  selbst ändert nur das Image; `tofu apply` setzt alles außer Image und Ingress
-  zurück. Voraussetzung wäre fremder Code auf `main`.
-- **Bekannte Grenze (Kill-Switch):** Er darf Dienste ändern und dabei die
-  eingetragenen Laufzeitkonten benutzen (actAs, nötig fürs Sperren). Eine
-  kompromittierte Abhängigkeit im Kill-Switch könnte so ein fremdes Image als
-  Konto `server` starten (Firestore, Pfeffer). Vor echten Daten (nicht erst B6) prüfen, ob
-  das Sperren ohne actAs geht (Review Lauf 3).
+  selbst ändert nur das Image; `tofu apply` setzt alles außer dem Image zurück.
+  Einen vom Kill-Switch gesperrten Dienst kann es nicht öffnen (dafür fehlt
+  `setIamPolicy`). Voraussetzung wäre fremder Code auf `main`.
+- **Kill-Switch ohne actAs** (seit 2026-11-05): Er sperrt über die IAM-Richtlinie
+  (`allUsers` entfernen) und darf nur Dienste auflisten und deren Richtlinie
+  lesen und setzen. Er kann keinen Dienst ändern und kein Image starten.
+  **Grenze:** Kompromittierter Code im Kill-Switch könnte Dienste sperren oder
+  Aufrufrechte vergeben; die Dienste prüfen die Anmeldung ohnehin selbst.
+- **Löschschutz** (seit 2026-11-05, vor echten Daten): Firestore, der Dienst
+  `server` und der Bucket der Datensicherungen lassen sich weder mit `tofu destroy`
+  noch aus Versehen löschen. Das Projekt zu löschen geht weiterhin (Q7).
 - Go-Tests: Entscheidung, Ausführung, Verarbeitung und Sperr-Logik (`sperren.go`)
   sind getestet. `gcp.go` enthält nur noch die Cloud-Aufrufe und wird durch den
   Test in der Cloud geprüft.
@@ -191,7 +195,16 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
    Server-Log nennt nur Gerät und Größe.
    **Upload-Limit** am 2026-11-05: 48 Sicherungen je Konto und Tag (E-B2b-12),
    Server und Kotlin (`SicherungTageslimit`); Deploy über PR nach `main`.
-   **Weiter mit:** Sperren ohne actAs vor echten Daten; Schritt 7 (App-Einbindung, eigener Entwurf im App-Repo). Offen aus
+   **Vor echten Daten** am 2026-11-05: Kill-Switch sperrt ohne actAs, Löschschutz
+   in OpenTofu (am 2026-11-05 angewendet).
+   **Neue Geräte erst nach Freischaltung** (E-B2b-13) am 2026-11-05: Server
+   (Merkmal am Gerät, Prüfung in allen ändernden Diensten, `GeraetFreischalten`,
+   `MitWiederherstellungFreischalten`), Ableitung in `protokoll` mit gemeinsamen
+   Testvektoren, Adapter, Test-Client (`freischalten <id>`, Anzeige in `geraete`).
+   Deploy über PR nach `main`. Alte Testgeräte sind danach nicht freigeschaltet:
+   mit neuem Gerätenamen anmelden.
+   **Weiter mit:** die Schritte, die nur Kevin macht
+   (b2b-entwurf.md, „Vor echten Daten“, Punkte 1–3 und 6); Schritt 7 (App-Einbindung, eigener Entwurf im App-Repo). Offen aus
    Lauf 5: Empfehlungen E5–E7; aus Lauf 6: E1–E6.
 5. Für den B3-Entwurf aus Lauf 4: A2 (Mitgliedschaft: Server-Liste oder signiertes
    Log), A4 (Umschläge an Kontext binden, Keyset-Typen prüfen), A5 (Speicher und
@@ -239,10 +252,11 @@ Kill-Switch von Hand auslösen (sperrt alle Cloud-Run-Dienste!):
 gcloud pubsub topics publish budget-meldungen --message='{"costAmount":21,"budgetAmount":20}'
 ```
 
-Nach einer Sperre wieder öffnen (erst, wenn die Ursache geklärt ist):
+Nach einer Sperre wieder öffnen (erst, wenn die Ursache geklärt ist; ohne die
+Variable bricht `tofu plan` mit „gesperrt“ ab):
 
 ```bash
-gcloud run services update server --region=europe-west1 --ingress=all
+tofu -chdir=infra apply -var=gesperrte_dienste_oeffnen=true
 ```
 
 Logs lesen (liegen im EU-Bucket, nicht im Standard-Bucket):

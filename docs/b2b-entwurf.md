@@ -155,22 +155,72 @@ gelesen hat. Bevor die App-Variante echte Daten sichert:
    Screenshot, kein Gespräch mit Claude.
 4. **Löschschutz an:** Firestore `deletion_policy = "ABANDON"` und
    `delete_protection_state`, Cloud Run `deletion_protection = true`, Bucket mit
-   `force_destroy = false`. Bis dahin muss das Lernprojekt vollständig löschbar sein.
+   `force_destroy = false`. (In OpenTofu erledigt 2026-11-05, per `tofu test`
+   abgesichert; „vollständig löschbar“ bleibt über das Löschen des Projekts.)
 5. **Neue Geräte:** entscheiden und umsetzen, dass ein neu angemeldetes Gerät erst
    nach Freischaltung (QR oder Wiederherstellungsschlüssel) andere Geräte sperren und
    Backup oder Datensicherung löschen darf, und dass vorhandene Geräte von jedem neuen
    Gerät erfahren (Grenze in [b1-entwurf.md](b1-entwurf.md), „Gerät sperren“).
+   Erledigt 2026-11-05: E-B2b-13 (unten), Server, Schnittstelle, `protokoll`,
+   Adapter und Test-Client. Der Hinweis „Neues Gerät angemeldet“ kommt mit der App.
 6. **Pfeffer offline sichern:** Die Konto-ID ist ein HMAC der Google-Konto-ID mit
    dem Pfeffer. Geht er verloren, findet kein Gerät Schlüssel-Backup und
    Datensicherung wieder. Kevin legt allein eine Kopie im Passwortmanager ab
    (Ablauf und Wiederherstellen in [gcp-einrichtung.md](gcp-einrichtung.md)).
 7. **Kosten und Rechte:** Upload-Limit je Konto und Tag im Server (erledigt
-   2026-11-05, E-B2b-12); prüfen, ob der Kill-Switch ohne actAs auf die
-   Laufzeitkonten sperren kann (Grenzen in [stand.md](stand.md)).
+   2026-11-05, E-B2b-12); der Kill-Switch sperrt ohne actAs, indem er `allUsers`
+   entfernt (erledigt 2026-11-05, [stand.md](stand.md)).
 
 Claude kündigt diesen Schritt vorher ausdrücklich an (siehe `CLAUDE.md`,
 „Geheimnisse und Sicherheitsphase“). Das Rotieren der Schlüssel selbst kommt erst in
 B4; bis dahin heißt „rotieren“ hier: zurücksetzen und neu erzeugen.
+
+### E-B2b-13: Neue Geräte erst nach Freischaltung (bestätigt 2026-11-05)
+
+**Problem:** Wer das Google-Konto auf einem gestohlenen Gerät noch angemeldet hat,
+meldet sich mit einem neuen Geräteschlüssel als neues Gerät an und darf heute
+alles: andere Geräte sperren, Backup und Datensicherung löschen oder überschreiben.
+
+**Empfehlung:**
+- Jedes Gerät hat neben `aktiv`/`gesperrt` das Merkmal **freigeschaltet**. Das erste
+  Gerät eines neuen Kontos ist es sofort; jedes weitere startet ohne. Genauer
+  (umgesetzt): Ein neues Gerät ist freigeschaltet, wenn das Konto weder ein
+  freigeschaltetes, ungesperrtes Gerät noch ein Schlüssel-Backup mit
+  Freischaltschlüssel hat; dann gibt es nichts zu schützen. Vorhandene Geräte
+  behalten ihr Merkmal beim erneuten Anmelden.
+- Ein **nicht freigeschaltetes** Gerät darf nur: Sitzung erneuern, Geräte auflisten,
+  sich selbst sperren (abmelden), Schlüssel-Backup und Datensicherung **holen**, das
+  Schlüssel-Backup anlegen, wenn es noch keins gibt (E-B2-5), und sich freischalten.
+  Alles andere (andere Geräte sperren oder freischalten, Backup überschreiben oder
+  löschen, Sicherung speichern oder löschen) lehnt der Server mit
+  `permission_denied` ab. Holen ist harmlos: Es sind Chiffrate.
+- **Freischalten auf zwei Wegen:**
+  1. Ein freigeschaltetes Gerät bestätigt das neue (`GeraetFreischalten(Geräte-ID)`).
+     Dafür braucht es noch keinen QR: Der Server muss nur wissen, dass ein
+     vertrautes Gerät zustimmt. Der QR kommt in B3 für das Übertragen der Schlüssel.
+  2. Mit dem **Wiederherstellungsschlüssel**: Aus ihm leitet das Gerät (HKDF, eigener
+     Zweck) einen Signierschlüssel ab; dessen öffentlichen Teil lädt das erste Gerät
+     mit dem Schlüssel-Backup hoch. Das neue Gerät signiert
+     `avlreminder/freischalten/v1` + Geräte-ID, der Server prüft gegen den
+     gespeicherten öffentlichen Schlüssel (Verfahren in [formate.md](formate.md),
+     gemeinsame Testvektoren in `proto/testvektoren/freischaltung.json`). Der Wiederherstellungsschlüssel verlässt
+     das Gerät nie, und der Server kann aus dem öffentlichen Schlüssel nichts
+     entschlüsseln. Das hilft, wenn kein vertrautes Gerät mehr da ist.
+- **Vorhandene Geräte erfahren davon:** `GeraeteAuflisten` liefert, ob ein Gerät
+  freigeschaltet ist und wann es sich angemeldet hat. Die App zeigt beim Start einen
+  Hinweis „Neues Gerät angemeldet – freischalten oder sperren“. Eine Push-Nachricht
+  (FCM) kommt erst mit der App-Einbindung.
+
+**Warum:** Ein Angreifer mit dem Google-Konto, aber ohne vertrautes Gerät und ohne
+Wiederherstellungsschlüssel kann dann nichts mehr zerstören, nur Chiffrate holen.
+Der Weg über den Wiederherstellungsschlüssel braucht keinen neuen Geheimwert: Er
+nutzt, was der Mensch für ein neues Gerät ohnehin eintippt.
+
+**Aufwand:** Server (Feld am Gerät, Prüfungen in den Diensten, zwei neue Aufrufe),
+Schnittstelle, `protokoll` (Ableitung und Signatur), Adapter, Test-Client-Befehle;
+etwa so groß wie das Diagnose-Log. Die Testgeräte in Firestore haben das Feld noch
+nicht; sie werden vor echten Daten ohnehin gelöscht (Punkt 1). Deshalb Punkt 1 vor
+dem Deploy dieses Schritts erledigen oder die Testgeräte einmal freischalten.
 
 ## Bekannte Grenzen (bewusst)
 - **Ein sicherndes Gerät.** Zwei Geräte mit verschiedenen Daten führt erst B3
@@ -184,8 +234,21 @@ B4; bis dahin heißt „rotieren“ hier: zurücksetzen und neu erzeugen.
   sie selbst wieder sichern dürfen. Ausweg: auf einem Gerät mit dem höheren Zähler
   erneut löschen und dort neu sichern (es zählt weiter, die anderen fragen dann nach).
   Selten, weil gelöscht nur bei Neuanfang wird.
-- **Gestohlenes Gerät mit Google-Login** kann sich nach dem Sperren neu anmelden und
-  die Sicherung löschen (siehe „Vor echten Daten“, Punkt 5).
+- **Gestohlenes Gerät mit Google-Login** kann sich nach dem Sperren neu anmelden,
+  ist dann aber nicht freigeschaltet (E-B2b-13): Es kann Chiffrate holen, aber nichts
+  sperren, überschreiben oder löschen.
+- **Erstes Backup schaltet frei.** Hat das Konto noch kein Schlüssel-Backup, darf
+  auch ein nicht freigeschaltetes Gerät das erste anlegen (E-B2-5), mit seinem
+  eigenen Freischaltschlüssel, und sich damit freischalten. Deshalb lädt die
+  Einrichtung das Backup sofort auf dem ersten Gerät hoch; die Lücke besteht nur
+  zwischen Anmelden und Hochladen oder wenn das Backup gelöscht wurde.
+- **Zwei neue Geräte gleichzeitig.** Melden sich zwei Geräte eines Kontos ohne
+  freigeschaltetes Gerät im selben Moment an, kann Firestore beide freischalten
+  (die Abfrage der Geräte ist kein Teil der Sperre der Transaktion). Ohne vertrautes
+  Gerät gibt es dann ohnehin nichts zu schützen.
+- **Testgeräte von vor E-B2b-13** sind in Firestore nicht freigeschaltet (das Feld
+  fehlt). Mit einem neuen Gerätenamen anmelden oder sie werden vor echten Daten
+  ohnehin gelöscht (Punkt 1).
 - **Schlüssel-Backup nach dem Löschen.** Die Version beginnt wieder bei 1. Ein Gerät,
   das noch Version 1 erwartet, könnte so ein neues Backup überschreiben. Heute
   harmlos, weil Clients nur mit `erwartet = 0` speichern (Kommentar in

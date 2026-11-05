@@ -5,7 +5,11 @@ name: CI
 on:
   push:
     branches: [develop, main]
+  # Nur PRs nach develop (Dependabot; deren Branches lösen keinen Push-Lauf aus).
+  # PRs von develop nach main brauchen keinen eigenen Lauf: Der Commit ist schon
+  # auf develop geprüft, und GitHub zeigt dessen Checks im PR an.
   pull_request:
+    branches: [develop]
 
 permissions:
   contents: read
@@ -58,7 +62,7 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq google-cloud-cli-firestore-emulator
           gcloud emulators firestore start --host-port=localhost:8086 > "$RUNNER_TEMP/emulator.log" 2>&1 &
-          for i in $(seq 60); do
+          for _ in $(seq 60); do
             curl -sf http://localhost:8086/ > /dev/null && exit 0
             sleep 1
           done
@@ -72,7 +76,7 @@ jobs:
           docker run -d --name fakegcs -p 4443:4443 \
             fsouza/fake-gcs-server:1.56.1@sha256:797ce226d62f947c009dc40246b30cfb456b8473d8241407f9d6f2c04e4d69ef \
             -scheme http -port 4443 -backend memory
-          for i in $(seq 30); do
+          for _ in $(seq 30); do
             curl -sf http://localhost:4443/storage/v1/b > /dev/null && exit 0
             sleep 1
           done
@@ -173,9 +177,9 @@ jobs:
           cache-dependency-path: server/go.sum
       - name: Werkzeuge installieren
         run: |
-          go install github.com/bufbuild/buf/cmd/buf@$BUF_VERSION
-          go install google.golang.org/protobuf/cmd/protoc-gen-go@$PROTOC_GEN_GO_VERSION
-          go install connectrpc.com/connect/cmd/protoc-gen-connect-go@$PROTOC_GEN_CONNECT_GO_VERSION
+          go install github.com/bufbuild/buf/cmd/buf@"$BUF_VERSION"
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@"$PROTOC_GEN_GO_VERSION"
+          go install connectrpc.com/connect/cmd/protoc-gen-connect-go@"$PROTOC_GEN_CONNECT_GO_VERSION"
       - name: Lint und Formatierung
         run: buf lint && buf format -d --exit-code
       # Wer die .proto-Dateien ändert, muss den Code neu erzeugen und mit einchecken.

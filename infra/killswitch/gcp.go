@@ -7,6 +7,7 @@ import (
 
 	billing "cloud.google.com/go/billing/apiv1"
 	"cloud.google.com/go/billing/apiv1/billingpb"
+	"cloud.google.com/go/iam/apiv1/iampb"
 	run "cloud.google.com/go/run/apiv2"
 	"cloud.google.com/go/run/apiv2/runpb"
 	"google.golang.org/api/iterator"
@@ -46,7 +47,7 @@ func (p *gcpPlattform) Schliessen() error {
 
 // DiensteSperren erfüllt Plattform. Die eigentliche Logik steht in
 // SperreAlle (sperren.go); hier sind nur die Cloud-Run-Aufrufe.
-// Rückgängig: Ingress wieder auf "all" stellen (z. B. per gcloud).
+// Rückgängig: `tofu apply -var=gesperrte_dienste_oeffnen=true` (docs/stand.md).
 func (p *gcpPlattform) DiensteSperren(ctx context.Context) (Sperrung, error) {
 	return SperreAlle(ctx, p, p.eigenerDienst)
 }
@@ -64,27 +65,38 @@ func (p *gcpPlattform) Dienste(ctx context.Context) ([]Dienst, error) {
 		if err != nil {
 			return nil, err
 		}
-		dienste = append(dienste, Dienst{
-			Name:   d.Name,
-			Intern: d.Ingress == runpb.IngressTraffic_INGRESS_TRAFFIC_INTERNAL_ONLY,
-		})
+		pol, err := p.richtlinie(ctx, d.Name)
+		if err != nil {
+			return nil, fmt.Errorf("%s: Richtlinie lesen: %w", d.Name, err)
+		}
+		dienste = append(dienste, Dienst{Name: d.Name, Gesperrt: !istOeffentlich(pol)})
 	}
 }
 
-// Sperre stellt einen Dienst auf "nur intern" (Teil von CloudRun). Der Dienst
-// wird frisch gelesen, weil die Update-API das vollständige Objekt erwartet,
-// und es wird gewartet, bis die Änderung aktiv ist.
+// richtlinie liest die IAM-Richtlinie eines Dienstes. Version 3 liefert auch
+// Rollen mit Bedingungen; ohne sie gingen diese beim Zurückschreiben verloren.
+func (p *gcpPlattform) richtlinie(ctx context.Context, name string) (*iampb.Policy, error) {
+	return p.run.GetIamPolicy(ctx, &iampb.GetIamPolicyRequest{
+		Resource: name,
+		Options:  &iampb.GetPolicyOptions{RequestedPolicyVersion: 3},
+	})
+}
+
+// Sperre entzieht dem Internet das Aufrufrecht (Teil von CloudRun, Logik in
+// ohneOeffentlich). Die Richtlinie wird frisch gelesen und mit ihrem Etag
+// zurückgeschrieben: Hat sie inzwischen jemand anders geändert, lehnt die API
+// ab, statt dessen Änderung zu überschreiben (Fehler im Log, nächste
+// Budget-Meldung versucht es wieder). Braucht kein actAs (siehe ohneOeffentlich).
 func (p *gcpPlattform) Sperre(ctx context.Context, name string) error {
-	d, err := p.run.GetService(ctx, &runpb.GetServiceRequest{Name: name})
+	pol, err := p.richtlinie(ctx, name)
 	if err != nil {
 		return err
 	}
-	d.Ingress = runpb.IngressTraffic_INGRESS_TRAFFIC_INTERNAL_ONLY
-	op, err := p.run.UpdateService(ctx, &runpb.UpdateServiceRequest{Service: d})
-	if err != nil {
-		return err
+	if !ohneOeffentlich(pol) {
+		return nil // inzwischen schon gesperrt
 	}
-	_, err = op.Wait(ctx)
+	pol.Version = 3
+	_, err = p.run.SetIamPolicy(ctx, &iampb.SetIamPolicyRequest{Resource: name, Policy: pol})
 	return err
 }
 

@@ -82,6 +82,14 @@ gcloud storage buckets update gs://avlreminder-exp-1ef2-tfstate --versioning
 gcloud auth application-default set-quota-project avlreminder-exp-1ef2
 ```
 
+Beim **ersten** `tofu apply` eines neuen Projekts ist der Server noch für niemanden
+freigegeben, und das Modul `module/oeffentlich` hält ihn wie einen vom Kill-Switch
+gesperrten Dienst zu. Deshalb einmalig:
+
+```bash
+tofu -chdir=infra apply -var=gesperrte_dienste_oeffnen=true
+```
+
 Ergebnis: [stand.md](stand.md).
 
 ## Später – Schritte im Browser je Etappe

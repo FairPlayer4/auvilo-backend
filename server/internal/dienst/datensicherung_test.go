@@ -52,7 +52,9 @@ func (ts *testServer) erwarteSicherung(t *testing.T, token, inhalt string, versi
 func TestZweitesGeraetHoltUndErsetztDieSicherung(t *testing.T) {
 	ts := neuerTestServer(t)
 	handy := ts.anmelden(t, "google-kevin", testhilfe.NeuesGeraet(t)).Sitzung.Token
-	laptop := ts.anmelden(t, "google-kevin", testhilfe.NeuesGeraet(t)).Sitzung.Token
+	laptopAntwort := ts.anmelden(t, "google-kevin", testhilfe.NeuesGeraet(t))
+	laptop := laptopAntwort.Sitzung.Token
+	ts.geraetFreischaltenOK(t, handy, laptopAntwort.GeraetId) // ohne: freischaltung_test.go
 
 	erste, err := ts.sicherungSpeichern(handy, []byte("sicherung-1"), 0)
 	if err != nil {
@@ -157,7 +159,10 @@ const sicherungenAmTag = 48
 // begrenzt hochladen (Kosten, Rückfallebene).
 func TestSicherungSpeichernHatEinTageslimitJeKonto(t *testing.T) {
 	ts := neuerTestServer(t)
-	kevin, _ := ts.freischalten(t, "google-kevin") // auch für Diagnosen, siehe unten
+	kevinGeraet := testhilfe.NeuesGeraet(t)
+	kevinAntwort := ts.anmelden(t, "google-kevin", kevinGeraet)
+	ts.diagnoseKonten[kevinAntwort.KontoId] = true // auch für Diagnosen, siehe unten
+	kevin := kevinAntwort.Sitzung.Token
 	anna := ts.anmelden(t, "google-anna", testhilfe.NeuesGeraet(t)).Sitzung.Token
 
 	var version int64
@@ -209,7 +214,7 @@ func TestSicherungSpeichernHatEinTageslimitJeKonto(t *testing.T) {
 	})
 	t.Run("am nächsten Tag (UTC) geht es wieder", func(t *testing.T) {
 		ts.jetzt = time.Date(start.Year(), start.Month(), start.Day()+1, 0, 0, 1, 0, time.UTC)
-		neu := ts.anmelden(t, "google-kevin", testhilfe.NeuesGeraet(t)).Sitzung.Token // die alte Sitzung ist abgelaufen
+		neu := ts.anmelden(t, "google-kevin", kevinGeraet).Sitzung.Token // die alte Sitzung ist abgelaufen
 		if err := speichern(neu, "morgen"); err != nil {
 			t.Fatal(err)
 		}
@@ -251,6 +256,7 @@ func TestSicherungVerlangtGueltigeSitzung(t *testing.T) {
 	handy, laptop := testhilfe.NeuesGeraet(t), testhilfe.NeuesGeraet(t)
 	handySitzung := ts.anmelden(t, "google-kevin", handy).Sitzung.Token
 	laptopSitzung := ts.anmelden(t, "google-kevin", laptop).Sitzung.Token
+	ts.geraetFreischaltenOK(t, handySitzung, laptop.ID())
 	res, err := ts.sicherungSpeichern(laptopSitzung, []byte("sicherung"), 0)
 	if err != nil {
 		t.Fatal(err)

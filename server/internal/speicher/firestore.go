@@ -30,11 +30,13 @@ type kontoDok struct {
 }
 
 type geraetDok struct {
-	KontoID    string     `firestore:"konto_id"`
-	Schluessel []byte     `firestore:"schluessel"`
-	Gesperrt   bool       `firestore:"gesperrt"`
-	Erstellt   time.Time  `firestore:"erstellt"`
-	GesperrtAm *time.Time `firestore:"gesperrt_am,omitempty"`
+	KontoID    string `firestore:"konto_id"`
+	Schluessel []byte `firestore:"schluessel"`
+	Gesperrt   bool   `firestore:"gesperrt"`
+	// Fehlt bei Geräten aus der Zeit vor E-B2b-13: dann false.
+	Freigeschaltet bool       `firestore:"freigeschaltet"`
+	Erstellt       time.Time  `firestore:"erstellt"`
+	GesperrtAm     *time.Time `firestore:"gesperrt_am,omitempty"`
 }
 
 type sitzungDok struct {
@@ -44,9 +46,10 @@ type sitzungDok struct {
 }
 
 type backupDok struct {
-	Chiffrat  []byte    `firestore:"chiffrat"`
-	Version   int64     `firestore:"version"`
-	Geaendert time.Time `firestore:"geaendert_am"`
+	Chiffrat             []byte    `firestore:"chiffrat"`
+	Freischaltschluessel []byte    `firestore:"freischaltschluessel,omitempty"`
+	Version              int64     `firestore:"version"`
+	Geaendert            time.Time `firestore:"geaendert_am"`
 }
 
 // Firestore speichert in der Firestore-Datenbank des Projekts.
@@ -73,7 +76,13 @@ func nichtGefunden(err error) bool {
 // KRITISCH: Kennung, Konto, Gerät (samt Sperre und Konto-Zugehörigkeit) werden
 // in derselben Transaktion gelesen, in der geschrieben wird. Sonst könnten zwei
 // gleichzeitige Erst-Anmeldungen zwei Konten anlegen oder ein gerade gesperrtes
-// Gerät eine Sitzung bekommen.
+// Gerät eine Sitzung bekommen. Für ein neues Gerät werden dort auch die übrigen
+// Geräte und das Backup gelesen (Freischaltung).
+//
+// Grenze: Melden sich zwei neue Geräte eines Kontos, das nichts zu schützen
+// hat, im selben Augenblick an, sieht keins das andere, und beide werden
+// freigeschaltet. Geschützt ist dabei noch nichts; ab dem ersten
+// freigeschalteten Gerät oder Backup greift die Regel.
 func (f *Firestore) Anmelden(ctx context.Context, kennung string, g Geraet, s NeueSitzung) (AnmeldeErgebnis, error) {
 	var ergebnis AnmeldeErgebnis
 	// RunTransaction wiederholt die Funktion bei Konflikten mit gleichzeitigen
@@ -114,10 +123,18 @@ func (f *Firestore) Anmelden(ctx context.Context, kennung string, g Geraet, s Ne
 			if gd.Gesperrt {
 				return ErrGeraetGesperrt
 			}
+			ergebnis.Freigeschaltet = gd.Freigeschaltet
 		case nichtGefunden(err):
 			geraetNeu = true
 		default:
 			return err
+		}
+		if geraetNeu {
+			frei, err := f.nichtsZuSchuetzen(tx, kd.KontoID)
+			if err != nil {
+				return err
+			}
+			ergebnis.Freigeschaltet = frei
 		}
 
 		// Schreiben
@@ -132,9 +149,10 @@ func (f *Firestore) Anmelden(ctx context.Context, kennung string, g Geraet, s Ne
 		}
 		if geraetNeu {
 			gd := geraetDok{
-				KontoID:    kd.KontoID,
-				Schluessel: g.Schluessel,
-				Erstellt:   g.Erstellt.UTC().Truncate(time.Millisecond),
+				KontoID:        kd.KontoID,
+				Schluessel:     g.Schluessel,
+				Freigeschaltet: ergebnis.Freigeschaltet,
+				Erstellt:       g.Erstellt.UTC().Truncate(time.Millisecond),
 			}
 			if err := tx.Create(geraetRef, gd); err != nil {
 				return err
@@ -150,6 +168,38 @@ func (f *Firestore) Anmelden(ctx context.Context, kennung string, g Geraet, s Ne
 		return AnmeldeErgebnis{}, fmt.Errorf("anmelden: %w", err)
 	}
 	return ergebnis, nil
+}
+
+// nichtsZuSchuetzen liest in der Transaktion, ob das Konto ein
+// freigeschaltetes, ungesperrtes Gerät oder ein Backup mit Freischaltschlüssel
+// hat (Regel bei Speicher.Anmelden). Nur lesen: muss vor allen Schreibzugriffen
+// der Transaktion stehen.
+func (f *Firestore) nichtsZuSchuetzen(tx *firestore.Transaction, kontoID string) (bool, error) {
+	geraete, err := tx.Documents(f.c.Collection(sammlungGeraete).Where("konto_id", "==", kontoID)).GetAll()
+	if err != nil {
+		return false, err
+	}
+	for _, snap := range geraete {
+		g, err := geraetAus(snap)
+		if err != nil {
+			return false, err
+		}
+		if g.Freigeschaltet && !g.Gesperrt {
+			return false, nil
+		}
+	}
+	snap, err := tx.Get(f.c.Collection(sammlungBackups).Doc(kontoID))
+	if nichtGefunden(err) {
+		return true, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	var bd backupDok
+	if err := snap.DataTo(&bd); err != nil {
+		return false, err
+	}
+	return len(bd.Freischaltschluessel) == 0, nil
 }
 
 func (f *Firestore) Geraet(ctx context.Context, geraetID string) (Geraet, error) {
@@ -282,12 +332,43 @@ func (f *Firestore) GeraetSperren(ctx context.Context, kontoID, geraetID string,
 	return nil
 }
 
+// GeraetFreischalten erfüllt Speicher.GeraetFreischalten. Lesen und Schreiben
+// in einer Transaktion: Ein gleichzeitig gesperrtes Gerät wird nicht
+// freigeschaltet.
+func (f *Firestore) GeraetFreischalten(ctx context.Context, kontoID, geraetID string) error {
+	err := f.c.RunTransaction(ctx, func(ctx context.Context, tx *firestore.Transaction) error {
+		ref := f.c.Collection(sammlungGeraete).Doc(geraetID)
+		snap, err := tx.Get(ref)
+		if nichtGefunden(err) {
+			return ErrNichtGefunden
+		}
+		if err != nil {
+			return err
+		}
+		g, err := geraetAus(snap)
+		if err != nil {
+			return err
+		}
+		if g.KontoID != kontoID {
+			return ErrNichtGefunden
+		}
+		if g.Gesperrt {
+			return ErrGeraetGesperrt
+		}
+		return tx.Update(ref, []firestore.Update{{Path: "freigeschaltet", Value: true}})
+	})
+	if err != nil {
+		return fmt.Errorf("Gerät freischalten: %w", err)
+	}
+	return nil
+}
+
 // BackupSpeichern erfüllt Speicher.BackupSpeichern.
 //
 // KRITISCH: Version lesen und Backup schreiben in einer Transaktion. Ändert
 // ein anderes Gerät das Backup dazwischen, wiederholt Firestore die Funktion,
 // und die Versionsprüfung schlägt dann fehl – nie gewinnen beide.
-func (f *Firestore) BackupSpeichern(ctx context.Context, kontoID string, chiffrat []byte, erwartet int64, jetzt time.Time) (int64, error) {
+func (f *Firestore) BackupSpeichern(ctx context.Context, kontoID string, chiffrat, freischaltschluessel []byte, erwartet int64, jetzt time.Time) (int64, error) {
 	ref := f.c.Collection(sammlungBackups).Doc(kontoID)
 	var neu int64
 	err := f.c.RunTransaction(ctx, func(ctx context.Context, tx *firestore.Transaction) error {
@@ -307,7 +388,12 @@ func (f *Firestore) BackupSpeichern(ctx context.Context, kontoID string, chiffra
 			return ErrVersionVeraltet
 		}
 		neu = erwartet + 1
-		return tx.Set(ref, backupDok{Chiffrat: chiffrat, Version: neu, Geaendert: jetzt.UTC().Truncate(time.Millisecond)})
+		return tx.Set(ref, backupDok{
+			Chiffrat:             chiffrat,
+			Freischaltschluessel: freischaltschluessel,
+			Version:              neu,
+			Geaendert:            jetzt.UTC().Truncate(time.Millisecond),
+		})
 	})
 	if err != nil {
 		return 0, fmt.Errorf("Backup speichern: %w", err)
@@ -327,7 +413,7 @@ func (f *Firestore) BackupHolen(ctx context.Context, kontoID string) (Backup, er
 	if err := snap.DataTo(&bd); err != nil {
 		return Backup{}, err
 	}
-	return Backup{Chiffrat: bd.Chiffrat, Version: bd.Version, Geaendert: bd.Geaendert.UTC()}, nil
+	return Backup{Chiffrat: bd.Chiffrat, Freischaltschluessel: bd.Freischaltschluessel, Version: bd.Version, Geaendert: bd.Geaendert.UTC()}, nil
 }
 
 // BackupLoeschen erfüllt Speicher.BackupLoeschen. Firestore meldet beim Löschen
@@ -345,11 +431,12 @@ func geraetAus(snap *firestore.DocumentSnapshot) (Geraet, error) {
 		return Geraet{}, err
 	}
 	g := Geraet{
-		ID:         snap.Ref.ID,
-		KontoID:    gd.KontoID,
-		Schluessel: gd.Schluessel,
-		Gesperrt:   gd.Gesperrt,
-		Erstellt:   gd.Erstellt.UTC(),
+		ID:             snap.Ref.ID,
+		KontoID:        gd.KontoID,
+		Schluessel:     gd.Schluessel,
+		Gesperrt:       gd.Gesperrt,
+		Freigeschaltet: gd.Freigeschaltet,
+		Erstellt:       gd.Erstellt.UTC(),
 	}
 	if gd.GesperrtAm != nil {
 		g.GesperrtAm = gd.GesperrtAm.UTC()

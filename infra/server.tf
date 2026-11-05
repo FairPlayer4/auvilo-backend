@@ -99,10 +99,12 @@ resource "google_firestore_field" "sitzungen_ttl" {
 # --- Dienst ------------------------------------------------------------------
 
 resource "google_cloud_run_v2_service" "server" {
-  name                = "server"
-  location            = var.region
-  ingress             = "INGRESS_TRAFFIC_ALL"
-  deletion_protection = false # Lernprojekt: muss vollständig löschbar sein
+  name     = "server"
+  location = var.region
+  ingress  = "INGRESS_TRAFFIC_ALL"
+  # Vor echten Daten (b2b-entwurf.md): Weder `tofu destroy` noch die Konsole
+  # löschen den Dienst, solange dieser Schutz an ist.
+  deletion_protection = true
 
   template {
     service_account = google_service_account.server.email
@@ -170,10 +172,9 @@ resource "google_cloud_run_v2_service" "server" {
   }
 
   lifecycle {
-    # ingress: Der Kill-Switch stellt ihn auf "nur intern"; `tofu apply` darf
-    # das nicht wieder öffnen. image: setzt der Deploy. client*: setzt gcloud.
+    # image: setzt der Deploy. client*: setzt gcloud. Den Ingress fasst der
+    # Kill-Switch nicht mehr an (er sperrt über die Invoker-Bindung unten).
     ignore_changes = [
-      ingress,
       template[0].containers[0].image,
       client,
       client_version,
@@ -189,12 +190,20 @@ resource "google_cloud_run_v2_service" "server" {
 }
 
 # Öffentlich aufrufbar: Wer anfragen darf, prüft der Server selbst (Google-
-# Anmeldung, Sitzung). Sperrt der Kill-Switch den Ingress, hilft das nicht mehr.
-resource "google_cloud_run_v2_service_iam_member" "server_oeffentlich" {
-  location = google_cloud_run_v2_service.server.location
-  name     = google_cloud_run_v2_service.server.name
-  role     = "roles/run.invoker"
-  member   = "allUsers"
+# Anmeldung, Sitzung). Der Kill-Switch sperrt, indem er diese Bindung entfernt;
+# das Modul sorgt dafür, dass `tofu apply` sie dann nicht einfach neu anlegt.
+module "server_oeffentlich" {
+  source     = "./module/oeffentlich"
+  name       = google_cloud_run_v2_service.server.name
+  location   = google_cloud_run_v2_service.server.location
+  oeffnen    = var.gesperrte_dienste_oeffnen
+  depends_on = [google_cloud_run_v2_service.server]
+}
+
+# Dieselbe Bindung wie bisher, nur jetzt im Modul: nicht löschen und neu anlegen.
+moved {
+  from = google_cloud_run_v2_service_iam_member.server_oeffentlich
+  to   = module.server_oeffentlich.google_cloud_run_v2_service_iam_member.oeffentlich
 }
 
 # --- Deploy aus GitHub Actions -----------------------------------------------

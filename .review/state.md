@@ -108,8 +108,9 @@ Tageslimit; 3 Pfeffer-Wiederherstellung einmal durchspielen.
 Erledigt am 2026-11-05: Frage 2 (Adapter unterscheiden „zu groß“ und „Tageslimit“ an
 der gesendeten Größe, Diagnose und Datensicherung), Empfehlung E3 (Grenzwerttest
 `MAX_NUTZLAST`), Upload-Limit (48 je Tag, E-B2b-12).
-Lauf 6 erledigt: 200 Fassungen (stündlich), WARN ab 100 %, Pfeffer-Offline-Kopie;
-actAs bleibt vor echten Daten offen (stand.md).
+Lauf 6 erledigt: 200 Fassungen (stündlich), WARN ab 100 %, Pfeffer-Offline-Kopie.
+Erledigt am 2026-11-05: Sperren ohne actAs (Kill-Switch entfernt `allUsers`, Modul
+`infra/module/oeffentlich` hält gesperrte Dienste bei `tofu apply` zu), Löschschutz.
 
 ## Getroffene Entscheidungen
 - 2026-11-01: Architekturbild bestätigt.
@@ -120,7 +121,8 @@ actAs bleibt vor echten Daten offen (stand.md).
 - 2026-11-01: Keine Pflicht-Statuschecks (GitHub Free, privat) – Konvention reicht, kein
   produktiver Einsatz. Nicht erneut als Fund melden.
 - 2026-11-01: Kosten vor Verfügbarkeit: `tofu apply` darf gesperrte Dienste nicht wieder
-  öffnen (`ignore_changes = [ingress]`). Hohe Kosten gelten als Zeichen für Fehler/Angriff.
+  öffnen (seit 2026-11-05 über `infra/module/oeffentlich` statt `ignore_changes =
+  [ingress]`). Hohe Kosten gelten als Zeichen für Fehler/Angriff.
 - 2026-11-01 (Lauf 2): Wiederholte Anfragen im Zeitfenster sind bewusst erlaubt
   (anforderungen.md Kap. 11, Test in dienst_test). Nicht erneut als Fund melden.
 - 2026-11-01 (Lauf 2): Geräte-IDs dürfen in Logs stehen (anforderungen.md Kap. 11).

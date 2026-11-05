@@ -18,6 +18,7 @@ import com.avlreminder.protokoll.Eingerichtet
 import com.avlreminder.protokoll.Einrichtung
 import com.avlreminder.protokoll.EinrichtungAbgebrochen
 import com.avlreminder.protokoll.EntschluesselnFehlgeschlagen
+import com.avlreminder.protokoll.GeraetNichtFreigeschaltet
 import com.avlreminder.protokoll.Geraetenachrichten
 import com.avlreminder.protokoll.Gesichert
 import com.avlreminder.protokoll.NeueresSchema
@@ -34,6 +35,7 @@ import com.avlreminder.schnittstelle.v1.Sitzung
 import com.avlreminder.schnittstelle.v1.SitzungErneuernRequest
 import com.avlreminder.verbindung.ServerBackupAblage
 import com.avlreminder.verbindung.ServerDiagnoseAblage
+import com.avlreminder.verbindung.ServerGeraete
 import com.avlreminder.verbindung.ServerSicherungsAblage
 import com.avlreminder.verbindung.Serverfehler
 import com.avlreminder.verbindung.Verbindung
@@ -57,6 +59,7 @@ private const val HILFE = """Befehle:
   erneuern          Sitzung mit dem Geräteschlüssel erneuern
   geraete           Geräte des Kontos auflisten
   sperren <id>      Gerät sperren (eigenes Gerät = abmelden)
+  freischalten <id> anderes Gerät des Kontos freischalten (E-B2b-13)
   schluessel        Fingerabdruck des Personenschlüssels zeigen
   sichern <datei>   Inhalt der Datei als Datensicherung hochladen (verschlüsselt)
   wiederherstellen <datei>
@@ -83,6 +86,12 @@ fun main(args: Array<String>) {
         exitProcess(1)
     } catch (e: Serverfehler) {
         System.err.println("Fehler: ${e.message}")
+        exitProcess(1)
+    } catch (_: GeraetNichtFreigeschaltet) {
+        System.err.println(
+            "Fehler: Dieses Gerät ist noch nicht freigeschaltet - auf einem freigeschalteten Gerät " +
+                "\"freischalten <id>\" ausführen oder bei \"anmelden\" den Wiederherstellungsschlüssel eingeben.",
+        )
         exitProcess(1)
     } catch (e: EinrichtungAbgebrochen) {
         System.err.println("Einrichtung abgebrochen: ${e.message}")
@@ -124,6 +133,7 @@ private suspend fun ausfuehren(args: List<String>) {
         rest == listOf("erneuern") -> werkzeug.erneuern()
         rest == listOf("geraete") -> werkzeug.geraete()
         rest.size == 2 && rest[0] == "sperren" -> werkzeug.sperren(rest[1])
+        rest.size == 2 && rest[0] == "freischalten" -> werkzeug.freischalten(rest[1])
         rest == listOf("schluessel") -> werkzeug.schluessel()
         rest.size == 2 && rest[0] == "sichern" -> werkzeug.sichern(File(rest[1]))
         rest.size == 2 && rest[0] == "wiederherstellen" -> werkzeug.wiederherstellen(File(rest[1]))
@@ -171,10 +181,14 @@ private class Werkzeug(
         ).ergebnis()
         speichereSitzung(antwort.kontoId, antwort.geraetId, antwort.sitzung)
         println("Angemeldet: Konto ${antwort.kontoId}, Gerät ${antwort.geraetId}" + if (antwort.neuesKonto) " (neues Konto)" else "")
+        if (!antwort.freigeschaltet) println("Dieses Gerät ist noch nicht freigeschaltet.")
 
         val ergebnis = Einrichtung(
             antwort.kontoId,
+            antwort.geraetId,
+            antwort.freigeschaltet,
             ServerBackupAblage(verbindung, antwort.sitzung.token),
+            ServerGeraete(verbindung, antwort.sitzung.token),
             ablage.lokal(name, antwort.kontoId),
             frageSchluessel = {
                 print("Wiederherstellungsschlüssel (leer = Abbruch): ")
@@ -219,7 +233,11 @@ private class Werkzeug(
         val s = ablage.sitzung(name)
         val liste = verbindung.geraete.geraeteAuflisten(GeraeteAuflistenRequest.getDefaultInstance(), mitSitzung(s.token)).ergebnis()
         for (g in liste.geraeteList) {
-            val merkmale = listOfNotNull("gesperrt".takeIf { g.gesperrt }, "dieses Gerät".takeIf { g.diesesGeraet })
+            val merkmale = listOfNotNull(
+                "gesperrt".takeIf { g.gesperrt },
+                "nicht freigeschaltet".takeIf { !g.freigeschaltet },
+                "dieses Gerät".takeIf { g.diesesGeraet },
+            )
             println("${g.geraetId}  seit ${Instant.ofEpochSecond(g.angemeldetAm.seconds)}" + if (merkmale.isEmpty()) "" else "  (${merkmale.joinToString()})")
         }
     }
@@ -228,6 +246,12 @@ private class Werkzeug(
         val s = ablage.sitzung(name)
         verbindung.geraete.geraetSperren(GeraetSperrenRequest.newBuilder().setGeraetId(geraetId).build(), mitSitzung(s.token)).ergebnis()
         println(if (geraetId == s.geraetId) "Dieses Gerät ist gesperrt (abgemeldet)." else "Gerät $geraetId gesperrt.")
+    }
+
+    suspend fun freischalten(geraetId: String) {
+        val s = ablage.sitzung(name)
+        ServerGeraete(verbindung, s.token).freischalten(geraetId)
+        println("Gerät $geraetId freigeschaltet.")
     }
 
     fun schluessel() {

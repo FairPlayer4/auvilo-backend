@@ -4,6 +4,8 @@ import com.google.crypto.tink.Aead
 import com.google.crypto.tink.InsecureSecretKeyAccess
 import com.google.crypto.tink.aead.XChaCha20Poly1305Key
 import com.google.crypto.tink.aead.subtle.XChaCha20Poly1305Aead
+import com.google.crypto.tink.subtle.Ed25519Sign
+import com.google.crypto.tink.subtle.Hkdf
 import com.google.crypto.tink.util.SecretBytes
 import java.security.MessageDigest
 import java.security.SecureRandom
@@ -37,6 +39,29 @@ class Wiederherstellungsschluessel private constructor(private val bytes: ByteAr
         return XChaCha20Poly1305Aead.create(schluessel)
     }
 
+    /**
+     * Öffentlicher Freischaltschlüssel (Ed25519, 32 Bytes). Geht mit dem
+     * Schlüssel-Backup an den Server; aus ihm lässt sich nichts entschlüsseln.
+     */
+    fun freischaltschluessel(): ByteArray = Ed25519Sign.KeyPair.newKeyPairFromSeed(freischaltSeed()).publicKey
+
+    /**
+     * Signatur, mit der sich das Gerät [geraetId] beim Server freischaltet
+     * (E-B2b-13). Der Server prüft sie gegen [freischaltschluessel].
+     *
+     * KRITISCH: Signiert wird Zweck + Geräte-ID. Die Signatur schaltet so nur
+     * genau dieses Gerät frei und gilt für nichts anderes. Gemeinsame
+     * Testvektoren mit dem Server: proto/testvektoren/freischaltung.json.
+     */
+    fun signiereFreischaltung(geraetId: String): ByteArray = Ed25519Sign(freischaltSeed()).sign(freischaltNachricht(geraetId))
+
+    /**
+     * Seed des Ed25519-Schlüssels: HKDF-SHA256 ohne Salz mit eigenem Zweck, damit
+     * er nichts mit dem Schlüssel für das Backup gemein hat.
+     */
+    private fun freischaltSeed(): ByteArray =
+        Hkdf.computeHkdf("HMACSHA256", bytes, ByteArray(0), Zweck.FREISCHALTSCHLUESSEL.toByteArray(), SEED_LAENGE)
+
     // Nie den Schlüssel in Logs oder Fehlermeldungen.
     override fun toString() = "Wiederherstellungsschluessel(***)"
 
@@ -44,6 +69,10 @@ class Wiederherstellungsschluessel private constructor(private val bytes: ByteAr
         private const val LAENGE = 32 // Bytes = 256 Bit
         private const val SCHLUESSEL_ZEICHEN = 52 // 52 × 5 Bit = 260 Bit ≥ 256 Bit
         private const val PRUEF_ZEICHEN = 4 // 20 Bit aus SHA-256 des Schlüssels
+        private const val SEED_LAENGE = 32 // Ed25519
+
+        /** Die Bytes, die [signiereFreischaltung] signiert. */
+        internal fun freischaltNachricht(geraetId: String): ByteArray = (Zweck.FREISCHALTEN + geraetId).toByteArray()
 
         fun erzeugen(): Wiederherstellungsschluessel =
             Wiederherstellungsschluessel(ByteArray(LAENGE).also { SecureRandom().nextBytes(it) })

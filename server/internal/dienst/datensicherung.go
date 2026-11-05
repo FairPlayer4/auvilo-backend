@@ -62,12 +62,16 @@ func begrenze(max int, h http.Handler) http.Handler {
 // KRITISCH:
 //   - Die Konto-ID kommt aus der Sitzung, nie aus der Anfrage – ein Gerät kann
 //     nur die Sicherung seines eigenen Kontos schreiben.
+//   - Nur ein freigeschaltetes Gerät (E-B2b-13).
 //   - Erst prüfen, dann zählen, dann speichern: Eine abgelehnte Anfrage
 //     verbraucht nichts vom Tageslimit; ein Konflikt (veraltete Version) schon,
 //     denn ob die Version passt, zeigt erst das Speichern.
 func (d *dienste) SicherungSpeichern(ctx context.Context, req *connect.Request[v1.SicherungSpeichernRequest]) (*connect.Response[v1.SicherungSpeichernResponse], error) {
 	id, err := identitaet(ctx)
 	if err != nil {
+		return nil, err
+	}
+	if err := d.nurFreigeschaltetesGeraet(ctx, id); err != nil {
 		return nil, err
 	}
 	chiffrat, erwartet := req.Msg.GetChiffrat(), req.Msg.GetErwarteteVersion()
@@ -118,9 +122,14 @@ func (d *dienste) SicherungHolen(ctx context.Context, _ *connect.Request[v1.Sich
 
 // SicherungLoeschen löscht die Sicherung des eigenen Kontos mit allen älteren
 // Fassungen.
+//
+// KRITISCH: Nur ein freigeschaltetes Gerät (E-B2b-13).
 func (d *dienste) SicherungLoeschen(ctx context.Context, _ *connect.Request[v1.SicherungLoeschenRequest]) (*connect.Response[v1.SicherungLoeschenResponse], error) {
 	id, err := identitaet(ctx)
 	if err != nil {
+		return nil, err
+	}
+	if err := d.nurFreigeschaltetesGeraet(ctx, id); err != nil {
 		return nil, err
 	}
 	if err := d.k.Sicherungen.Loeschen(ctx, id.KontoID); err != nil {

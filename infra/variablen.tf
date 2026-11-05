@@ -57,6 +57,12 @@ variable "schwelle_sperren" {
   default     = 1.0
 }
 
+variable "gesperrte_dienste_oeffnen" {
+  description = "true öffnet vom Kill-Switch gesperrte Dienste wieder (nur für diesen einen Aufruf von tofu apply setzen)"
+  type        = bool
+  default     = false
+}
+
 variable "schwelle_trennen" {
   description = "Anteil des Budgets, ab dem das Projekt vom Rechnungskonto getrennt wird"
   type        = number

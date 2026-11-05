@@ -35,7 +35,17 @@ Tink-Konfiguration: `TinkConfig2026`, ausdrücklich je Aufruf (keine globale Reg
 - Zugehörige Daten: `"avlreminder/backup/v1\n" + konto_id` (UTF-8). Ein Backup passt
   so nur zu seinem Konto.
 - Auf dem Server: `SchluesselDienst` ([schluessel.proto](../proto/avlreminder/v1/schluessel.proto)),
-  höchstens 16 KiB, mit Version.
+  höchstens 16 KiB, mit Version, dazu der öffentliche Freischaltschlüssel.
+
+## Freischaltung mit dem Wiederherstellungsschlüssel (`avlreminder/freischalten/v1`)
+Begründung: E-B2b-13 in [b2b-entwurf.md](b2b-entwurf.md).
+- Freischaltschlüssel: Ed25519, Seed = HKDF-SHA256(Wiederherstellungsschlüssel,
+  Salz leer, info `"avlreminder/freischaltschluessel/v1"`, 32 Bytes). Der öffentliche
+  Teil (32 Bytes) geht mit jedem `BackupSpeichern` an den Server.
+- Signiert wird `"avlreminder/freischalten/v1\n" + geraet_id` (UTF-8);
+  `MitWiederherstellungFreischalten` prüft gegen den Schlüssel am Backup.
+- Testvektoren: [freischaltung.json](../proto/testvektoren/freischaltung.json),
+  geprüft in Go (`internal/freischaltung`) und Kotlin (`FreischaltungTest`).
 
 ## Datensicherung (`avlreminder/datensicherung/v1`)
 - Klartext: `Datensicherung` ([datensicherung.proto](../proto/avlreminder/inhalt/v1/datensicherung.proto)):

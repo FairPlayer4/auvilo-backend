@@ -412,3 +412,44 @@ run "lehnt_zu_kurze_konto_id_ab" {
 
   expect_failures = [var.diagnose_konten]
 }
+
+# Vor echten Daten (b2b-entwurf.md): Datenbank, Sicherungen und Server lassen
+# sich weder mit `tofu destroy` noch aus Versehen löschen.
+run "echte_daten_sind_vor_dem_loeschen_geschuetzt" {
+  command = plan
+
+  assert {
+    condition     = google_firestore_database.standard.delete_protection_state == "DELETE_PROTECTION_ENABLED"
+    error_message = "Die Datenbank lässt sich in GCP löschen."
+  }
+  assert {
+    # ABANDON: `tofu destroy` vergisst die Datenbank nur, statt sie zu löschen.
+    condition     = google_firestore_database.standard.deletion_policy == "ABANDON"
+    error_message = "`tofu destroy` würde die Datenbank löschen."
+  }
+  assert {
+    condition     = !google_storage_bucket.datensicherung.force_destroy
+    error_message = "`tofu destroy` würde den Bucket samt Sicherungen löschen."
+  }
+  assert {
+    condition     = google_cloud_run_v2_service.server.deletion_protection
+    error_message = "Der Server-Dienst lässt sich löschen."
+  }
+}
+
+# Der Kill-Switch sperrt ohne actAs (killswitch/sperren.go): Er darf die
+# IAM-Richtlinie setzen, aber keinen Dienst ändern und damit kein Image starten.
+run "kill_switch_kann_keine_dienste_aendern" {
+  command = plan
+
+  assert {
+    condition     = contains(google_project_iam_custom_role.killswitch_cloud_run.permissions, "run.services.setIamPolicy")
+    error_message = "Der Kill-Switch kann keine Dienste sperren."
+  }
+  assert {
+    # KRITISCH: Mit update (und actAs) könnte er ein fremdes Image als Konto
+    # "server" starten.
+    condition     = length([for p in google_project_iam_custom_role.killswitch_cloud_run.permissions : p if !startswith(p, "run.services.") || endswith(p, ".update") || endswith(p, ".create") || endswith(p, ".delete")]) == 0
+    error_message = "Der Kill-Switch darf mehr als Dienste auflisten und ihre Richtlinie setzen."
+  }
+}

@@ -14,8 +14,11 @@ option java_package = "com.avlreminder.schnittstelle.v1";
 //
 // Fehlercodes (Connect):
 //   unauthenticated     Sitzung fehlt, ist ungültig oder abgelaufen.
+//   permission_denied   Das Gerät ist nicht freigeschaltet (geraete.proto):
+//                       BackupLoeschen, BackupSpeichern mit erwartete_version > 0.
 //   invalid_argument    BackupSpeichern: chiffrat leer oder größer als 16 KiB,
-//                       oder erwartete_version negativ.
+//                       freischaltschluessel nicht genau 32 Bytes, oder
+//                       erwartete_version negativ.
 //   failed_precondition BackupSpeichern: erwartete_version passt nicht – ein
 //                       anderes Gerät war schneller. Neu holen, nicht überschreiben.
 //   not_found           BackupHolen: Für das Konto gibt es noch kein Backup.
@@ -30,8 +33,8 @@ service SchluesselDienst {
 
   rpc BackupHolen(BackupHolenRequest) returns (BackupHolenResponse);
 
-  // Löscht das Backup des eigenen Kontos (Neuanfang mit neuen Schlüsseln, DSGVO
-  // Art. 17). Gibt es keins, ist das kein Fehler.
+  // Löscht das Backup des eigenen Kontos samt Freischaltschlüssel (Neuanfang
+  // mit neuen Schlüsseln, DSGVO Art. 17). Gibt es keins, ist das kein Fehler.
   //
   // Grenze: Danach beginnt die Version wieder bei 1. Ein Gerät, das sich noch
   // Version 1 von vorher gemerkt hat, könnte ein neues Backup überschreiben. Clients
@@ -46,6 +49,13 @@ message BackupSpeichernRequest {
   bytes chiffrat = 1;
   // Version, die das Gerät zuletzt gesehen hat; 0, wenn es noch keins gibt.
   int64 erwartete_version = 2;
+  // Öffentlicher Ed25519-Schlüssel (32 Bytes), abgeleitet aus dem
+  // Wiederherstellungsschlüssel: HKDF-SHA256 (ohne Salz, info
+  // "avlreminder/freischaltschluessel/v1") ergibt 32 Bytes, die der Seed des
+  // Ed25519-Schlüssels sind. Pflicht. Damit kann sich ein neues Gerät später
+  // freischalten (geraete.proto, MitWiederherstellungFreischalten). Aus ihm
+  // lässt sich nichts entschlüsseln.
+  bytes freischaltschluessel = 3;
 }
 
 message BackupSpeichernResponse {
