@@ -12,7 +12,8 @@ interface SicherungsAblage {
 
     /**
      * Speichert die Sicherung; wirft [VersionVeraltet], wenn [erwartet] nicht mehr
-     * stimmt (0 = noch keine), und [SicherungZuGross], wenn der Server sie ablehnt.
+     * stimmt (0 = noch keine), [SicherungZuGross], wenn der Server sie als zu groß
+     * ablehnt, und [SicherungTageslimit], wenn für heute genug gesichert wurde.
      */
     suspend fun speichern(chiffrat: ByteArray, erwartet: Long): Long
 
@@ -48,11 +49,18 @@ class AeltereSicherung(gemerkt: Long, geliefert: Long) :
 
 /**
  * Die Sicherung ist größer als erlaubt ([Datensicherung.MAX_CHIFFRAT]). Kommt vom
- * Ablauf selbst, bevor etwas hochgeladen wird, oder vom Server, falls dessen Grenze
- * kleiner ist; die App meldet in beiden Fällen "Sicherung zu groß".
+ * Ablauf selbst, bevor etwas hochgeladen wird; der Server lehnt zu große ebenfalls
+ * ab. Die App meldet "Sicherung zu groß".
  */
 class SicherungZuGross(groesse: Int?) :
     Exception("Sicherung zu groß" + (groesse?.let { ": $it Bytes" } ?: "") + " - nichts hochgeladen")
+
+/**
+ * Für heute hat das Konto genug gesichert (höchstens 48 am Tag, UTC;
+ * datensicherung.proto). Die Sicherung auf dem Server bleibt, wie sie ist; die App
+ * versucht es am nächsten Tag wieder, statt in einer Schleife zu wiederholen.
+ */
+class SicherungTageslimit : Exception("Tageslimit für Sicherungen erreicht - morgen wieder, nichts hochgeladen")
 
 /** Ergebnis von [Sicherungsablauf.sichern]. */
 sealed interface Gesichert {

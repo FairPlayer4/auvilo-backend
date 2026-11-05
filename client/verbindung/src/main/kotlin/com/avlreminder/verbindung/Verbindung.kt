@@ -1,11 +1,13 @@
 package com.avlreminder.verbindung
 
 import com.avlreminder.protokoll.BackupAblage
+import com.avlreminder.protokoll.Datensicherung
 import com.avlreminder.protokoll.DiagnoseAblage
 import com.avlreminder.protokoll.DiagnoseNichtFreigeschaltet
 import com.avlreminder.protokoll.DiagnoseTageslimit
 import com.avlreminder.protokoll.GeholteSicherung
 import com.avlreminder.protokoll.GeholtesBackup
+import com.avlreminder.protokoll.SicherungTageslimit
 import com.avlreminder.protokoll.SicherungZuGross
 import com.avlreminder.protokoll.SicherungsAblage
 import com.avlreminder.protokoll.VersionVeraltet
@@ -119,8 +121,11 @@ class ServerSicherungsAblage(private val verbindung: Verbindung, private val tok
         } catch (e: Serverfehler) {
             when (e.code) {
                 Code.FAILED_PRECONDITION -> throw VersionVeraltet()
-                // Der Server sagt nur „zu groß“, nicht wie groß.
-                Code.RESOURCE_EXHAUSTED -> throw SicherungZuGross(null)
+                // Der Server meldet "zu groß" und "Tageslimit" mit demselben Code
+                // (Connect selbst nimmt ihn für zu große Anfragen). Die Größe des
+                // Gesendeten unterscheidet: Bis 8 MiB lehnt er nur wegen des Limits ab.
+                Code.RESOURCE_EXHAUSTED ->
+                    if (chiffrat.size > Datensicherung.MAX_CHIFFRAT) throw SicherungZuGross(chiffrat.size) else throw SicherungTageslimit()
                 else -> throw e
             }
         }
