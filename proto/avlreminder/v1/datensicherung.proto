@@ -8,7 +8,12 @@ option java_package = "com.avlreminder.schnittstelle.v1";
 // Ablage für die verschlüsselte Datensicherung eines Kontos (Etappe B2b).
 // Alle Aufrufe brauchen eine Sitzung und wirken nur auf das eigene Konto.
 // Jedes Konto hat genau eine Sicherung; der Server hält zusätzlich ältere
-// Fassungen der letzten 7 Tage als Rückfallebene (docs/b2b-entwurf.md).
+// Fassungen der letzten 7 Tage (höchstens 200) als Rückfallebene
+// (docs/b2b-entwurf.md).
+//
+// Jedes Konto darf höchstens 48-mal am Tag (UTC) speichern. Gezählt wird jede
+// Anfrage, die die Prüfungen von Größe und Inhalt besteht, auch ein Konflikt
+// (failed_precondition); Holen und Löschen sind nicht begrenzt.
 //
 // Der Server kann die Sicherung nicht lesen: Sie ist mit dem Tresorschlüssel
 // verschlüsselt (Format: proto/avlreminder/inhalt/v1/datensicherung.proto,
@@ -21,8 +26,9 @@ option java_package = "com.avlreminder.schnittstelle.v1";
 //   failed_precondition SicherungSpeichern: erwartete_version passt nicht – ein
 //                       anderes Gerät war schneller. Neu holen, nicht überschreiben.
 //   not_found           SicherungHolen: Für das Konto gibt es keine Sicherung.
-//   resource_exhausted  SicherungSpeichern: Sicherung größer als 8 MiB. Nur in
-//                       diesem Fall; die App meldet "Sicherung zu groß".
+//   resource_exhausted  SicherungSpeichern: Sicherung größer als 8 MiB ("zu
+//                       groß") oder Tageslimit erreicht ("morgen wieder"). Wer
+//                       höchstens 8 MiB gesendet hat, weiß: Es ist das Limit.
 //   unavailable         vorübergehend (auch: gerade zu viele Sicherungen
 //                       gleichzeitig); später wiederholen.
 //   internal            Fehler im Server.

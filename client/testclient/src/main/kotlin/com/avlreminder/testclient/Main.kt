@@ -21,6 +21,7 @@ import com.avlreminder.protokoll.EntschluesselnFehlgeschlagen
 import com.avlreminder.protokoll.Geraetenachrichten
 import com.avlreminder.protokoll.Gesichert
 import com.avlreminder.protokoll.NeueresSchema
+import com.avlreminder.protokoll.SicherungTageslimit
 import com.avlreminder.protokoll.SicherungZuGross
 import com.avlreminder.protokoll.Sicherungsablauf
 import com.avlreminder.protokoll.Sicherungskopf
@@ -88,7 +89,7 @@ fun main(args: Array<String>) {
         exitProcess(1)
     } catch (e: Exception) {
         // Erwartete Meldungen des Sicherungsablaufs (protokoll) ohne Stacktrace.
-        if (e is VersionVeraltet || e is AeltereSicherung || e is NeueresSchema || e is SicherungZuGross ||
+        if (e is VersionVeraltet || e is AeltereSicherung || e is NeueresSchema || e is SicherungZuGross || e is SicherungTageslimit ||
             e is EntschluesselnFehlgeschlagen || e is DiagnoseTageslimit || e is DiagnoseZuGross
         ) {
             System.err.println("Fehler: ${e.message}")

@@ -2,6 +2,8 @@ package com.avlreminder.verbindung
 
 import com.avlreminder.protokoll.DiagnoseNichtFreigeschaltet
 import com.avlreminder.protokoll.DiagnoseTageslimit
+import com.avlreminder.protokoll.DiagnoseZuGross
+import com.avlreminder.protokoll.SicherungTageslimit
 import com.avlreminder.protokoll.SicherungZuGross
 import com.avlreminder.protokoll.VersionVeraltet
 import com.avlreminder.schnittstelle.v1.BackupHolenResponse
@@ -197,9 +199,18 @@ class AdapterTest {
         private const val TOKEN = "test-token"
         private val CHIFFRAT = byteArrayOf(1, 2, 3, 0, -1)
 
+        // Eigene Zahl statt Datensicherung.MAX_CHIFFRAT (datensicherung.proto: 8 MiB).
+        private val UEBER_8_MIB = ByteArray(8 * 1024 * 1024 + 1)
+        private val GENAU_8_MIB = ByteArray(8 * 1024 * 1024)
+
         private fun sicherung(v: Verbindung) = ServerSicherungsAblage(v, TOKEN)
         private fun backup(v: Verbindung) = ServerBackupAblage(v, TOKEN)
-        private suspend fun diagnose(v: Verbindung): Any? = ServerDiagnoseAblage(v, TOKEN).senden(CHIFFRAT).let { "gesendet" }
+        private suspend fun diagnose(v: Verbindung, nutzlast: ByteArray = CHIFFRAT): Any? =
+            ServerDiagnoseAblage(v, TOKEN).senden(nutzlast).let { "gesendet" }
+
+        // Eigene Zahl statt Diagnose.MAX_NUTZLAST (diagnose.proto: 256 KiB).
+        private val UEBER_256_KIB = ByteArray(256 * 1024 + 1)
+        private val GENAU_256_KIB = ByteArray(256 * 1024)
 
         @JvmStatic
         fun fehlerfaelle() = listOf(
@@ -208,7 +219,11 @@ class AdapterTest {
             Fall("Sicherung holen: ungültige Sitzung bleibt Serverfehler", Code.UNAUTHENTICATED, { sicherung(it).holen() }, Serverfehler::class),
             Fall("Sicherung holen: Überlastung bleibt Serverfehler", Code.UNAVAILABLE, { sicherung(it).holen() }, Serverfehler::class),
             Fall("Sicherung speichern: Bedingung verletzt heißt veraltet", Code.FAILED_PRECONDITION, { sicherung(it).speichern(CHIFFRAT, 1) }, VersionVeraltet::class),
-            Fall("Sicherung speichern: zu groß", Code.RESOURCE_EXHAUSTED, { sicherung(it).speichern(CHIFFRAT, 1) }, SicherungZuGross::class),
+            // KRITISCH: Bis 8 MiB heißt erschöpft "Tageslimit", sonst meldete die App
+            // fälschlich "zu groß" (und der Mensch suchte den Fehler bei sich).
+            Fall("Sicherung speichern: erschöpft über 8 MiB heißt zu groß", Code.RESOURCE_EXHAUSTED, { sicherung(it).speichern(UEBER_8_MIB, 1) }, SicherungZuGross::class),
+            Fall("Sicherung speichern: erschöpft bei genau 8 MiB heißt Tageslimit", Code.RESOURCE_EXHAUSTED, { sicherung(it).speichern(GENAU_8_MIB, 1) }, SicherungTageslimit::class),
+            Fall("Sicherung speichern: erschöpft bei kleiner Sicherung heißt Tageslimit", Code.RESOURCE_EXHAUSTED, { sicherung(it).speichern(CHIFFRAT, 1) }, SicherungTageslimit::class),
             Fall("Sicherung speichern: nicht gefunden bleibt Serverfehler", Code.NOT_FOUND, { sicherung(it).speichern(CHIFFRAT, 1) }, Serverfehler::class),
             Fall("Sicherung speichern: Überlastung bleibt Serverfehler", Code.UNAVAILABLE, { sicherung(it).speichern(CHIFFRAT, 1) }, Serverfehler::class),
             Fall("Sicherung speichern: ungültige Anfrage bleibt Serverfehler", Code.INVALID_ARGUMENT, { sicherung(it).speichern(CHIFFRAT, 1) }, Serverfehler::class),
@@ -223,7 +238,9 @@ class AdapterTest {
             Fall("Backup löschen: Fehler bleibt Serverfehler", Code.UNAUTHENTICATED, { backup(it).loeschen() }, Serverfehler::class),
             // Diagnose
             Fall("Diagnose senden: keine Erlaubnis heißt nicht freigeschaltet", Code.PERMISSION_DENIED, { diagnose(it) }, DiagnoseNichtFreigeschaltet::class),
-            Fall("Diagnose senden: erschöpft heißt Tageslimit", Code.RESOURCE_EXHAUSTED, { diagnose(it) }, DiagnoseTageslimit::class),
+            Fall("Diagnose senden: erschöpft bei kleiner Sendung heißt Tageslimit", Code.RESOURCE_EXHAUSTED, { diagnose(it) }, DiagnoseTageslimit::class),
+            Fall("Diagnose senden: erschöpft bei genau 256 KiB heißt Tageslimit", Code.RESOURCE_EXHAUSTED, { diagnose(it, GENAU_256_KIB) }, DiagnoseTageslimit::class),
+            Fall("Diagnose senden: erschöpft über 256 KiB heißt zu groß", Code.RESOURCE_EXHAUSTED, { diagnose(it, UEBER_256_KIB) }, DiagnoseZuGross::class),
             Fall("Diagnose senden: ungültige Sitzung bleibt Serverfehler", Code.UNAUTHENTICATED, { diagnose(it) }, Serverfehler::class),
             Fall("Diagnose senden: ungültige Anfrage bleibt Serverfehler", Code.INVALID_ARGUMENT, { diagnose(it) }, Serverfehler::class),
             Fall("Diagnose senden: Überlastung bleibt Serverfehler", Code.UNAVAILABLE, { diagnose(it) }, Serverfehler::class),

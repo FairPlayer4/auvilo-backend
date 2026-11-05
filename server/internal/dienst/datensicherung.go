@@ -11,6 +11,7 @@ import (
 	v1 "github.com/FairPlayer4/avlreminder-backend/server/gen/avlreminder/v1"
 	"github.com/FairPlayer4/avlreminder-backend/server/gen/avlreminder/v1/avlreminderv1connect"
 	"github.com/FairPlayer4/avlreminder-backend/server/internal/datensicherung"
+	"github.com/FairPlayer4/avlreminder-backend/server/internal/kontingent"
 )
 
 // MaxSicherungsanfrage ist die Sicherung plus Platz für die Protobuf-Hülle. Was
@@ -23,6 +24,18 @@ const MaxSicherungsanfrage = datensicherung.MaxChiffrat + 1<<10
 // brauchen gemessen etwa 95 MiB (Anfrage, entpackte Nachricht, Upload); dazu
 // kommt der Grundbedarf des Servers.
 const StandardGleichzeitigeSicherungen = 4
+
+// SicherungenJeTag gibt an, wie oft ein Konto am Tag (UTC) speichern darf
+// (datensicherung.proto, b2b-entwurf.md E-B2b-12): stündlich (24) plus ebenso viel
+// Reserve für Sicherungen von Hand und zweite Versuche nach Konflikten.
+//
+// Schützt Kosten und Rückfallebene: Eine App, die in einer Schleife sichert,
+// lädt höchstens 48 × 8 MiB am Tag hoch und verdrängt von den 200 älteren
+// Fassungen (infra/datensicherung.tf) höchstens 48, also nie die ganze Woche.
+const SicherungenJeTag = 48
+
+// kontingentSicherung ist die Art im Tageszähler.
+const kontingentSicherung = "sicherung"
 
 var _ avlreminderv1connect.DatensicherungDienstHandler = (*dienste)(nil)
 
@@ -46,8 +59,12 @@ func begrenze(max int, h http.Handler) http.Handler {
 
 // SicherungSpeichern legt die Sicherung des eigenen Kontos ab.
 //
-// KRITISCH: Die Konto-ID kommt aus der Sitzung, nie aus der Anfrage – ein
-// Gerät kann nur die Sicherung seines eigenen Kontos schreiben.
+// KRITISCH:
+//   - Die Konto-ID kommt aus der Sitzung, nie aus der Anfrage – ein Gerät kann
+//     nur die Sicherung seines eigenen Kontos schreiben.
+//   - Erst prüfen, dann zählen, dann speichern: Eine abgelehnte Anfrage
+//     verbraucht nichts vom Tageslimit; ein Konflikt (veraltete Version) schon,
+//     denn ob die Version passt, zeigt erst das Speichern.
 func (d *dienste) SicherungSpeichern(ctx context.Context, req *connect.Request[v1.SicherungSpeichernRequest]) (*connect.Response[v1.SicherungSpeichernResponse], error) {
 	id, err := identitaet(ctx)
 	if err != nil {
@@ -61,6 +78,14 @@ func (d *dienste) SicherungSpeichern(ctx context.Context, req *connect.Request[v
 	// (datensicherung.proto); derselbe, den Connect für zu große Anfragen nimmt.
 	if len(chiffrat) > datensicherung.MaxChiffrat {
 		return nil, connect.NewError(connect.CodeResourceExhausted, errors.New("Sicherung größer als 8 MiB"))
+	}
+	err = d.k.Kontingente.Verbrauche(ctx, kontingentSicherung, id.KontoID, d.k.Jetzt(), SicherungenJeTag)
+	if errors.Is(err, kontingent.ErrErschoepft) {
+		slog.WarnContext(ctx, "Tageslimit für Sicherungen erreicht", "geraet", id.GeraetID)
+		return nil, connect.NewError(connect.CodeResourceExhausted, errors.New("Tageslimit für Sicherungen erreicht – morgen wieder"))
+	}
+	if err != nil {
+		return nil, speicherFehler(ctx, err)
 	}
 	version, err := d.k.Sicherungen.Speichern(ctx, id.KontoID, chiffrat, erwartet)
 	if errors.Is(err, datensicherung.ErrVersionVeraltet) {

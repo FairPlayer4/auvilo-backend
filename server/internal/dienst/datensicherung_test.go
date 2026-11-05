@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"log/slog"
+	"strings"
 	"testing"
 	"time"
 
@@ -146,6 +147,72 @@ func TestSicherungLoeschen(t *testing.T) {
 			t.Fatal(err)
 		}
 		ts.erwarteSicherung(t, token, "neu", neu.Version)
+	})
+}
+
+// Die Grenze aus datensicherung.proto als eigene Zahl (nicht SicherungenJeTag).
+const sicherungenAmTag = 48
+
+// KRITISCH: Eine App, die in einer Schleife sichert, kann je Konto und Tag nur
+// begrenzt hochladen (Kosten, Rückfallebene).
+func TestSicherungSpeichernHatEinTageslimitJeKonto(t *testing.T) {
+	ts := neuerTestServer(t)
+	kevin, _ := ts.freischalten(t, "google-kevin") // auch für Diagnosen, siehe unten
+	anna := ts.anmelden(t, "google-anna", testhilfe.NeuesGeraet(t)).Sitzung.Token
+
+	var version int64
+	speichern := func(token string, inhalt string) error {
+		res, err := ts.sicherungSpeichern(token, []byte(inhalt), version)
+		if err == nil {
+			version = res.Version
+		}
+		return err
+	}
+	for i := range sicherungenAmTag - 2 {
+		if err := speichern(kevin, "sicherung"); err != nil {
+			t.Fatalf("Sicherung %d: %v", i+1, err)
+		}
+	}
+	// Abgelehnte Anfragen zählen nicht mit: leer oder zu groß.
+	for range 3 {
+		_, err := ts.sicherungSpeichern(kevin, nil, version)
+		erwarteCode(t, err, connect.CodeInvalidArgument)
+		_, err = ts.sicherungSpeichern(kevin, make([]byte, achtMiB+1), version)
+		erwarteCode(t, err, connect.CodeResourceExhausted)
+	}
+	// Ein Konflikt zählt: Ob die Version passt, zeigt erst das Speichern.
+	_, err := ts.sicherungSpeichern(kevin, []byte("veraltet"), 0)
+	erwarteCode(t, err, connect.CodeFailedPrecondition)
+	if err := speichern(kevin, "letzte"); err != nil {
+		t.Fatalf("letzte erlaubte Sicherung: %v", err)
+	}
+	t.Run("danach lehnt der Server ab und lässt die Sicherung stehen", func(t *testing.T) {
+		_, err := ts.sicherungSpeichern(kevin, []byte("zu viel"), version)
+		erwarteCode(t, err, connect.CodeResourceExhausted)
+		if err != nil && !strings.Contains(err.Error(), "Tageslimit") {
+			t.Errorf("Meldung nennt das Tageslimit nicht: %v", err)
+		}
+		ts.erwarteSicherung(t, kevin, "letzte", version)
+	})
+	t.Run("Holen bleibt möglich", func(t *testing.T) {
+		ts.erwarteSicherung(t, kevin, "letzte", version)
+	})
+	t.Run("Diagnosen haben ein eigenes Tageslimit", func(t *testing.T) {
+		if err := ts.diagnoseSenden(kevin, gzipJSON(t, "{}")); err != nil {
+			t.Fatal(err)
+		}
+	})
+	t.Run("ein anderes Konto hat sein eigenes Limit", func(t *testing.T) {
+		if _, err := ts.sicherungSpeichern(anna, []byte("annas"), 0); err != nil {
+			t.Fatal(err)
+		}
+	})
+	t.Run("am nächsten Tag (UTC) geht es wieder", func(t *testing.T) {
+		ts.jetzt = time.Date(start.Year(), start.Month(), start.Day()+1, 0, 0, 1, 0, time.UTC)
+		neu := ts.anmelden(t, "google-kevin", testhilfe.NeuesGeraet(t)).Sitzung.Token // die alte Sitzung ist abgelaufen
+		if err := speichern(neu, "morgen"); err != nil {
+			t.Fatal(err)
+		}
 	})
 }
 

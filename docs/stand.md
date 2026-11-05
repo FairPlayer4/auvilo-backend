@@ -1,6 +1,6 @@
 # Stand und nächste Schritte
 
-Stand: 2026-11-04. Bei jedem größeren Schritt aktualisieren.
+Stand: 2026-11-05. Bei jedem größeren Schritt aktualisieren.
 
 ## In GCP (Projekt `avlreminder-exp-1ef2`, Region `europe-west1`)
 Etappe **B0** ist angelegt (OpenTofu, `infra/`):
@@ -54,9 +54,10 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
   `var.region`. Cloud-Run-Jobs und Dienste in anderen Regionen bleiben offen; dafür
   greift erst das Trennen ab 150 %. Kommen solche dazu, den Kill-Switch erweitern.
   Ebenso kostet Speicher (Bucket der Datensicherungen) nach der Sperre weiter, bis
-  zum Trennen; die Lebenszyklusregeln greifen erst verzögert. Ein Upload-Limit je
-  Konto und Zeit im Server kommt vor echten Daten
-  ([b2b-entwurf.md](b2b-entwurf.md), „Vor echten Daten“).
+  zum Trennen; die Lebenszyklusregeln greifen erst verzögert. Das Hochladen
+  begrenzt der Server auf 48 Sicherungen je Konto und Tag
+  ([b2b-entwurf.md](b2b-entwurf.md), E-B2b-12); Holen ist nicht begrenzt
+  (Ausgang kostet), nur durch höchstens 4 gleichzeitige Aufrufe.
 - **Bekannte Grenze (Absenz-Alarm):** schlägt erst an, nachdem der Kill-Switch
   einmal aufgerufen wurde. Nach einem Neuaufbau einmal eine Meldung unter der
   Schwelle schicken (`gcloud pubsub topics publish budget-meldungen
@@ -184,11 +185,13 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
    `werkzeuge/diagnose-holen.sh` am 2026-11-04 umgesetzt; Infrastruktur am selben
    Tag angewendet (3 neu, 1 geändert). Test-Client: `diagnose-senden` (feste
    Test-Diagnose; nennt bei „nicht freigeschaltet“ die Konto-ID), Packen und Senden
-   in `protokoll` (`Diagnose`), Adapter in `verbindung`. **Offen:** Deploy über PR
-   nach `main`, dann Kevins Konto-ID in `diagnose_konten` (`infra/werte.auto.tfvars`)
-   eintragen, `tofu apply`, und in der Cloud testen: `diagnose-senden`, danach
-   `werkzeuge/diagnose-holen.sh`.
-   **Weiter mit:** Upload-Limit und Sperren ohne actAs vor echten Daten; Schritt 7 (App-Einbindung, eigener Entwurf im App-Repo). Offen aus
+   in `protokoll` (`Diagnose`), Adapter in `verbindung`. **Am 2026-11-05 in der Cloud
+   getestet:** deployt (PR #9), Kevins Konto freigeschaltet, `diagnose-senden` legt
+   die Sendung ab, `werkzeuge/diagnose-holen.sh` holt und entpackt sie, das
+   Server-Log nennt nur Gerät und Größe.
+   **Upload-Limit** am 2026-11-05: 48 Sicherungen je Konto und Tag (E-B2b-12),
+   Server und Kotlin (`SicherungTageslimit`); Deploy über PR nach `main`.
+   **Weiter mit:** Sperren ohne actAs vor echten Daten; Schritt 7 (App-Einbindung, eigener Entwurf im App-Repo). Offen aus
    Lauf 5: Empfehlungen E5–E7; aus Lauf 6: E1–E6.
 5. Für den B3-Entwurf aus Lauf 4: A2 (Mitgliedschaft: Server-Liste oder signiertes
    Log), A4 (Umschläge an Kontext binden, Keyset-Typen prüfen), A5 (Speicher und
