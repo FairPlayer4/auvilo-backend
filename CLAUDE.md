@@ -63,9 +63,10 @@ Kommunikation auf **Deutsch, mit ß**.
   zusammenfassen. Was Geld kostet oder etwas abschaltet, erst nach Kevins Go.
 - Lokale Werte (Rechnungskonto) in `infra/werte.auto.tfvars`, nicht im Repo.
 - Kosten gehen vor Verfügbarkeit. Jeder Cloud-Run-Dienst bekommt ein eigenes
-  Dienstkonto (in `cloud_run_laufzeitkonten` in `infra/kosten.tf` eintragen) und
-  `lifecycle { ignore_changes = [ingress] }`, damit `tofu apply` vom Kill-Switch
-  gesperrte Dienste nicht wieder öffnet.
+  Dienstkonto; öffentlich wird er nur über das Modul `infra/module/oeffentlich`
+  (mit `depends_on` auf den Dienst). Der Kill-Switch sperrt, indem er `allUsers`
+  entfernt, und das Modul verhindert, dass `tofu apply` gesperrte Dienste wieder
+  öffnet (nur mit `-var=gesperrte_dienste_oeffnen=true`).
 - Nur EU-Regionen: Standorte immer über `var.region`; `tofu test` und
   `infra/pruefe-regionen.sh` prüfen das.
 

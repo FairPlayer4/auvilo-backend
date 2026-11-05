@@ -167,11 +167,11 @@ abgelaufene Sitzung, Token nach dem Sperren.
 
 ## Infrastruktur
 
-- Cloud-Run-Dienst `server` in `var.region`: eigenes Dienstkonto `server` (in
-  `cloud_run_laufzeitkonten` eingetragen), `ignore_changes` für Ingress **und Image**
-  (das Image setzt der Deploy), 0–2 Instanzen, 1 CPU nur während Anfragen,
-  256 MiB. Öffentlich aufrufbar (`allUsers` als Invoker) – die Anmeldung prüft die
-  App selbst.
+- Cloud-Run-Dienst `server` in `var.region`: eigenes Dienstkonto `server`,
+  `ignore_changes` für das Image (setzt der Deploy), 0–2 Instanzen, 1 CPU nur
+  während Anfragen, 256 MiB. Öffentlich aufrufbar (`allUsers` als Invoker, Modul
+  `module/oeffentlich`) – die Anmeldung prüft die App selbst. Der Kill-Switch
+  sperrt, indem er `allUsers` entfernt (seit 2026-11-05; vorher Ingress).
 - Rechte des Kontos `server`: Firestore lesen/schreiben, nur **dieses eine** Secret
   (Pfeffer) lesen.
 - Pfeffer: Secret im Secret Manager. OpenTofu erzeugt den Wert so, dass er **nicht**

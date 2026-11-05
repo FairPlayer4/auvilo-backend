@@ -4,12 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
+
+	"cloud.google.com/go/iam/apiv1/iampb"
 )
 
 // Dienst ist das, was die Sperr-Logik über einen Cloud-Run-Dienst wissen muss.
 type Dienst struct {
-	Name   string // voller Name, z. B. "projects/p/locations/r/services/api"
-	Intern bool   // Ingress steht schon auf "nur intern"
+	Name     string // voller Name, z. B. "projects/p/locations/r/services/api"
+	Gesperrt bool   // niemand aus dem Internet darf ihn aufrufen (oeffentlich fehlt)
 }
 
 // CloudRun kapselt die beiden Cloud-Run-Aufrufe, die das Sperren braucht.
@@ -18,8 +21,64 @@ type Dienst struct {
 type CloudRun interface {
 	// Dienste listet alle Cloud-Run-Dienste der Region.
 	Dienste(ctx context.Context) ([]Dienst, error)
-	// Sperre stellt den Dienst mit diesem vollen Namen auf "nur intern".
+	// Sperre entzieht dem Internet das Recht, den Dienst mit diesem vollen
+	// Namen aufzurufen (siehe ohneOeffentlich).
 	Sperre(ctx context.Context, name string) error
+}
+
+// oeffentlich sind die beiden IAM-Mitglieder, über die jeder aus dem Internet
+// einen Dienst aufrufen darf: "allUsers" (jeder) und "allAuthenticatedUsers"
+// (jedes Google-Konto).
+var oeffentlich = []string{"allUsers", "allAuthenticatedUsers"}
+
+// istOeffentlich sagt, ob die IAM-Richtlinie eines Dienstes dem Internet
+// irgendeine Rolle gibt.
+func istOeffentlich(p *iampb.Policy) bool {
+	for _, b := range p.GetBindings() {
+		for _, m := range b.GetMembers() {
+			if slices.Contains(oeffentlich, m) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// ohneOeffentlich entfernt "allUsers" und "allAuthenticatedUsers" aus allen
+// Rollen der Richtlinie und gibt zurück, ob sich etwas geändert hat. Rollen,
+// in denen dann niemand mehr steht, fallen weg (die API lehnt leere ab).
+//
+// Warum so statt Ingress "nur intern": Den Ingress zu ändern ist ein Update des
+// Dienstes, und dafür verlangt Cloud Run das Recht, dessen Laufzeitkonto zu
+// "benutzen" (actAs). Mit diesem Recht könnte kompromittierter Code im
+// Kill-Switch ein fremdes Image als Konto "server" starten. Die IAM-Richtlinie
+// zu ändern braucht kein actAs. Abgewiesen wird dann schon vor dem Dienst
+// (403), es startet keine Instanz und es entstehen keine Rechenkosten.
+//
+// KRITISCH:
+//   - Entfernt wird aus jeder Rolle, nicht nur aus run.invoker; sonst bliebe
+//     ein Dienst über eine andere Rolle mit Aufrufrecht offen.
+//   - Alle anderen Mitglieder (z. B. das Konto, das den Kill-Switch aufruft)
+//     bleiben, damit der Kill-Switch sich nicht selbst aussperrt.
+func ohneOeffentlich(p *iampb.Policy) bool {
+	geaendert := false
+	var bleiben []*iampb.Binding
+	for _, b := range p.GetBindings() {
+		vorher := len(b.Members)
+		b.Members = slices.DeleteFunc(b.Members, func(m string) bool {
+			return slices.Contains(oeffentlich, m)
+		})
+		if len(b.Members) != vorher {
+			geaendert = true
+		}
+		if len(b.Members) > 0 {
+			bleiben = append(bleiben, b)
+		}
+	}
+	if p != nil {
+		p.Bindings = bleiben
+	}
+	return geaendert
 }
 
 // Sperrung zählt, was SperreAlle vorgefunden und getan hat.
@@ -27,18 +86,18 @@ type Sperrung struct {
 	// Gefunden zählt alle Dienste außer dem eigenen, auch schon gesperrte.
 	// 0 heißt: Der Kill-Switch schützt nichts (z. B. falsche REGION).
 	Gefunden int
-	// Gesperrt zählt die Dienste, die jetzt neu auf "nur intern" stehen.
+	// Gesperrt zählt die Dienste, die jetzt neu für das Internet gesperrt sind.
 	Gesperrt int
 }
 
-// SperreAlle stellt alle offenen Cloud-Run-Dienste auf "nur intern" und gibt
-// zurück, wie viele Dienste es gefunden und gesperrt hat. Anfragen aus dem Internet werden dann
-// abgewiesen, ohne dass eine Instanz startet – es entstehen keine
-// Rechenkosten mehr.
+// SperreAlle sperrt alle offenen Cloud-Run-Dienste für das Internet und gibt
+// zurück, wie viele Dienste es gefunden und gesperrt hat. Anfragen aus dem
+// Internet werden dann abgewiesen, ohne dass eine Instanz startet – es
+// entstehen keine Rechenkosten mehr.
 //
 // KRITISCH:
 //   - Der eigene Dienst (die Funktion selbst) wird nie gesperrt.
-//   - Schon interne Dienste werden nicht angefasst.
+//   - Schon gesperrte Dienste werden nicht angefasst.
 //   - Ein Fehler bei einem Dienst hält die anderen nicht auf; alle Fehler
 //     werden gesammelt zurückgegeben.
 //   - Scheitert schon das Auflisten, wird nichts gesperrt und der Fehler gemeldet.
@@ -55,7 +114,7 @@ func SperreAlle(ctx context.Context, cr CloudRun, eigenerDienst string) (Sperrun
 			continue
 		}
 		s.Gefunden++
-		if d.Intern {
+		if d.Gesperrt {
 			continue
 		}
 		if err := cr.Sperre(ctx, d.Name); err != nil {

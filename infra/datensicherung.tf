@@ -9,7 +9,7 @@ resource "google_storage_bucket" "datensicherung" {
   location                    = var.region
   uniform_bucket_level_access = true       # Rechte nur am Bucket, keine pro Objekt
   public_access_prevention    = "enforced" # nie öffentlich, auch nicht aus Versehen
-  force_destroy               = true       # Lernprojekt: muss vollständig löschbar sein (vor echten Daten: false)
+  force_destroy               = false      # vor echten Daten: Ein Bucket mit Sicherungen lässt sich nicht löschen
 
   versioning {
     enabled = true

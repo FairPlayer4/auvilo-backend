@@ -246,11 +246,12 @@ aber nicht **was**. Wird in der Datenschutzerklärung so benannt.
   bzw. trennt das Rechnungskonto. Budgets allein stoppen nichts.
   **Kosten gehen vor Verfügbarkeit**: Hohe Kosten deuten auf einen Fehler oder einen
   Angriff hin. Ein vom Kill-Switch gesperrter Dienst bleibt gesperrt, bis er bewusst
-  von Hand wieder geöffnet wird – auch ein `tofu apply` öffnet ihn nicht
-  (`lifecycle { ignore_changes = [ingress] }` an jedem Cloud-Run-Dienst).
-- KO3a Jeder Cloud-Run-Dienst läuft mit **eigenem Dienstkonto**; dieses wird in
-  `cloud_run_laufzeitkonten` (infra/kosten.tf) eingetragen, damit der Kill-Switch
-  ihn sperren darf. Der Kill-Switch selbst darf nur Dienste lesen und ändern.
+  von Hand wieder geöffnet wird – auch ein `tofu apply` öffnet ihn nicht, nur
+  `tofu apply -var=gesperrte_dienste_oeffnen=true` (Modul `infra/module/oeffentlich`).
+- KO3a Jeder Cloud-Run-Dienst läuft mit **eigenem Dienstkonto**. Der Kill-Switch
+  sperrt, indem er dem Internet (`allUsers`) das Aufrufrecht entzieht; er darf nur
+  Dienste auflisten und ihre IAM-Richtlinie setzen, aber keinen Dienst ändern und
+  kein Laufzeitkonto benutzen (kein actAs).
 - KO4 Cloud Run `max-instances` 2, `min-instances` 0, kleinste CPU/RAM.
 - KO5 KI-Kontingent pro Konto und Tag.
 - Hinweis: Das Test-Guthaben läuft in der Regel nach 90 Tagen ab; der Kill-Switch
@@ -380,5 +381,7 @@ tragen die Tests die Spezifikation. Anleitung zum Review: [go-review.md](go-revi
 | 2026-11-04 | Datensicherung: App sichert automatisch höchstens stündlich und nur bei Änderung, dazu manuell (höchstens einmal pro Minute); ältere Fassungen 7 Tage, höchstens 200 |
 | 2026-11-04 | Kill-Switch: WARN (Alarm-Mail) auch, wenn ab 100 % kein Dienst gefunden wird – sonst schützt er unbemerkt nichts (z. B. falsche REGION) |
 | 2026-11-04 | Pfeffer: Zu Beginn der Sicherheitsphase legt Kevin allein eine Offline-Kopie im Passwortmanager ab; sie schützt auch gegen das Löschen des ganzen Secrets. Ablauf zum Sichern und Wiederherstellen in [gcp-einrichtung.md](gcp-einrichtung.md); der Schutz in OpenTofu (`prevent_destroy`, 30 Tage für zerstörte Versionen) ist per `tofu test` abgesichert |
+| 2026-11-05 | Kill-Switch sperrt ohne actAs: Er entfernt `allUsers` aus der IAM-Richtlinie der Dienste (statt Ingress „nur intern“); Rechte nur noch `run.services.list`, `getIamPolicy`, `setIamPolicy`. Ein `tofu apply` öffnet gesperrte Dienste nur mit `-var=gesperrte_dienste_oeffnen=true` |
+| 2026-11-05 | Löschschutz vor echten Daten: Firestore mit Löschschutz und `ABANDON`, Cloud Run `deletion_protection`, Bucket der Datensicherungen ohne `force_destroy`. „Vollständig löschbar“ (Q7) bleibt über das Löschen des Projekts |
 | 2026-11-05 | Datensicherung: höchstens 48 Sicherungen je Konto und Tag (UTC), danach `resource_exhausted` bis Mitternacht UTC; Holen und Löschen frei ([b2b-entwurf.md](b2b-entwurf.md), E-B2b-12) |
 | 2026-11-04 | Diagnose-Log aus der App ([diagnose-entwurf.md](diagnose-entwurf.md)): unverschlüsselt, ohne Inhalte (nur feste Ereignisse, typisierte Felder, Stapel ohne Meldungstext), nur auf Knopfdruck, nur freigeschaltete Konten, eigener Bucket in der EU, 14 Tage; Claude darf diese Logs lesen |

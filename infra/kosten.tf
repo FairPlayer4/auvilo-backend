@@ -74,20 +74,22 @@ resource "google_service_account" "bauen" {
   depends_on   = [google_project_service.apis]
 }
 
-# Eigene Rolle statt roles/run.developer: Der Kill-Switch darf Dienste nur
-# lesen und ändern, aber keine neuen Dienste oder Jobs anlegen und nichts
-# löschen. Grenze: "ändern" umfasst auch das Image. Zusammen mit actAs auf die
-# Laufzeitkonten (unten) könnte kompromittierter Code im Kill-Switch ein
-# fremdes Image als z. B. Konto "server" starten (siehe docs/stand.md).
+# Eigene, schmale Rolle: Der Kill-Switch darf Dienste auflisten und ihre
+# IAM-Richtlinie lesen und setzen, sonst nichts. Er sperrt, indem er dem
+# Internet ("allUsers") das Aufrufrecht entzieht (killswitch/sperren.go).
+# KRITISCH: kein run.services.update und kein actAs auf Laufzeitkonten. Damit
+# kann auch kompromittierter Code im Kill-Switch kein fremdes Image starten,
+# schon gar nicht als Konto "server" (Firestore, Pfeffer). Grenze: Er kann
+# Dienste sperren und Aufrufrechte vergeben; die Dienste prüfen die Anmeldung
+# ohnehin selbst.
 resource "google_project_iam_custom_role" "killswitch_cloud_run" {
   role_id     = "killswitchCloudRun"
   title       = "Kill-Switch: Cloud-Run-Dienste sperren"
-  description = "Dienste auflisten, lesen und den Ingress ändern"
+  description = "Dienste auflisten und dem Internet das Aufrufrecht entziehen"
   permissions = [
-    "run.services.get",
     "run.services.list",
-    "run.services.update",
-    "run.operations.get", # Warten, bis die Änderung aktiv ist
+    "run.services.getIamPolicy",
+    "run.services.setIamPolicy",
   ]
   depends_on = [google_project_service.apis]
 }
@@ -100,17 +102,6 @@ locals {
     abrechnung = "roles/billing.projectManager"                           # Projekt vom Rechnungskonto trennen
     eventarc   = "roles/eventarc.eventReceiver"                           # Ereignisse von Eventarc empfangen
   }
-
-  # Wer einen Cloud-Run-Dienst ändert, muss dessen Laufzeit-Dienstkonto
-  # "benutzen" dürfen (actAs). Deshalb bekommt der Kill-Switch dieses Recht
-  # nur für genau diese Konten – nicht projektweit.
-  # NEUE CLOUD-RUN-DIENSTE: Ihr Laufzeitkonto hier eintragen, sonst kann der
-  # Kill-Switch sie nicht sperren (Fehler im Log).
-  cloud_run_laufzeitkonten = {
-    # Standardkonto für Dienste ohne eigenes Konto (z. B. manuelle Tests).
-    compute_standard = "${data.google_project.projekt.number}-compute@developer.gserviceaccount.com"
-    server           = google_service_account.server.email
-  }
 }
 
 resource "google_project_iam_member" "killswitch" {
@@ -118,14 +109,6 @@ resource "google_project_iam_member" "killswitch" {
   project  = var.projekt
   role     = each.value
   member   = google_service_account.killswitch.member
-}
-
-resource "google_service_account_iam_member" "killswitch_act_as" {
-  for_each           = local.cloud_run_laufzeitkonten
-  service_account_id = "projects/${var.projekt}/serviceAccounts/${each.value}"
-  role               = "roles/iam.serviceAccountUser"
-  member             = google_service_account.killswitch.member
-  depends_on         = [google_project_service.apis] # das Compute-Standardkonto legt Google erst mit den APIs an
 }
 
 # Ohne Organisation gibt Google den Standardkonten automatisch die Rolle

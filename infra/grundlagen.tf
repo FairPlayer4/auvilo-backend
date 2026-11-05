@@ -35,11 +35,15 @@ resource "google_project_service" "apis" {
 # --- Firestore ---------------------------------------------------------------
 # Die "(default)"-Datenbank ist die einzige mit Gratis-Kontingent.
 resource "google_firestore_database" "standard" {
-  name                    = "(default)"
-  location_id             = var.region
-  type                    = "FIRESTORE_NATIVE"
-  delete_protection_state = "DELETE_PROTECTION_DISABLED"
-  deletion_policy         = "DELETE" # Lernprojekt: muss vollständig löschbar sein
+  name        = "(default)"
+  location_id = var.region
+  type        = "FIRESTORE_NATIVE"
+  # Vor echten Daten (b2b-entwurf.md): GCP verweigert das Löschen der Datenbank,
+  # und `tofu destroy` entfernt sie nur aus dem Zustand (ABANDON), statt sie zu
+  # löschen. Konten, Geräte und Sitzungen bleiben so auch bei einem Fehler in
+  # der Konfiguration erhalten.
+  delete_protection_state = "DELETE_PROTECTION_ENABLED"
+  deletion_policy         = "ABANDON"
 
   depends_on = [google_project_service.apis]
 }
