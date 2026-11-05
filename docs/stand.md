@@ -196,9 +196,14 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
    **Upload-Limit** am 2026-11-05: 48 Sicherungen je Konto und Tag (E-B2b-12),
    Server und Kotlin (`SicherungTageslimit`); Deploy über PR nach `main`.
    **Vor echten Daten** am 2026-11-05: Kill-Switch sperrt ohne actAs, Löschschutz
-   in OpenTofu (beides noch per `tofu apply` anzuwenden); Vorschlag „neue Geräte
-   erst nach Freischaltung“ (E-B2b-13) wartet auf Kevins Bestätigung.
-   **Weiter mit:** E-B2b-13 umsetzen, dann die Schritte, die nur Kevin macht
+   in OpenTofu (am 2026-11-05 angewendet).
+   **Neue Geräte erst nach Freischaltung** (E-B2b-13) am 2026-11-05: Server
+   (Merkmal am Gerät, Prüfung in allen ändernden Diensten, `GeraetFreischalten`,
+   `MitWiederherstellungFreischalten`), Ableitung in `protokoll` mit gemeinsamen
+   Testvektoren, Adapter, Test-Client (`freischalten <id>`, Anzeige in `geraete`).
+   Deploy über PR nach `main`. Alte Testgeräte sind danach nicht freigeschaltet:
+   mit neuem Gerätenamen anmelden.
+   **Weiter mit:** die Schritte, die nur Kevin macht
    (b2b-entwurf.md, „Vor echten Daten“, Punkte 1–3 und 6); Schritt 7 (App-Einbindung, eigener Entwurf im App-Repo). Offen aus
    Lauf 5: Empfehlungen E5–E7; aus Lauf 6: E1–E6.
 5. Für den B3-Entwurf aus Lauf 4: A2 (Mitgliedschaft: Server-Liste oder signiertes

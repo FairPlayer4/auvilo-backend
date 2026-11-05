@@ -108,9 +108,13 @@ type Geraet struct {
 	AngemeldetAm *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=angemeldet_am,json=angemeldetAm,proto3" json:"angemeldet_am,omitempty"`
 	Gesperrt     bool                   `protobuf:"varint,3,opt,name=gesperrt,proto3" json:"gesperrt,omitempty"`
 	// true für das Gerät, das gerade anfragt.
-	DiesesGeraet  bool `protobuf:"varint,4,opt,name=dieses_geraet,json=diesesGeraet,proto3" json:"dieses_geraet,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	DiesesGeraet bool `protobuf:"varint,4,opt,name=dieses_geraet,json=diesesGeraet,proto3" json:"dieses_geraet,omitempty"`
+	// Darf das Gerät sperren, freischalten, speichern und löschen? Ein neues,
+	// nicht freigeschaltetes und nicht gesperrtes Gerät zeigt die App als
+	// „Neues Gerät angemeldet – freischalten oder sperren“.
+	Freigeschaltet bool `protobuf:"varint,5,opt,name=freigeschaltet,proto3" json:"freigeschaltet,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *Geraet) Reset() {
@@ -167,6 +171,13 @@ func (x *Geraet) GetGesperrt() bool {
 func (x *Geraet) GetDiesesGeraet() bool {
 	if x != nil {
 		return x.DiesesGeraet
+	}
+	return false
+}
+
+func (x *Geraet) GetFreigeschaltet() bool {
+	if x != nil {
+		return x.Freigeschaltet
 	}
 	return false
 }
@@ -251,6 +262,171 @@ func (*GeraetSperrenResponse) Descriptor() ([]byte, []int) {
 	return file_avlreminder_v1_geraete_proto_rawDescGZIP(), []int{4}
 }
 
+type GeraetFreischaltenRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	GeraetId      string                 `protobuf:"bytes,1,opt,name=geraet_id,json=geraetId,proto3" json:"geraet_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GeraetFreischaltenRequest) Reset() {
+	*x = GeraetFreischaltenRequest{}
+	mi := &file_avlreminder_v1_geraete_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GeraetFreischaltenRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GeraetFreischaltenRequest) ProtoMessage() {}
+
+func (x *GeraetFreischaltenRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_avlreminder_v1_geraete_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GeraetFreischaltenRequest.ProtoReflect.Descriptor instead.
+func (*GeraetFreischaltenRequest) Descriptor() ([]byte, []int) {
+	return file_avlreminder_v1_geraete_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *GeraetFreischaltenRequest) GetGeraetId() string {
+	if x != nil {
+		return x.GeraetId
+	}
+	return ""
+}
+
+type GeraetFreischaltenResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GeraetFreischaltenResponse) Reset() {
+	*x = GeraetFreischaltenResponse{}
+	mi := &file_avlreminder_v1_geraete_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GeraetFreischaltenResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GeraetFreischaltenResponse) ProtoMessage() {}
+
+func (x *GeraetFreischaltenResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_avlreminder_v1_geraete_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GeraetFreischaltenResponse.ProtoReflect.Descriptor instead.
+func (*GeraetFreischaltenResponse) Descriptor() ([]byte, []int) {
+	return file_avlreminder_v1_geraete_proto_rawDescGZIP(), []int{6}
+}
+
+type MitWiederherstellungFreischaltenRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Ed25519-Signatur (64 Bytes) mit dem Freischaltschlüssel über die
+	// UTF-8-Bytes von "avlreminder/freischalten/v1\n" + Geräte-ID des
+	// anfragenden Geräts. Den Schlüssel leitet das Gerät aus dem
+	// Wiederherstellungsschlüssel ab (schluessel.proto); Testvektoren in
+	// proto/testvektoren/freischaltung.json.
+	Signatur      []byte `protobuf:"bytes,1,opt,name=signatur,proto3" json:"signatur,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MitWiederherstellungFreischaltenRequest) Reset() {
+	*x = MitWiederherstellungFreischaltenRequest{}
+	mi := &file_avlreminder_v1_geraete_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MitWiederherstellungFreischaltenRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MitWiederherstellungFreischaltenRequest) ProtoMessage() {}
+
+func (x *MitWiederherstellungFreischaltenRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_avlreminder_v1_geraete_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MitWiederherstellungFreischaltenRequest.ProtoReflect.Descriptor instead.
+func (*MitWiederherstellungFreischaltenRequest) Descriptor() ([]byte, []int) {
+	return file_avlreminder_v1_geraete_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *MitWiederherstellungFreischaltenRequest) GetSignatur() []byte {
+	if x != nil {
+		return x.Signatur
+	}
+	return nil
+}
+
+type MitWiederherstellungFreischaltenResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MitWiederherstellungFreischaltenResponse) Reset() {
+	*x = MitWiederherstellungFreischaltenResponse{}
+	mi := &file_avlreminder_v1_geraete_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MitWiederherstellungFreischaltenResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MitWiederherstellungFreischaltenResponse) ProtoMessage() {}
+
+func (x *MitWiederherstellungFreischaltenResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_avlreminder_v1_geraete_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MitWiederherstellungFreischaltenResponse.ProtoReflect.Descriptor instead.
+func (*MitWiederherstellungFreischaltenResponse) Descriptor() ([]byte, []int) {
+	return file_avlreminder_v1_geraete_proto_rawDescGZIP(), []int{8}
+}
+
 var File_avlreminder_v1_geraete_proto protoreflect.FileDescriptor
 
 const file_avlreminder_v1_geraete_proto_rawDesc = "" +
@@ -258,18 +434,27 @@ const file_avlreminder_v1_geraete_proto_rawDesc = "" +
 	"\x1cavlreminder/v1/geraete.proto\x12\x0eavlreminder.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\x19\n" +
 	"\x17GeraeteAuflistenRequest\"L\n" +
 	"\x18GeraeteAuflistenResponse\x120\n" +
-	"\ageraete\x18\x01 \x03(\v2\x16.avlreminder.v1.GeraetR\ageraete\"\xa7\x01\n" +
+	"\ageraete\x18\x01 \x03(\v2\x16.avlreminder.v1.GeraetR\ageraete\"\xcf\x01\n" +
 	"\x06Geraet\x12\x1b\n" +
 	"\tgeraet_id\x18\x01 \x01(\tR\bgeraetId\x12?\n" +
 	"\rangemeldet_am\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\fangemeldetAm\x12\x1a\n" +
 	"\bgesperrt\x18\x03 \x01(\bR\bgesperrt\x12#\n" +
-	"\rdieses_geraet\x18\x04 \x01(\bR\fdiesesGeraet\"3\n" +
+	"\rdieses_geraet\x18\x04 \x01(\bR\fdiesesGeraet\x12&\n" +
+	"\x0efreigeschaltet\x18\x05 \x01(\bR\x0efreigeschaltet\"3\n" +
 	"\x14GeraetSperrenRequest\x12\x1b\n" +
 	"\tgeraet_id\x18\x01 \x01(\tR\bgeraetId\"\x17\n" +
-	"\x15GeraetSperrenResponse2\xd4\x01\n" +
+	"\x15GeraetSperrenResponse\"8\n" +
+	"\x19GeraetFreischaltenRequest\x12\x1b\n" +
+	"\tgeraet_id\x18\x01 \x01(\tR\bgeraetId\"\x1c\n" +
+	"\x1aGeraetFreischaltenResponse\"E\n" +
+	"'MitWiederherstellungFreischaltenRequest\x12\x1a\n" +
+	"\bsignatur\x18\x01 \x01(\fR\bsignatur\"*\n" +
+	"(MitWiederherstellungFreischaltenResponse2\xd9\x03\n" +
 	"\rGeraeteDienst\x12e\n" +
 	"\x10GeraeteAuflisten\x12'.avlreminder.v1.GeraeteAuflistenRequest\x1a(.avlreminder.v1.GeraeteAuflistenResponse\x12\\\n" +
-	"\rGeraetSperren\x12$.avlreminder.v1.GeraetSperrenRequest\x1a%.avlreminder.v1.GeraetSperrenResponseB\xcf\x01\n" +
+	"\rGeraetSperren\x12$.avlreminder.v1.GeraetSperrenRequest\x1a%.avlreminder.v1.GeraetSperrenResponse\x12k\n" +
+	"\x12GeraetFreischalten\x12).avlreminder.v1.GeraetFreischaltenRequest\x1a*.avlreminder.v1.GeraetFreischaltenResponse\x12\x95\x01\n" +
+	" MitWiederherstellungFreischalten\x127.avlreminder.v1.MitWiederherstellungFreischaltenRequest\x1a8.avlreminder.v1.MitWiederherstellungFreischaltenResponseB\xcf\x01\n" +
 	"\x12com.avlreminder.v1B\fGeraeteProtoP\x01ZRgithub.com/FairPlayer4/avlreminder-backend/server/gen/avlreminder/v1;avlreminderv1\xa2\x02\x03AXX\xaa\x02\x0eAvlreminder.V1\xca\x02\x0eAvlreminder\\V1\xe2\x02\x1aAvlreminder\\V1\\GPBMetadata\xea\x02\x0fAvlreminder::V1b\x06proto3"
 
 var (
@@ -284,24 +469,32 @@ func file_avlreminder_v1_geraete_proto_rawDescGZIP() []byte {
 	return file_avlreminder_v1_geraete_proto_rawDescData
 }
 
-var file_avlreminder_v1_geraete_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_avlreminder_v1_geraete_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_avlreminder_v1_geraete_proto_goTypes = []any{
-	(*GeraeteAuflistenRequest)(nil),  // 0: avlreminder.v1.GeraeteAuflistenRequest
-	(*GeraeteAuflistenResponse)(nil), // 1: avlreminder.v1.GeraeteAuflistenResponse
-	(*Geraet)(nil),                   // 2: avlreminder.v1.Geraet
-	(*GeraetSperrenRequest)(nil),     // 3: avlreminder.v1.GeraetSperrenRequest
-	(*GeraetSperrenResponse)(nil),    // 4: avlreminder.v1.GeraetSperrenResponse
-	(*timestamppb.Timestamp)(nil),    // 5: google.protobuf.Timestamp
+	(*GeraeteAuflistenRequest)(nil),                  // 0: avlreminder.v1.GeraeteAuflistenRequest
+	(*GeraeteAuflistenResponse)(nil),                 // 1: avlreminder.v1.GeraeteAuflistenResponse
+	(*Geraet)(nil),                                   // 2: avlreminder.v1.Geraet
+	(*GeraetSperrenRequest)(nil),                     // 3: avlreminder.v1.GeraetSperrenRequest
+	(*GeraetSperrenResponse)(nil),                    // 4: avlreminder.v1.GeraetSperrenResponse
+	(*GeraetFreischaltenRequest)(nil),                // 5: avlreminder.v1.GeraetFreischaltenRequest
+	(*GeraetFreischaltenResponse)(nil),               // 6: avlreminder.v1.GeraetFreischaltenResponse
+	(*MitWiederherstellungFreischaltenRequest)(nil),  // 7: avlreminder.v1.MitWiederherstellungFreischaltenRequest
+	(*MitWiederherstellungFreischaltenResponse)(nil), // 8: avlreminder.v1.MitWiederherstellungFreischaltenResponse
+	(*timestamppb.Timestamp)(nil),                    // 9: google.protobuf.Timestamp
 }
 var file_avlreminder_v1_geraete_proto_depIdxs = []int32{
 	2, // 0: avlreminder.v1.GeraeteAuflistenResponse.geraete:type_name -> avlreminder.v1.Geraet
-	5, // 1: avlreminder.v1.Geraet.angemeldet_am:type_name -> google.protobuf.Timestamp
+	9, // 1: avlreminder.v1.Geraet.angemeldet_am:type_name -> google.protobuf.Timestamp
 	0, // 2: avlreminder.v1.GeraeteDienst.GeraeteAuflisten:input_type -> avlreminder.v1.GeraeteAuflistenRequest
 	3, // 3: avlreminder.v1.GeraeteDienst.GeraetSperren:input_type -> avlreminder.v1.GeraetSperrenRequest
-	1, // 4: avlreminder.v1.GeraeteDienst.GeraeteAuflisten:output_type -> avlreminder.v1.GeraeteAuflistenResponse
-	4, // 5: avlreminder.v1.GeraeteDienst.GeraetSperren:output_type -> avlreminder.v1.GeraetSperrenResponse
-	4, // [4:6] is the sub-list for method output_type
-	2, // [2:4] is the sub-list for method input_type
+	5, // 4: avlreminder.v1.GeraeteDienst.GeraetFreischalten:input_type -> avlreminder.v1.GeraetFreischaltenRequest
+	7, // 5: avlreminder.v1.GeraeteDienst.MitWiederherstellungFreischalten:input_type -> avlreminder.v1.MitWiederherstellungFreischaltenRequest
+	1, // 6: avlreminder.v1.GeraeteDienst.GeraeteAuflisten:output_type -> avlreminder.v1.GeraeteAuflistenResponse
+	4, // 7: avlreminder.v1.GeraeteDienst.GeraetSperren:output_type -> avlreminder.v1.GeraetSperrenResponse
+	6, // 8: avlreminder.v1.GeraeteDienst.GeraetFreischalten:output_type -> avlreminder.v1.GeraetFreischaltenResponse
+	8, // 9: avlreminder.v1.GeraeteDienst.MitWiederherstellungFreischalten:output_type -> avlreminder.v1.MitWiederherstellungFreischaltenResponse
+	6, // [6:10] is the sub-list for method output_type
+	2, // [2:6] is the sub-list for method input_type
 	2, // [2:2] is the sub-list for extension type_name
 	2, // [2:2] is the sub-list for extension extendee
 	0, // [0:2] is the sub-list for field type_name
@@ -318,7 +511,7 @@ func file_avlreminder_v1_geraete_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_avlreminder_v1_geraete_proto_rawDesc), len(file_avlreminder_v1_geraete_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   5,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

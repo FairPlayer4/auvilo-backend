@@ -3,6 +3,7 @@ package com.avlreminder.verbindung
 import com.avlreminder.protokoll.DiagnoseNichtFreigeschaltet
 import com.avlreminder.protokoll.DiagnoseTageslimit
 import com.avlreminder.protokoll.DiagnoseZuGross
+import com.avlreminder.protokoll.GeraetNichtFreigeschaltet
 import com.avlreminder.protokoll.SicherungTageslimit
 import com.avlreminder.protokoll.SicherungZuGross
 import com.avlreminder.protokoll.VersionVeraltet
@@ -12,6 +13,10 @@ import com.avlreminder.schnittstelle.v1.BackupSpeichernRequest
 import com.avlreminder.schnittstelle.v1.BackupSpeichernResponse
 import com.avlreminder.schnittstelle.v1.DiagnoseSendenRequest
 import com.avlreminder.schnittstelle.v1.DiagnoseSendenResponse
+import com.avlreminder.schnittstelle.v1.GeraetFreischaltenRequest
+import com.avlreminder.schnittstelle.v1.GeraetFreischaltenResponse
+import com.avlreminder.schnittstelle.v1.MitWiederherstellungFreischaltenRequest
+import com.avlreminder.schnittstelle.v1.MitWiederherstellungFreischaltenResponse
 import com.avlreminder.schnittstelle.v1.SicherungHolenResponse
 import com.avlreminder.schnittstelle.v1.SicherungLoeschenResponse
 import com.avlreminder.schnittstelle.v1.SicherungSpeichernRequest
@@ -159,14 +164,35 @@ class AdapterTest {
     @Test
     fun `speichert das Schlüssel-Backup mit Sitzung und erwarteter Version`() {
         antwort = Antwort.Ok(BackupSpeichernResponse.newBuilder().setVersion(3).build())
-        val version = runBlocking { ServerBackupAblage(verbindung(), TOKEN).speichern(CHIFFRAT, 2) }
+        val version = runBlocking { ServerBackupAblage(verbindung(), TOKEN).speichern(CHIFFRAT, SCHLUESSEL, 2) }
         assertEquals(3, version)
         val a = anfragen.single()
         assertEquals("/avlreminder.v1.SchluesselDienst/BackupSpeichern", a.pfad)
         assertEquals("Bearer $TOKEN", a.autorisierung)
         val gesendet = BackupSpeichernRequest.parseFrom(a.inhalt)
         assertArrayEquals(CHIFFRAT, gesendet.chiffrat.toByteArray())
+        assertArrayEquals(SCHLUESSEL, gesendet.freischaltschluessel.toByteArray())
         assertEquals(2, gesendet.erwarteteVersion)
+    }
+
+    @Test
+    fun `schaltet sich mit Sitzung und Signatur frei`() {
+        antwort = Antwort.Ok(MitWiederherstellungFreischaltenResponse.getDefaultInstance())
+        runBlocking { ServerGeraete(verbindung(), TOKEN).mitWiederherstellung(CHIFFRAT) }
+        val a = anfragen.single()
+        assertEquals("/avlreminder.v1.GeraeteDienst/MitWiederherstellungFreischalten", a.pfad)
+        assertEquals("Bearer $TOKEN", a.autorisierung)
+        assertArrayEquals(CHIFFRAT, MitWiederherstellungFreischaltenRequest.parseFrom(a.inhalt).signatur.toByteArray())
+    }
+
+    @Test
+    fun `schaltet ein anderes Gerät mit Sitzung frei`() {
+        antwort = Antwort.Ok(GeraetFreischaltenResponse.getDefaultInstance())
+        runBlocking { ServerGeraete(verbindung(), TOKEN).freischalten("geraet-2") }
+        val a = anfragen.single()
+        assertEquals("/avlreminder.v1.GeraeteDienst/GeraetFreischalten", a.pfad)
+        assertEquals("Bearer $TOKEN", a.autorisierung)
+        assertEquals("geraet-2", GeraetFreischaltenRequest.parseFrom(a.inhalt).geraetId)
     }
 
     @Test
@@ -198,6 +224,7 @@ class AdapterTest {
     companion object {
         private const val TOKEN = "test-token"
         private val CHIFFRAT = byteArrayOf(1, 2, 3, 0, -1)
+        private val SCHLUESSEL = ByteArray(32) { it.toByte() }
 
         // Eigene Zahl statt Datensicherung.MAX_CHIFFRAT (datensicherung.proto: 8 MiB).
         private val UEBER_8_MIB = ByteArray(8 * 1024 * 1024 + 1)
@@ -205,6 +232,7 @@ class AdapterTest {
 
         private fun sicherung(v: Verbindung) = ServerSicherungsAblage(v, TOKEN)
         private fun backup(v: Verbindung) = ServerBackupAblage(v, TOKEN)
+        private fun geraete(v: Verbindung) = ServerGeraete(v, TOKEN)
         private suspend fun diagnose(v: Verbindung, nutzlast: ByteArray = CHIFFRAT): Any? =
             ServerDiagnoseAblage(v, TOKEN).senden(nutzlast).let { "gesendet" }
 
@@ -229,13 +257,27 @@ class AdapterTest {
             Fall("Sicherung speichern: ungültige Anfrage bleibt Serverfehler", Code.INVALID_ARGUMENT, { sicherung(it).speichern(CHIFFRAT, 1) }, Serverfehler::class),
             Fall("Sicherung löschen: Fehler bleibt Serverfehler", Code.UNAUTHENTICATED, { sicherung(it).loeschen() }, Serverfehler::class),
             Fall("Sicherung löschen: nicht gefunden bleibt Serverfehler", Code.NOT_FOUND, { sicherung(it).loeschen() }, Serverfehler::class),
+            // KRITISCH (E-B2b-13): permission_denied heißt bei ändernden Aufrufen
+            // "Gerät nicht freigeschaltet", damit die App zur Freischaltung führt.
+            Fall("Sicherung speichern: keine Erlaubnis heißt nicht freigeschaltet", Code.PERMISSION_DENIED, { sicherung(it).speichern(CHIFFRAT, 1) }, GeraetNichtFreigeschaltet::class),
+            Fall("Sicherung löschen: keine Erlaubnis heißt nicht freigeschaltet", Code.PERMISSION_DENIED, { sicherung(it).loeschen() }, GeraetNichtFreigeschaltet::class),
+            Fall("Sicherung holen: keine Erlaubnis bleibt Serverfehler", Code.PERMISSION_DENIED, { sicherung(it).holen() }, Serverfehler::class),
             // Schlüssel-Backup
             Fall("Backup holen: nicht gefunden heißt kein Backup", Code.NOT_FOUND, { backup(it).holen() }, null),
             Fall("Backup holen: ungültige Sitzung bleibt Serverfehler", Code.UNAUTHENTICATED, { backup(it).holen() }, Serverfehler::class),
-            Fall("Backup speichern: Bedingung verletzt heißt veraltet", Code.FAILED_PRECONDITION, { backup(it).speichern(CHIFFRAT, 1) }, VersionVeraltet::class),
-            Fall("Backup speichern: zu groß bleibt Serverfehler", Code.RESOURCE_EXHAUSTED, { backup(it).speichern(CHIFFRAT, 1) }, Serverfehler::class),
-            Fall("Backup speichern: nicht gefunden bleibt Serverfehler", Code.NOT_FOUND, { backup(it).speichern(CHIFFRAT, 1) }, Serverfehler::class),
+            Fall("Backup speichern: Bedingung verletzt heißt veraltet", Code.FAILED_PRECONDITION, { backup(it).speichern(CHIFFRAT, SCHLUESSEL, 1) }, VersionVeraltet::class),
+            Fall("Backup speichern: zu groß bleibt Serverfehler", Code.RESOURCE_EXHAUSTED, { backup(it).speichern(CHIFFRAT, SCHLUESSEL, 1) }, Serverfehler::class),
+            Fall("Backup speichern: nicht gefunden bleibt Serverfehler", Code.NOT_FOUND, { backup(it).speichern(CHIFFRAT, SCHLUESSEL, 1) }, Serverfehler::class),
+            Fall("Backup speichern: keine Erlaubnis heißt nicht freigeschaltet", Code.PERMISSION_DENIED, { backup(it).speichern(CHIFFRAT, SCHLUESSEL, 1) }, GeraetNichtFreigeschaltet::class),
             Fall("Backup löschen: Fehler bleibt Serverfehler", Code.UNAUTHENTICATED, { backup(it).loeschen() }, Serverfehler::class),
+            Fall("Backup löschen: keine Erlaubnis heißt nicht freigeschaltet", Code.PERMISSION_DENIED, { backup(it).loeschen() }, GeraetNichtFreigeschaltet::class),
+            // Geräte
+            Fall("Mit Wiederherstellung freischalten: keine Erlaubnis heißt Signatur abgelehnt", Code.PERMISSION_DENIED, { geraete(it).mitWiederherstellung(CHIFFRAT) }, GeraetNichtFreigeschaltet::class),
+            Fall("Mit Wiederherstellung freischalten: kein Backup bleibt Serverfehler", Code.FAILED_PRECONDITION, { geraete(it).mitWiederherstellung(CHIFFRAT) }, Serverfehler::class),
+            Fall("Mit Wiederherstellung freischalten: ungültige Sitzung bleibt Serverfehler", Code.UNAUTHENTICATED, { geraete(it).mitWiederherstellung(CHIFFRAT) }, Serverfehler::class),
+            Fall("Gerät freischalten: keine Erlaubnis heißt nicht freigeschaltet", Code.PERMISSION_DENIED, { geraete(it).freischalten("x") }, GeraetNichtFreigeschaltet::class),
+            Fall("Gerät freischalten: nicht gefunden bleibt Serverfehler", Code.NOT_FOUND, { geraete(it).freischalten("x") }, Serverfehler::class),
+            Fall("Gerät freischalten: gesperrt bleibt Serverfehler", Code.FAILED_PRECONDITION, { geraete(it).freischalten("x") }, Serverfehler::class),
             // Diagnose
             Fall("Diagnose senden: keine Erlaubnis heißt nicht freigeschaltet", Code.PERMISSION_DENIED, { diagnose(it) }, DiagnoseNichtFreigeschaltet::class),
             Fall("Diagnose senden: erschöpft bei kleiner Sendung heißt Tageslimit", Code.RESOURCE_EXHAUSTED, { diagnose(it) }, DiagnoseTageslimit::class),

@@ -39,6 +39,12 @@ const (
 	// GeraeteDienstGeraetSperrenProcedure is the fully-qualified name of the GeraeteDienst's
 	// GeraetSperren RPC.
 	GeraeteDienstGeraetSperrenProcedure = "/avlreminder.v1.GeraeteDienst/GeraetSperren"
+	// GeraeteDienstGeraetFreischaltenProcedure is the fully-qualified name of the GeraeteDienst's
+	// GeraetFreischalten RPC.
+	GeraeteDienstGeraetFreischaltenProcedure = "/avlreminder.v1.GeraeteDienst/GeraetFreischalten"
+	// GeraeteDienstMitWiederherstellungFreischaltenProcedure is the fully-qualified name of the
+	// GeraeteDienst's MitWiederherstellungFreischalten RPC.
+	GeraeteDienstMitWiederherstellungFreischaltenProcedure = "/avlreminder.v1.GeraeteDienst/MitWiederherstellungFreischalten"
 )
 
 // GeraeteDienstClient is a client for the avlreminder.v1.GeraeteDienst service.
@@ -50,6 +56,13 @@ type GeraeteDienstClient interface {
 	// ab (permission_denied). Wer sich wieder anmelden will, erzeugt einen
 	// neuen Geräteschlüssel; es gibt kein Entsperren.
 	GeraetSperren(context.Context, *connect.Request[v1.GeraetSperrenRequest]) (*connect.Response[v1.GeraetSperrenResponse], error)
+	// Ein freigeschaltetes Gerät schaltet ein anderes Gerät des Kontos frei
+	// (der Mensch bestätigt es auf dem vertrauten Gerät). Wiederholbar.
+	GeraetFreischalten(context.Context, *connect.Request[v1.GeraetFreischaltenRequest]) (*connect.Response[v1.GeraetFreischaltenResponse], error)
+	// Das anfragende Gerät schaltet sich selbst frei und beweist dabei, dass es
+	// den Wiederherstellungsschlüssel kennt. Der Server prüft die Signatur gegen
+	// den Freischaltschlüssel am Schlüssel-Backup (schluessel.proto). Wiederholbar.
+	MitWiederherstellungFreischalten(context.Context, *connect.Request[v1.MitWiederherstellungFreischaltenRequest]) (*connect.Response[v1.MitWiederherstellungFreischaltenResponse], error)
 }
 
 // NewGeraeteDienstClient constructs a client for the avlreminder.v1.GeraeteDienst service. By
@@ -75,13 +88,27 @@ func NewGeraeteDienstClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(geraeteDienstMethods.ByName("GeraetSperren")),
 			connect.WithClientOptions(opts...),
 		),
+		geraetFreischalten: connect.NewClient[v1.GeraetFreischaltenRequest, v1.GeraetFreischaltenResponse](
+			httpClient,
+			baseURL+GeraeteDienstGeraetFreischaltenProcedure,
+			connect.WithSchema(geraeteDienstMethods.ByName("GeraetFreischalten")),
+			connect.WithClientOptions(opts...),
+		),
+		mitWiederherstellungFreischalten: connect.NewClient[v1.MitWiederherstellungFreischaltenRequest, v1.MitWiederherstellungFreischaltenResponse](
+			httpClient,
+			baseURL+GeraeteDienstMitWiederherstellungFreischaltenProcedure,
+			connect.WithSchema(geraeteDienstMethods.ByName("MitWiederherstellungFreischalten")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // geraeteDienstClient implements GeraeteDienstClient.
 type geraeteDienstClient struct {
-	geraeteAuflisten *connect.Client[v1.GeraeteAuflistenRequest, v1.GeraeteAuflistenResponse]
-	geraetSperren    *connect.Client[v1.GeraetSperrenRequest, v1.GeraetSperrenResponse]
+	geraeteAuflisten                 *connect.Client[v1.GeraeteAuflistenRequest, v1.GeraeteAuflistenResponse]
+	geraetSperren                    *connect.Client[v1.GeraetSperrenRequest, v1.GeraetSperrenResponse]
+	geraetFreischalten               *connect.Client[v1.GeraetFreischaltenRequest, v1.GeraetFreischaltenResponse]
+	mitWiederherstellungFreischalten *connect.Client[v1.MitWiederherstellungFreischaltenRequest, v1.MitWiederherstellungFreischaltenResponse]
 }
 
 // GeraeteAuflisten calls avlreminder.v1.GeraeteDienst.GeraeteAuflisten.
@@ -94,6 +121,17 @@ func (c *geraeteDienstClient) GeraetSperren(ctx context.Context, req *connect.Re
 	return c.geraetSperren.CallUnary(ctx, req)
 }
 
+// GeraetFreischalten calls avlreminder.v1.GeraeteDienst.GeraetFreischalten.
+func (c *geraeteDienstClient) GeraetFreischalten(ctx context.Context, req *connect.Request[v1.GeraetFreischaltenRequest]) (*connect.Response[v1.GeraetFreischaltenResponse], error) {
+	return c.geraetFreischalten.CallUnary(ctx, req)
+}
+
+// MitWiederherstellungFreischalten calls
+// avlreminder.v1.GeraeteDienst.MitWiederherstellungFreischalten.
+func (c *geraeteDienstClient) MitWiederherstellungFreischalten(ctx context.Context, req *connect.Request[v1.MitWiederherstellungFreischaltenRequest]) (*connect.Response[v1.MitWiederherstellungFreischaltenResponse], error) {
+	return c.mitWiederherstellungFreischalten.CallUnary(ctx, req)
+}
+
 // GeraeteDienstHandler is an implementation of the avlreminder.v1.GeraeteDienst service.
 type GeraeteDienstHandler interface {
 	GeraeteAuflisten(context.Context, *connect.Request[v1.GeraeteAuflistenRequest]) (*connect.Response[v1.GeraeteAuflistenResponse], error)
@@ -103,6 +141,13 @@ type GeraeteDienstHandler interface {
 	// ab (permission_denied). Wer sich wieder anmelden will, erzeugt einen
 	// neuen Geräteschlüssel; es gibt kein Entsperren.
 	GeraetSperren(context.Context, *connect.Request[v1.GeraetSperrenRequest]) (*connect.Response[v1.GeraetSperrenResponse], error)
+	// Ein freigeschaltetes Gerät schaltet ein anderes Gerät des Kontos frei
+	// (der Mensch bestätigt es auf dem vertrauten Gerät). Wiederholbar.
+	GeraetFreischalten(context.Context, *connect.Request[v1.GeraetFreischaltenRequest]) (*connect.Response[v1.GeraetFreischaltenResponse], error)
+	// Das anfragende Gerät schaltet sich selbst frei und beweist dabei, dass es
+	// den Wiederherstellungsschlüssel kennt. Der Server prüft die Signatur gegen
+	// den Freischaltschlüssel am Schlüssel-Backup (schluessel.proto). Wiederholbar.
+	MitWiederherstellungFreischalten(context.Context, *connect.Request[v1.MitWiederherstellungFreischaltenRequest]) (*connect.Response[v1.MitWiederherstellungFreischaltenResponse], error)
 }
 
 // NewGeraeteDienstHandler builds an HTTP handler from the service implementation. It returns the
@@ -124,12 +169,28 @@ func NewGeraeteDienstHandler(svc GeraeteDienstHandler, opts ...connect.HandlerOp
 		connect.WithSchema(geraeteDienstMethods.ByName("GeraetSperren")),
 		connect.WithHandlerOptions(opts...),
 	)
+	geraeteDienstGeraetFreischaltenHandler := connect.NewUnaryHandler(
+		GeraeteDienstGeraetFreischaltenProcedure,
+		svc.GeraetFreischalten,
+		connect.WithSchema(geraeteDienstMethods.ByName("GeraetFreischalten")),
+		connect.WithHandlerOptions(opts...),
+	)
+	geraeteDienstMitWiederherstellungFreischaltenHandler := connect.NewUnaryHandler(
+		GeraeteDienstMitWiederherstellungFreischaltenProcedure,
+		svc.MitWiederherstellungFreischalten,
+		connect.WithSchema(geraeteDienstMethods.ByName("MitWiederherstellungFreischalten")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/avlreminder.v1.GeraeteDienst/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case GeraeteDienstGeraeteAuflistenProcedure:
 			geraeteDienstGeraeteAuflistenHandler.ServeHTTP(w, r)
 		case GeraeteDienstGeraetSperrenProcedure:
 			geraeteDienstGeraetSperrenHandler.ServeHTTP(w, r)
+		case GeraeteDienstGeraetFreischaltenProcedure:
+			geraeteDienstGeraetFreischaltenHandler.ServeHTTP(w, r)
+		case GeraeteDienstMitWiederherstellungFreischaltenProcedure:
+			geraeteDienstMitWiederherstellungFreischaltenHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -145,4 +206,12 @@ func (UnimplementedGeraeteDienstHandler) GeraeteAuflisten(context.Context, *conn
 
 func (UnimplementedGeraeteDienstHandler) GeraetSperren(context.Context, *connect.Request[v1.GeraetSperrenRequest]) (*connect.Response[v1.GeraetSperrenResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("avlreminder.v1.GeraeteDienst.GeraetSperren is not implemented"))
+}
+
+func (UnimplementedGeraeteDienstHandler) GeraetFreischalten(context.Context, *connect.Request[v1.GeraetFreischaltenRequest]) (*connect.Response[v1.GeraetFreischaltenResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("avlreminder.v1.GeraeteDienst.GeraetFreischalten is not implemented"))
+}
+
+func (UnimplementedGeraeteDienstHandler) MitWiederherstellungFreischalten(context.Context, *connect.Request[v1.MitWiederherstellungFreischaltenRequest]) (*connect.Response[v1.MitWiederherstellungFreischaltenResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("avlreminder.v1.GeraeteDienst.MitWiederherstellungFreischalten is not implemented"))
 }

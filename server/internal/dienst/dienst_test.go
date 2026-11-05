@@ -41,7 +41,7 @@ type testServer struct {
 	jetzt    time.Time // die Uhr des Servers; Tests stellen sie vor
 
 	diagnosen      *diagnose.Arbeitsspeicher
-	freigeschaltet map[string]bool // Konten, die Diagnosen senden dürfen
+	diagnoseKonten map[string]bool // Konten, die Diagnosen senden dürfen
 }
 
 func neuerTestServer(t *testing.T) *testServer {
@@ -58,7 +58,7 @@ func neuerTestServerMit(t *testing.T, sicherungen datensicherung.Ablage, gleichz
 		speicher:       speicher.NeuerArbeitsspeicher(),
 		jetzt:          start,
 		diagnosen:      diagnose.NeuerArbeitsspeicher(),
-		freigeschaltet: map[string]bool{},
+		diagnoseKonten: map[string]bool{},
 	}
 	uhr := func() time.Time { return ts.jetzt }
 	pruefer, err := anmeldung.NeuerPruefer(ts.google.Schluessel(), []string{clientID}, uhr)
@@ -71,7 +71,7 @@ func neuerTestServerMit(t *testing.T, sicherungen datensicherung.Ablage, gleichz
 		Sicherungen:              sicherungen,
 		Diagnosen:                ts.diagnosen,
 		Kontingente:              kontingent.NeuerArbeitsspeicher(),
-		DiagnoseErlaubt:          func(k string) bool { return ts.freigeschaltet[k] },
+		DiagnoseErlaubt:          func(k string) bool { return ts.diagnoseKonten[k] },
 		Pfeffer:                  []byte("0123456789abcdef0123456789abcdef"),
 		Jetzt:                    uhr,
 		GleichzeitigeSicherungen: gleichzeitig,
@@ -286,6 +286,7 @@ func TestGesperrtesGeraetIstSofortDraussen(t *testing.T) {
 	handy, laptop := testhilfe.NeuesGeraet(t), testhilfe.NeuesGeraet(t)
 	handySitzung := ts.anmelden(t, "google-kevin", handy).Sitzung.Token
 	laptopSitzung := ts.anmelden(t, "google-kevin", laptop).Sitzung.Token
+	ts.geraetFreischaltenOK(t, handySitzung, laptop.ID()) // Sperren anderer Geräte braucht das
 
 	if _, err := ts.geraete.GeraetSperren(ctx, mitSitzung(&v1.GeraetSperrenRequest{GeraetId: handy.ID()}, laptopSitzung)); err != nil {
 		t.Fatalf("Sperren: %v", err)

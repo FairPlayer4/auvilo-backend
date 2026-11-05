@@ -27,11 +27,12 @@ func (ts *testServer) diagnoseSenden(token string, nutzlast []byte) error {
 	return err
 }
 
-// freischalten meldet ein Gerät an und schaltet sein Konto für Diagnosen frei.
-func (ts *testServer) freischalten(t *testing.T, sub string) (token, kontoID string) {
+// diagnoseFreischalten meldet ein Gerät an und schaltet sein Konto für
+// Diagnosen frei (E-D-3; nicht zu verwechseln mit der Freischaltung von Geräten).
+func (ts *testServer) diagnoseFreischalten(t *testing.T, sub string) (token, kontoID string) {
 	t.Helper()
 	res := ts.anmelden(t, sub, testhilfe.NeuesGeraet(t))
-	ts.freigeschaltet[res.KontoId] = true
+	ts.diagnoseKonten[res.KontoId] = true
 	return res.Sitzung.Token, res.KontoId
 }
 
@@ -64,7 +65,7 @@ func TestDiagnoseSendenLegtDieSendungImOrdnerDesKontosAb(t *testing.T) {
 	t.Cleanup(func() { slog.SetDefault(vorher) })
 
 	ts := neuerTestServer(t)
-	token, konto := ts.freischalten(t, "google-kevin")
+	token, konto := ts.diagnoseFreischalten(t, "google-kevin")
 	sendung := gzipJSON(t, `{"art":"kopf","app":"geheimes-merkmal"}`+"\n")
 
 	if err := ts.diagnoseSenden(token, sendung); err != nil {
@@ -86,7 +87,7 @@ func TestDiagnoseSendenLegtDieSendungImOrdnerDesKontosAb(t *testing.T) {
 
 func TestDiagnoseSendenPrueftDieAnfrage(t *testing.T) {
 	ts := neuerTestServer(t)
-	frei, _ := ts.freischalten(t, "google-kevin")
+	frei, _ := ts.diagnoseFreischalten(t, "google-kevin")
 	fremd := ts.anmelden(t, "google-tester", testhilfe.NeuesGeraet(t)).Sitzung.Token
 
 	t.Run("nimmt eine Sendung von genau 256 KiB an", func(t *testing.T) {
@@ -140,8 +141,8 @@ func TestDiagnoseSendenPrueftDieAnfrage(t *testing.T) {
 
 func TestDiagnoseSendenHatEinTageslimitJeKonto(t *testing.T) {
 	ts := neuerTestServer(t)
-	kevin, _ := ts.freischalten(t, "google-kevin")
-	anna, _ := ts.freischalten(t, "google-anna")
+	kevin, _ := ts.diagnoseFreischalten(t, "google-kevin")
+	anna, _ := ts.diagnoseFreischalten(t, "google-anna")
 	sendung := gzipJSON(t, "{}")
 
 	for i := range diagnosenAmTag - 1 {
@@ -169,7 +170,7 @@ func TestDiagnoseSendenHatEinTageslimitJeKonto(t *testing.T) {
 	})
 	t.Run("am nächsten Tag (UTC) geht es wieder", func(t *testing.T) {
 		ts.jetzt = time.Date(start.Year(), start.Month(), start.Day()+1, 0, 0, 1, 0, time.UTC)
-		neu, _ := ts.freischalten(t, "google-kevin") // die alte Sitzung ist abgelaufen
+		neu, _ := ts.diagnoseFreischalten(t, "google-kevin") // die alte Sitzung ist abgelaufen
 		if err := ts.diagnoseSenden(neu, sendung); err != nil {
 			t.Fatal(err)
 		}

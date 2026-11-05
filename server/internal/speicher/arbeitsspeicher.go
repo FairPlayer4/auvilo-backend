@@ -47,8 +47,10 @@ func (a *Arbeitsspeicher) Anmelden(_ context.Context, kennung string, g Geraet, 
 		if vorhanden.Gesperrt {
 			return AnmeldeErgebnis{}, ErrGeraetGesperrt
 		}
+		g = vorhanden
 	} else {
 		g.KontoID = kontoID
+		g.Freigeschaltet = a.nichtsZuSchuetzen(kontoID)
 		g.Gesperrt = false
 		g.GesperrtAm = time.Time{}
 		g.Erstellt = g.Erstellt.UTC().Truncate(time.Millisecond)
@@ -58,7 +60,18 @@ func (a *Arbeitsspeicher) Anmelden(_ context.Context, kennung string, g Geraet, 
 	// Erst schreiben, wenn alle Prüfungen bestanden sind (wie eine Transaktion).
 	a.kennungen[kennung] = kontoID
 	a.sitzungen[s.Hash] = Sitzung{Hash: s.Hash, KontoID: kontoID, GeraetID: g.ID, LaeuftAb: s.LaeuftAb.UTC().Truncate(time.Millisecond)}
-	return AnmeldeErgebnis{KontoID: kontoID, NeuesKonto: neu}, nil
+	return AnmeldeErgebnis{KontoID: kontoID, NeuesKonto: neu, Freigeschaltet: g.Freigeschaltet}, nil
+}
+
+// nichtsZuSchuetzen: kein freigeschaltetes, ungesperrtes Gerät und kein Backup
+// mit Freischaltschlüssel (Regel bei Speicher.Anmelden). Aufruf nur mit mu.
+func (a *Arbeitsspeicher) nichtsZuSchuetzen(kontoID string) bool {
+	for _, g := range a.geraete {
+		if g.KontoID == kontoID && g.Freigeschaltet && !g.Gesperrt {
+			return false
+		}
+	}
+	return len(a.backups[kontoID].Freischaltschluessel) == 0
 }
 
 func (a *Arbeitsspeicher) Geraet(_ context.Context, geraetID string) (Geraet, error) {
@@ -128,14 +141,34 @@ func (a *Arbeitsspeicher) GeraetSperren(_ context.Context, kontoID, geraetID str
 	return nil
 }
 
-func (a *Arbeitsspeicher) BackupSpeichern(_ context.Context, kontoID string, chiffrat []byte, erwartet int64, jetzt time.Time) (int64, error) {
+func (a *Arbeitsspeicher) GeraetFreischalten(_ context.Context, kontoID, geraetID string) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	g, ok := a.geraete[geraetID]
+	if !ok || g.KontoID != kontoID {
+		return ErrNichtGefunden
+	}
+	if g.Gesperrt {
+		return ErrGeraetGesperrt
+	}
+	g.Freigeschaltet = true
+	a.geraete[geraetID] = g
+	return nil
+}
+
+func (a *Arbeitsspeicher) BackupSpeichern(_ context.Context, kontoID string, chiffrat, freischaltschluessel []byte, erwartet int64, jetzt time.Time) (int64, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	// Ohne Eintrag liefert die Map den Nullwert: Version 0 = es gibt keins.
 	if a.backups[kontoID].Version != erwartet {
 		return 0, ErrVersionVeraltet
 	}
-	b := Backup{Chiffrat: slices.Clone(chiffrat), Version: erwartet + 1, Geaendert: jetzt.UTC().Truncate(time.Millisecond)}
+	b := Backup{
+		Chiffrat:             slices.Clone(chiffrat),
+		Freischaltschluessel: slices.Clone(freischaltschluessel),
+		Version:              erwartet + 1,
+		Geaendert:            jetzt.UTC().Truncate(time.Millisecond),
+	}
 	a.backups[kontoID] = b
 	return b.Version, nil
 }
@@ -147,7 +180,9 @@ func (a *Arbeitsspeicher) BackupHolen(_ context.Context, kontoID string) (Backup
 	if !ok {
 		return Backup{}, ErrNichtGefunden
 	}
-	b.Chiffrat = slices.Clone(b.Chiffrat) // Kopie: Der Aufrufer soll den Speicher nicht verändern können
+	// Kopien: Der Aufrufer soll den Speicher nicht verändern können.
+	b.Chiffrat = slices.Clone(b.Chiffrat)
+	b.Freischaltschluessel = slices.Clone(b.Freischaltschluessel)
 	return b, nil
 }
 

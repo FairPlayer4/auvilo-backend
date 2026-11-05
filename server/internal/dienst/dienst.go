@@ -163,12 +163,13 @@ func (d *dienste) Anmelden(ctx context.Context, req *connect.Request[v1.Anmelden
 		return nil, speicherFehler(ctx, err)
 	}
 
-	slog.InfoContext(ctx, "Gerät angemeldet", "geraet", erg.GeraetID, "neues_konto", ergebnis.NeuesKonto)
+	slog.InfoContext(ctx, "Gerät angemeldet", "geraet", erg.GeraetID, "neues_konto", ergebnis.NeuesKonto, "freigeschaltet", ergebnis.Freigeschaltet)
 	return connect.NewResponse(&v1.AnmeldenResponse{
-		KontoId:    ergebnis.KontoID,
-		GeraetId:   erg.GeraetID,
-		Sitzung:    sitzungNachAussen(token, neueSitzung),
-		NeuesKonto: ergebnis.NeuesKonto,
+		KontoId:        ergebnis.KontoID,
+		GeraetId:       erg.GeraetID,
+		Sitzung:        sitzungNachAussen(token, neueSitzung),
+		NeuesKonto:     ergebnis.NeuesKonto,
+		Freigeschaltet: ergebnis.Freigeschaltet,
 	}), nil
 }
 
@@ -219,10 +220,11 @@ func (d *dienste) GeraeteAuflisten(ctx context.Context, _ *connect.Request[v1.Ge
 	antwort := &v1.GeraeteAuflistenResponse{}
 	for _, g := range liste {
 		antwort.Geraete = append(antwort.Geraete, &v1.Geraet{
-			GeraetId:     g.ID,
-			AngemeldetAm: timestamppb.New(g.Erstellt),
-			Gesperrt:     g.Gesperrt,
-			DiesesGeraet: g.ID == id.GeraetID,
+			GeraetId:       g.ID,
+			AngemeldetAm:   timestamppb.New(g.Erstellt),
+			Gesperrt:       g.Gesperrt,
+			DiesesGeraet:   g.ID == id.GeraetID,
+			Freigeschaltet: g.Freigeschaltet,
 		})
 	}
 	return connect.NewResponse(antwort), nil
@@ -232,6 +234,14 @@ func (d *dienste) GeraetSperren(ctx context.Context, req *connect.Request[v1.Ger
 	id, err := identitaet(ctx)
 	if err != nil {
 		return nil, err
+	}
+	// KRITISCH (E-B2b-13): Sich selbst sperren (abmelden) darf jedes Gerät, ein
+	// anderes nur ein freigeschaltetes. Sonst sperrte ein Dieb mit Google-Login
+	// als Erstes die echten Geräte aus.
+	if req.Msg.GetGeraetId() != id.GeraetID {
+		if err := d.nurFreigeschaltetesGeraet(ctx, id); err != nil {
+			return nil, err
+		}
 	}
 	// Eine ID im falschen Format kann es nicht geben (wie unbekannt behandeln).
 	if !geraeteschluessel.IstGeraetID(req.Msg.GetGeraetId()) {

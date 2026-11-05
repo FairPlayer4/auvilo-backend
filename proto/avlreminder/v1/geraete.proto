@@ -10,10 +10,27 @@ option java_package = "com.avlreminder.schnittstelle.v1";
 // Die eigenen Geräte verwalten. Alle Aufrufe brauchen eine Sitzung und wirken
 // nur auf das eigene Konto.
 //
+// Freischaltung (docs/b2b-entwurf.md, E-B2b-13): Ein neu angemeldetes Gerät ist
+// zunächst nicht freigeschaltet, außer es gibt im Konto nichts zu schützen
+// (kein freigeschaltetes, ungesperrtes Gerät und kein Freischaltschlüssel am
+// Schlüssel-Backup). Ein nicht freigeschaltetes Gerät darf nur: Sitzung
+// erneuern, Geräte auflisten, sich selbst sperren, Schlüssel-Backup und
+// Datensicherung holen, das Schlüssel-Backup anlegen, wenn es keins gibt, sich
+// mit dem Wiederherstellungsschlüssel freischalten und Diagnosen senden. Alles
+// andere lehnt der Server mit permission_denied ab. Freigeschaltet bleibt ein
+// Gerät, bis es gesperrt wird.
+//
 // Fehlercodes (Connect):
 //   unauthenticated Sitzung fehlt, ist ungültig, abgelaufen oder gehört zu
 //                   einem inzwischen gesperrten Gerät.
-//   not_found       GeraetSperren: kein Gerät dieses Kontos mit dieser ID.
+//   permission_denied Dieses Gerät ist nicht freigeschaltet (GeraetSperren für
+//                   ein anderes Gerät, GeraetFreischalten), oder die Signatur
+//                   von MitWiederherstellungFreischalten stimmt nicht.
+//   not_found       GeraetSperren, GeraetFreischalten: kein Gerät dieses Kontos
+//                   mit dieser ID.
+//   failed_precondition GeraetFreischalten: Das Gerät ist gesperrt.
+//                   MitWiederherstellungFreischalten: Es gibt kein Backup mit
+//                   Freischaltschlüssel.
 //   resource_exhausted Anfrage größer als 64 KiB.
 //   unavailable     vorübergehend; später wiederholen.
 //   internal        Fehler im Server.
@@ -26,6 +43,15 @@ service GeraeteDienst {
   // ab (permission_denied). Wer sich wieder anmelden will, erzeugt einen
   // neuen Geräteschlüssel; es gibt kein Entsperren.
   rpc GeraetSperren(GeraetSperrenRequest) returns (GeraetSperrenResponse);
+
+  // Ein freigeschaltetes Gerät schaltet ein anderes Gerät des Kontos frei
+  // (der Mensch bestätigt es auf dem vertrauten Gerät). Wiederholbar.
+  rpc GeraetFreischalten(GeraetFreischaltenRequest) returns (GeraetFreischaltenResponse);
+
+  // Das anfragende Gerät schaltet sich selbst frei und beweist dabei, dass es
+  // den Wiederherstellungsschlüssel kennt. Der Server prüft die Signatur gegen
+  // den Freischaltschlüssel am Schlüssel-Backup (schluessel.proto). Wiederholbar.
+  rpc MitWiederherstellungFreischalten(MitWiederherstellungFreischaltenRequest) returns (MitWiederherstellungFreischaltenResponse);
 }
 
 message GeraeteAuflistenRequest {}
@@ -40,6 +66,10 @@ message Geraet {
   bool gesperrt = 3;
   // true für das Gerät, das gerade anfragt.
   bool dieses_geraet = 4;
+  // Darf das Gerät sperren, freischalten, speichern und löschen? Ein neues,
+  // nicht freigeschaltetes und nicht gesperrtes Gerät zeigt die App als
+  // „Neues Gerät angemeldet – freischalten oder sperren“.
+  bool freigeschaltet = 5;
 }
 
 message GeraetSperrenRequest {
@@ -47,3 +77,20 @@ message GeraetSperrenRequest {
 }
 
 message GeraetSperrenResponse {}
+
+message GeraetFreischaltenRequest {
+  string geraet_id = 1;
+}
+
+message GeraetFreischaltenResponse {}
+
+message MitWiederherstellungFreischaltenRequest {
+  // Ed25519-Signatur (64 Bytes) mit dem Freischaltschlüssel über die
+  // UTF-8-Bytes von "avlreminder/freischalten/v1\n" + Geräte-ID des
+  // anfragenden Geräts. Den Schlüssel leitet das Gerät aus dem
+  // Wiederherstellungsschlüssel ab (schluessel.proto); Testvektoren in
+  // proto/testvektoren/freischaltung.json.
+  bytes signatur = 1;
+}
+
+message MitWiederherstellungFreischaltenResponse {}

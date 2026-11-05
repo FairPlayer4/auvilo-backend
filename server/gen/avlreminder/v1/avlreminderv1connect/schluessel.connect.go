@@ -51,8 +51,8 @@ type SchluesselDienstClient interface {
 	// nie unbemerkt ein neueres Backup.
 	BackupSpeichern(context.Context, *connect.Request[v1.BackupSpeichernRequest]) (*connect.Response[v1.BackupSpeichernResponse], error)
 	BackupHolen(context.Context, *connect.Request[v1.BackupHolenRequest]) (*connect.Response[v1.BackupHolenResponse], error)
-	// Löscht das Backup des eigenen Kontos (Neuanfang mit neuen Schlüsseln, DSGVO
-	// Art. 17). Gibt es keins, ist das kein Fehler.
+	// Löscht das Backup des eigenen Kontos samt Freischaltschlüssel (Neuanfang
+	// mit neuen Schlüsseln, DSGVO Art. 17). Gibt es keins, ist das kein Fehler.
 	//
 	// Grenze: Danach beginnt die Version wieder bei 1. Ein Gerät, das sich noch
 	// Version 1 von vorher gemerkt hat, könnte ein neues Backup überschreiben. Clients
@@ -122,8 +122,8 @@ type SchluesselDienstHandler interface {
 	// nie unbemerkt ein neueres Backup.
 	BackupSpeichern(context.Context, *connect.Request[v1.BackupSpeichernRequest]) (*connect.Response[v1.BackupSpeichernResponse], error)
 	BackupHolen(context.Context, *connect.Request[v1.BackupHolenRequest]) (*connect.Response[v1.BackupHolenResponse], error)
-	// Löscht das Backup des eigenen Kontos (Neuanfang mit neuen Schlüsseln, DSGVO
-	// Art. 17). Gibt es keins, ist das kein Fehler.
+	// Löscht das Backup des eigenen Kontos samt Freischaltschlüssel (Neuanfang
+	// mit neuen Schlüsseln, DSGVO Art. 17). Gibt es keins, ist das kein Fehler.
 	//
 	// Grenze: Danach beginnt die Version wieder bei 1. Ein Gerät, das sich noch
 	// Version 1 von vorher gemerkt hat, könnte ein neues Backup überschreiben. Clients

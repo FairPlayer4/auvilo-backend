@@ -48,6 +48,9 @@ message AnmeldenResponse {
   Sitzung sitzung = 3;
   // true, wenn das Konto bei diesem Aufruf angelegt wurde.
   bool neues_konto = 4;
+  // true, wenn dieses Gerät freigeschaltet ist (geraete.proto). Ein neues Gerät
+  // ist es sofort nur, wenn es im Konto nichts zu schützen gibt.
+  bool freigeschaltet = 5;
 }
 
 message SitzungErneuernRequest {

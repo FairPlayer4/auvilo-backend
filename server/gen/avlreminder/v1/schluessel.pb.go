@@ -28,8 +28,15 @@ type BackupSpeichernRequest struct {
 	Chiffrat []byte `protobuf:"bytes,1,opt,name=chiffrat,proto3" json:"chiffrat,omitempty"`
 	// Version, die das Gerät zuletzt gesehen hat; 0, wenn es noch keins gibt.
 	ErwarteteVersion int64 `protobuf:"varint,2,opt,name=erwartete_version,json=erwarteteVersion,proto3" json:"erwartete_version,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// Öffentlicher Ed25519-Schlüssel (32 Bytes), abgeleitet aus dem
+	// Wiederherstellungsschlüssel: HKDF-SHA256 (ohne Salz, info
+	// "avlreminder/freischaltschluessel/v1") ergibt 32 Bytes, die der Seed des
+	// Ed25519-Schlüssels sind. Pflicht. Damit kann sich ein neues Gerät später
+	// freischalten (geraete.proto, MitWiederherstellungFreischalten). Aus ihm
+	// lässt sich nichts entschlüsseln.
+	Freischaltschluessel []byte `protobuf:"bytes,3,opt,name=freischaltschluessel,proto3" json:"freischaltschluessel,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
 }
 
 func (x *BackupSpeichernRequest) Reset() {
@@ -74,6 +81,13 @@ func (x *BackupSpeichernRequest) GetErwarteteVersion() int64 {
 		return x.ErwarteteVersion
 	}
 	return 0
+}
+
+func (x *BackupSpeichernRequest) GetFreischaltschluessel() []byte {
+	if x != nil {
+		return x.Freischaltschluessel
+	}
+	return nil
 }
 
 type BackupSpeichernResponse struct {
@@ -285,10 +299,11 @@ var File_avlreminder_v1_schluessel_proto protoreflect.FileDescriptor
 
 const file_avlreminder_v1_schluessel_proto_rawDesc = "" +
 	"\n" +
-	"\x1favlreminder/v1/schluessel.proto\x12\x0eavlreminder.v1\"a\n" +
+	"\x1favlreminder/v1/schluessel.proto\x12\x0eavlreminder.v1\"\x95\x01\n" +
 	"\x16BackupSpeichernRequest\x12\x1a\n" +
 	"\bchiffrat\x18\x01 \x01(\fR\bchiffrat\x12+\n" +
-	"\x11erwartete_version\x18\x02 \x01(\x03R\x10erwarteteVersion\"3\n" +
+	"\x11erwartete_version\x18\x02 \x01(\x03R\x10erwarteteVersion\x122\n" +
+	"\x14freischaltschluessel\x18\x03 \x01(\fR\x14freischaltschluessel\"3\n" +
 	"\x17BackupSpeichernResponse\x12\x18\n" +
 	"\aversion\x18\x01 \x01(\x03R\aversion\"\x14\n" +
 	"\x12BackupHolenRequest\"K\n" +

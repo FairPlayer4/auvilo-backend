@@ -12,7 +12,15 @@ import (
 )
 
 func (ts *testServer) backupSpeichern(token string, chiffrat []byte, erwartet int64) (*v1.BackupSpeichernResponse, error) {
-	res, err := ts.backup.BackupSpeichern(context.Background(), mitSitzung(&v1.BackupSpeichernRequest{Chiffrat: chiffrat, ErwarteteVersion: erwartet}, token))
+	return ts.backupSpeichernMit(token, chiffrat, fsOeffentlich(), erwartet)
+}
+
+func (ts *testServer) backupSpeichernMit(token string, chiffrat, freischaltschluessel []byte, erwartet int64) (*v1.BackupSpeichernResponse, error) {
+	res, err := ts.backup.BackupSpeichern(context.Background(), mitSitzung(&v1.BackupSpeichernRequest{
+		Chiffrat:             chiffrat,
+		ErwarteteVersion:     erwartet,
+		Freischaltschluessel: freischaltschluessel,
+	}, token))
 	if err != nil {
 		return nil, err
 	}
@@ -56,7 +64,9 @@ func TestZweitesGeraetHoltDasBackupDesErsten(t *testing.T) {
 		t.Errorf("geholt = %q Version %d", geholt.Chiffrat, geholt.Version)
 	}
 
-	// Der Laptop ersetzt es mit der gesehenen Version.
+	// Der Laptop ersetzt es mit der gesehenen Version, nachdem das Handy ihn
+	// freigeschaltet hat (ohne: freischaltung_test.go).
+	ts.geraetFreischaltenOK(t, handySitzung, laptop.ID())
 	if v, err := ts.backupSpeichern(laptopSitzung, []byte("chiffrat-2"), 1); err != nil || v.Version != 2 {
 		t.Errorf("Ersetzen: Version %v, Fehler %v", v, err)
 	}
@@ -76,18 +86,24 @@ func TestBackupSpeichernPrueftDieAnfrage(t *testing.T) {
 		}
 	})
 
+	// Ein Ed25519-Schlüssel hat 32 Bytes (schluessel.proto); eigene Zahl wie oben.
+	schluessel := fsOeffentlich()
 	faelle := []struct {
-		name     string
-		chiffrat []byte
-		erwartet int64
+		name       string
+		chiffrat   []byte
+		schluessel []byte
+		erwartet   int64
 	}{
-		{"lehnt leeres Backup ab", nil, 1},
-		{"lehnt Backup über 16 KiB ab", make([]byte, sechzehnKiB+1), 1},
-		{"lehnt negative Version ab", []byte("chiffrat"), -1},
+		{"lehnt leeres Backup ab", nil, schluessel, 1},
+		{"lehnt Backup über 16 KiB ab", make([]byte, sechzehnKiB+1), schluessel, 1},
+		{"lehnt negative Version ab", []byte("chiffrat"), schluessel, -1},
+		{"lehnt Backup ohne Freischaltschlüssel ab", []byte("chiffrat"), nil, 1},
+		{"lehnt Freischaltschlüssel mit 31 Bytes ab", []byte("chiffrat"), make([]byte, 31), 1},
+		{"lehnt Freischaltschlüssel mit 33 Bytes ab", []byte("chiffrat"), make([]byte, 33), 1},
 	}
 	for _, fall := range faelle {
 		t.Run(fall.name, func(t *testing.T) {
-			_, err := ts.backupSpeichern(token, fall.chiffrat, fall.erwartet)
+			_, err := ts.backupSpeichernMit(token, fall.chiffrat, fall.schluessel, fall.erwartet)
 			erwarteCode(t, err, connect.CodeInvalidArgument)
 		})
 	}
@@ -194,6 +210,7 @@ func TestBackupVerlangtGueltigeSitzung(t *testing.T) {
 	handy, laptop := testhilfe.NeuesGeraet(t), testhilfe.NeuesGeraet(t)
 	handySitzung := ts.anmelden(t, "google-kevin", handy).Sitzung.Token
 	laptopSitzung := ts.anmelden(t, "google-kevin", laptop).Sitzung.Token
+	ts.geraetFreischaltenOK(t, handySitzung, laptop.ID())
 	if _, err := ts.backupSpeichern(laptopSitzung, []byte("chiffrat"), 0); err != nil {
 		t.Fatal(err)
 	}

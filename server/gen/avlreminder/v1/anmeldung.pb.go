@@ -93,9 +93,12 @@ type AnmeldenResponse struct {
 	GeraetId string                 `protobuf:"bytes,2,opt,name=geraet_id,json=geraetId,proto3" json:"geraet_id,omitempty"`
 	Sitzung  *Sitzung               `protobuf:"bytes,3,opt,name=sitzung,proto3" json:"sitzung,omitempty"`
 	// true, wenn das Konto bei diesem Aufruf angelegt wurde.
-	NeuesKonto    bool `protobuf:"varint,4,opt,name=neues_konto,json=neuesKonto,proto3" json:"neues_konto,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	NeuesKonto bool `protobuf:"varint,4,opt,name=neues_konto,json=neuesKonto,proto3" json:"neues_konto,omitempty"`
+	// true, wenn dieses Gerät freigeschaltet ist (geraete.proto). Ein neues Gerät
+	// ist es sofort nur, wenn es im Konto nichts zu schützen gibt.
+	Freigeschaltet bool `protobuf:"varint,5,opt,name=freigeschaltet,proto3" json:"freigeschaltet,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *AnmeldenResponse) Reset() {
@@ -152,6 +155,13 @@ func (x *AnmeldenResponse) GetSitzung() *Sitzung {
 func (x *AnmeldenResponse) GetNeuesKonto() bool {
 	if x != nil {
 		return x.NeuesKonto
+	}
+	return false
+}
+
+func (x *AnmeldenResponse) GetFreigeschaltet() bool {
+	if x != nil {
+		return x.Freigeschaltet
 	}
 	return false
 }
@@ -326,13 +336,14 @@ const file_avlreminder_v1_anmeldung_proto_rawDesc = "" +
 	"\x0fAnmeldenRequest\x12&\n" +
 	"\x0fgoogle_id_token\x18\x01 \x01(\tR\rgoogleIdToken\x12,\n" +
 	"\x11geraeteschluessel\x18\x02 \x01(\fR\x11geraeteschluessel\x12\x1a\n" +
-	"\bsignatur\x18\x03 \x01(\fR\bsignatur\"\x9e\x01\n" +
+	"\bsignatur\x18\x03 \x01(\fR\bsignatur\"\xc6\x01\n" +
 	"\x10AnmeldenResponse\x12\x19\n" +
 	"\bkonto_id\x18\x01 \x01(\tR\akontoId\x12\x1b\n" +
 	"\tgeraet_id\x18\x02 \x01(\tR\bgeraetId\x121\n" +
 	"\asitzung\x18\x03 \x01(\v2\x17.avlreminder.v1.SitzungR\asitzung\x12\x1f\n" +
 	"\vneues_konto\x18\x04 \x01(\bR\n" +
-	"neuesKonto\"\x8b\x01\n" +
+	"neuesKonto\x12&\n" +
+	"\x0efreigeschaltet\x18\x05 \x01(\bR\x0efreigeschaltet\"\x8b\x01\n" +
 	"\x16SitzungErneuernRequest\x12\x1b\n" +
 	"\tgeraet_id\x18\x01 \x01(\tR\bgeraetId\x128\n" +
 	"\tzeitpunkt\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\tzeitpunkt\x12\x1a\n" +

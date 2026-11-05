@@ -15,6 +15,15 @@ internal object Zweck {
 
     /** Ein Schlüssel, verpackt für den Personenschlüssel eines anderen. */
     const val UMSCHLAG = "avlreminder/umschlag/v1\n"
+
+    /**
+     * Signatur, mit der sich ein Gerät beim Server freischaltet; dahinter die
+     * Geräte-ID (geraete.proto, MitWiederherstellungFreischalten).
+     */
+    const val FREISCHALTEN = "avlreminder/freischalten/v1\n"
+
+    /** HKDF-info: leitet aus dem Wiederherstellungsschlüssel den Freischaltschlüssel ab (schluessel.proto). */
+    const val FREISCHALTSCHLUESSEL = "avlreminder/freischaltschluessel/v1"
 }
 
 /**

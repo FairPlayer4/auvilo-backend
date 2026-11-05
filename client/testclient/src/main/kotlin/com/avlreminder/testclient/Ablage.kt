@@ -4,6 +4,7 @@ import com.avlreminder.protokoll.GemerkteSicherung
 import com.avlreminder.protokoll.Geraetenachrichten
 import com.avlreminder.protokoll.LokaleAblage
 import com.avlreminder.protokoll.LokalerStand
+import com.avlreminder.protokoll.OffenesBackup
 import com.avlreminder.protokoll.Schluesselbund
 import com.avlreminder.protokoll.SicherungsStand
 import kotlinx.serialization.Serializable
@@ -51,6 +52,8 @@ private data class GespeicherteSchluessel(
     val schluesselbund: String,
     /** Backup, das noch nicht sicher hochgeladen ist (Base64), sonst null. */
     val offenesBackup: String? = null,
+    /** Der öffentliche Freischaltschlüssel dazu (Base64, E-B2b-13). */
+    val offenerFreischaltschluessel: String? = null,
 )
 
 /** Was ein Gerät sich über die Datensicherung seines Kontos merkt. */
@@ -103,12 +106,23 @@ class Ablage(private val ordner: File) {
             throw Bedienfehler("Gerät \"$name\" hat Schlüssel eines anderen Kontos - anderen Gerätenamen wählen oder $datei löschen.")
         }
         val b64 = Base64.getDecoder()
-        return LokalerStand(Schluesselbund.ausGeheimenBytes(b64.decode(s.schluesselbund)), s.offenesBackup?.let(b64::decode))
+        val offen = s.offenesBackup?.let { chiffrat ->
+            // Dateien von vor E-B2b-13 haben den Schlüssel nicht; ohne ihn nimmt der Server das Backup nicht an.
+            val fs = s.offenerFreischaltschluessel
+                ?: throw Bedienfehler("$datei hat ein offenes Backup ohne Freischaltschlüssel (alte Version) - Datei löschen und neu einrichten.")
+            OffenesBackup(b64.decode(chiffrat), b64.decode(fs))
+        }
+        return LokalerStand(Schluesselbund.ausGeheimenBytes(b64.decode(s.schluesselbund)), offen)
     }
 
     fun speichereSchluessel(name: String, kontoId: String, stand: LokalerStand) {
         val b64 = Base64.getEncoder()
-        val gespeichert = GespeicherteSchluessel(kontoId, b64.encodeToString(stand.bund.geheimeBytes()), stand.offenesBackup?.let(b64::encodeToString))
+        val gespeichert = GespeicherteSchluessel(
+            kontoId,
+            b64.encodeToString(stand.bund.geheimeBytes()),
+            stand.offenesBackup?.chiffrat?.let(b64::encodeToString),
+            stand.offenesBackup?.freischaltschluessel?.let(b64::encodeToString),
+        )
         schreibe(datei("schluessel", name, "json"), json.encodeToString(gespeichert))
     }
 

@@ -1,0 +1,8 @@
+{
+  "beschreibung": "Gemeinsame Testvektoren für die Freischaltung mit dem Wiederherstellungsschlüssel (E-B2b-13): Kotlin (client/protokoll, FreischaltungTest) muss aus dem Wiederherstellungsschlüssel genau diesen Freischaltschlüssel ableiten und diese Signatur bilden (Ed25519 ist deterministisch); Go (server/internal/freischaltung) muss sie annehmen. Wegwerf-Schlüssel (SHA-256 eines festen Texts), keine echten Daten.",
+  "wiederherstellungsschluessel_hex": "095854b1d3929d8f854c5c8137e0a2ece61680b3f3648a2197bb2452f5f95963",
+  "freischaltschluessel_hex": "114857ba84c1b80ac7572fc8d7ab28d675abdaad47426692b6198577f3239320",
+  "geraet_id": "d0e5518e666349cb0a3637c6b536b1cd",
+  "nachricht_hex": "61766c72656d696e6465722f66726569736368616c74656e2f76310a6430653535313865363636333439636230613336333763366235333662316364",
+  "signatur_hex": "a4be8ed86a21bee401e2cc64c746ec6aead64ccc26c1d277833c8a2ea988b03295c30b154d1f60d4f8631e03ad602fe488369287cd812dd9ba4b1a8c7f7b960b"
+}

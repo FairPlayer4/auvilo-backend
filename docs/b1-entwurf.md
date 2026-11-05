@@ -70,16 +70,16 @@ legt Konto- und Geräte-ID in den Kontext. Ohne gültige Sitzung: `unauthenticat
 auf `gesperrt` und löscht alle Sitzungen dieses Geräts; es kann keine neue Sitzung
 mehr holen. Das eigene Gerät zu sperren ist erlaubt (= abmelden).
 
-**Grenze (Review Lauf 5, bewusst bis vor echten Daten):** Gesperrt wird der
+**Grenze (Review Lauf 5, aufgehoben 2026-11-05 durch E-B2b-13):** Gesperrt wird der
 Geräteschlüssel, nicht das Gerät. Ist auf einem gestohlenen Gerät das Google-Konto
 noch angemeldet, kann es einen neuen Geräteschlüssel erzeugen und sich als neues
 Gerät wieder anmelden; danach darf es wie jedes Gerät andere Geräte sperren und
 Backup oder Datensicherung löschen. Sperren hilft deshalb nur zusammen mit dem
 Entfernen des Google-Zugangs auf dem Gerät (Google-Konto → Sicherheit → Geräte).
-Vor echten Daten wird entschieden, dass neue Geräte erst nach Freischaltung durch
-ein vorhandenes Gerät (QR) oder den Wiederherstellungsschlüssel sperren und löschen
-dürfen und vorhandene Geräte von jedem neuen Gerät erfahren
-([b2b-entwurf.md](b2b-entwurf.md), „Vor echten Daten“).
+Seit E-B2b-13 ist ein so neu angemeldetes Gerät nicht freigeschaltet: Andere
+Geräte sperren, Backup überschreiben und Datensicherung speichern oder löschen darf
+es erst, wenn ein freigeschaltetes Gerät es bestätigt (`GeraetFreischalten`) oder es
+mit dem Wiederherstellungsschlüssel signiert ([b2b-entwurf.md](b2b-entwurf.md)).
 
 Signaturen enthalten immer einen festen Zweck-Präfix (`avlreminder/anmelden/v1`,
 `avlreminder/sitzung/v1`), damit eine Signatur für das eine nie für das andere passt.
