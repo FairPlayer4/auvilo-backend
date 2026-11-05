@@ -240,8 +240,19 @@ dem Deploy dieses Schritts erledigen oder die Testgeräte einmal freischalten.
 - **Erstes Backup schaltet frei.** Hat das Konto noch kein Schlüssel-Backup, darf
   auch ein nicht freigeschaltetes Gerät das erste anlegen (E-B2-5), mit seinem
   eigenen Freischaltschlüssel, und sich damit freischalten. Deshalb lädt die
-  Einrichtung das Backup sofort auf dem ersten Gerät hoch; die Lücke besteht nur
-  zwischen Anmelden und Hochladen oder wenn das Backup gelöscht wurde.
+  Einrichtung das Backup sofort auf dem ersten Gerät hoch. Die Lücke besteht,
+  solange das Konto kein Backup hat: zwischen Anmelden und Hochladen, aber auch
+  tagelang, wenn der Mensch den Wiederherstellungsschlüssel nicht bestätigt oder
+  das Hochladen scheitert, und nach dem Löschen des Backups. Ein Angreifer mit dem
+  Google-Login könnte in dieser Zeit sein eigenes Backup anlegen, sich damit
+  freischalten und das vertraute Gerät sperren (offene Frage aus Review-Lauf 8:
+  das erste Backup von einem nicht freigeschalteten Gerät nur annehmen, wenn es im
+  Konto nichts zu schützen gibt).
+- **Prüfen und Ausführen sind zwei Schritte.** Der Server liest die Freischaltung
+  des anfragenden Geräts vor dem Aufruf, nicht in derselben Transaktion. Sperrt
+  ein Gerät ein anderes, kann eine Anfrage, die das gesperrte Gerät im selben
+  Moment (Millisekunden) gestellt hat, noch ausgeführt werden. Dasselbe gilt für
+  die Sitzung (Interceptor).
 - **Zwei neue Geräte gleichzeitig.** Melden sich zwei Geräte eines Kontos ohne
   freigeschaltetes Gerät im selben Moment an, kann Firestore beide freischalten
   (die Abfrage der Geräte ist kein Teil der Sperre der Transaktion). Ohne vertrautes

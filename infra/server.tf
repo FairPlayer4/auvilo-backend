@@ -102,8 +102,9 @@ resource "google_cloud_run_v2_service" "server" {
   name     = "server"
   location = var.region
   ingress  = "INGRESS_TRAFFIC_ALL"
-  # Vor echten Daten (b2b-entwurf.md): Weder `tofu destroy` noch die Konsole
-  # löschen den Dienst, solange dieser Schutz an ist.
+  # Vor echten Daten (b2b-entwurf.md): `tofu destroy` löscht den Dienst nicht.
+  # Das Feld gibt es nur in OpenTofu; in der Konsole oder mit gcloud lässt er
+  # sich weiter löschen (er hält keine Daten, nur die Konfiguration).
   deletion_protection = true
 
   template {

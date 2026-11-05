@@ -246,12 +246,58 @@ class EinrichtungTest {
     }
 
     @Test
-    fun `ein eingerichtetes Gerät fragt den Server nicht`() {
+    fun `ein eingerichtetes, freigeschaltetes Gerät fragt den Server nicht`() {
         val bund = Schluesselbund.erzeugen()
         val server = vorhanden.server().apply { nichtErreichbar = true }
-        val ergebnis = Lauf(server, FalscherLokalerSpeicher(LokalerStand(bund, null))).ausfuehren()
+        val ergebnis = Lauf(server, FalscherLokalerSpeicher(LokalerStand(bund, null)), freigeschaltet = true).ausfuehren()
         assertInstanceOf(Eingerichtet.Vorhanden::class.java, ergebnis)
         assertSame(bund, ergebnis.bund)
+    }
+
+    // --- Eingerichtet, aber nicht freigeschaltet ---------------------------
+    // Z. B. nach einer Neuanmeldung mit neuem Geräteschlüssel: Die Schlüssel
+    // liegen auf dem Gerät, der Server kennt es aber als neues Gerät.
+
+    @Test
+    fun `ein eingerichtetes, nicht freigeschaltetes Gerät schaltet sich mit dem Wiederherstellungsschlüssel frei`() {
+        val stand = LokalerStand(Schluesselbund.erzeugen(), null)
+        val lauf = Lauf(vorhanden.server(), FalscherLokalerSpeicher(stand), vorhanden.text)
+        val ergebnis = lauf.ausfuehren()
+
+        assertInstanceOf(Eingerichtet.Vorhanden::class.java, ergebnis)
+        assertTrue(lauf.server.freigeschaltet)
+        assertSame(stand, lauf.lokal.stand)
+        assertEquals(0, lauf.server.gespeichert)
+    }
+
+    @Test
+    fun `ohne Eingabe bleibt ein eingerichtetes Gerät eingerichtet, aber nicht freigeschaltet`() {
+        val stand = LokalerStand(Schluesselbund.erzeugen(), null)
+        val lauf = Lauf(vorhanden.server(), FalscherLokalerSpeicher(stand), null)
+        assertInstanceOf(Eingerichtet.Vorhanden::class.java, lauf.ausfuehren())
+        assertFalse(lauf.server.freigeschaltet)
+        assertEquals(0, lauf.server.freischaltVersuche)
+        assertSame(stand, lauf.lokal.stand)
+    }
+
+    @Test
+    fun `ein falscher Schlüssel schaltet ein eingerichtetes Gerät nicht frei`() {
+        val stand = LokalerStand(Schluesselbund.erzeugen(), null)
+        val lauf = Lauf(vorhanden.server(), FalscherLokalerSpeicher(stand), *Array(3) { fremdes.text })
+        assertThrows<EinrichtungAbgebrochen> { lauf.ausfuehren() }
+        assertFalse(lauf.server.freigeschaltet)
+        assertEquals(0, lauf.server.freischaltVersuche)
+        assertSame(stand, lauf.lokal.stand)
+        assertSame(vorhanden.backup, lauf.server.backup)
+    }
+
+    @Test
+    fun `ohne Backup bleibt ein eingerichtetes, nicht freigeschaltetes Gerät, wie es ist`() {
+        val stand = LokalerStand(Schluesselbund.erzeugen(), null)
+        val lauf = Lauf(FalscheAblage(), FalscherLokalerSpeicher(stand))
+        assertInstanceOf(Eingerichtet.Vorhanden::class.java, lauf.ausfuehren())
+        assertEquals(0, lauf.server.gespeichert)
+        assertSame(stand, lauf.lokal.stand)
     }
 
     // --- Ablehnungen -------------------------------------------------------

@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"crypto/ed25519"
+	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -57,12 +59,14 @@ type konto struct {
 	handy, laptop               *testhilfe.Geraet
 	handySitzung, laptopSitzung string
 	laptopFreigeschaltet        bool // laut Antwort beim Anmelden
+	kontoID                     string
 }
 
 func (ts *testServer) kontoMitNeuemGeraet(t *testing.T) konto {
 	t.Helper()
 	k := konto{handy: testhilfe.NeuesGeraet(t), laptop: testhilfe.NeuesGeraet(t)}
-	k.handySitzung = ts.anmelden(t, "google-kevin", k.handy).Sitzung.Token
+	handy := ts.anmelden(t, "google-kevin", k.handy)
+	k.handySitzung, k.kontoID = handy.Sitzung.Token, handy.KontoId
 	if _, err := ts.backupSpeichern(k.handySitzung, []byte("backup-handy"), 0); err != nil {
 		t.Fatal(err)
 	}
@@ -117,45 +121,86 @@ func TestAnmeldenMeldetFreischaltung(t *testing.T) {
 func TestNichtFreigeschaltetesGeraetDarfNichtsAendern(t *testing.T) {
 	faelle := []struct {
 		name   string
-		aktion func(ts *testServer, k konto) error
+		aktion func(t *testing.T, ts *testServer, k konto) error
 	}{
-		{"anderes Gerät sperren", func(ts *testServer, k konto) error {
-			return ts.sperren(k.laptopSitzung, k.handy.ID())
+		// Die Erlaubnisfälle prüfen auch die Wirkung: Ein Dienst, der nach der
+		// Prüfung nichts tut, darf nicht als „erlaubt“ durchgehen.
+		{"anderes Gerät sperren", func(_ *testing.T, ts *testServer, k konto) error {
+			if err := ts.sperren(k.laptopSitzung, k.handy.ID()); err != nil {
+				return err
+			}
+			_, err := ts.geraete.GeraeteAuflisten(context.Background(), mitSitzung(&v1.GeraeteAuflistenRequest{}, k.handySitzung))
+			if connect.CodeOf(err) != connect.CodeUnauthenticated {
+				return fmt.Errorf("Handy nach dem Sperren: Code %v, erwartet unauthenticated", connect.CodeOf(err))
+			}
+			return nil
 		}},
-		{"Gerät freischalten", func(ts *testServer, k konto) error {
-			return ts.geraetFreischalten(k.laptopSitzung, k.laptop.ID())
+		// Ein drittes Gerät, damit die Erlaubnis eine Wirkung hat: Sich selbst
+		// freizuschalten änderte für ein freigeschaltetes Gerät nichts.
+		{"anderes Gerät freischalten", func(t *testing.T, ts *testServer, k konto) error {
+			tablet := testhilfe.NeuesGeraet(t)
+			ts.anmelden(t, "google-kevin", tablet)
+			if err := ts.geraetFreischalten(k.laptopSitzung, tablet.ID()); err != nil {
+				return err
+			}
+			if !ts.anmelden(t, "google-kevin", tablet).Freigeschaltet {
+				return errors.New("Tablet ist danach nicht freigeschaltet")
+			}
+			return nil
 		}},
-		{"Backup ersetzen", func(ts *testServer, k konto) error {
-			_, err := ts.backupSpeichern(k.laptopSitzung, []byte("backup-laptop"), 1)
-			return err
+		{"Backup ersetzen", func(_ *testing.T, ts *testServer, k konto) error {
+			if _, err := ts.backupSpeichern(k.laptopSitzung, []byte("backup-laptop"), 1); err != nil {
+				return err
+			}
+			if b, err := ts.backupHolen(k.handySitzung); err != nil || string(b.Chiffrat) != "backup-laptop" {
+				return fmt.Errorf("Backup danach = %v, Fehler %w", b, err)
+			}
+			return nil
 		}},
-		{"Backup löschen", func(ts *testServer, k konto) error {
-			return ts.backupLoeschen(k.laptopSitzung)
+		{"Backup löschen", func(_ *testing.T, ts *testServer, k konto) error {
+			if err := ts.backupLoeschen(k.laptopSitzung); err != nil {
+				return err
+			}
+			if _, err := ts.backupHolen(k.handySitzung); connect.CodeOf(err) != connect.CodeNotFound {
+				return fmt.Errorf("Backup nach dem Löschen: Code %v, erwartet not_found", connect.CodeOf(err))
+			}
+			return nil
 		}},
-		{"Sicherung speichern", func(ts *testServer, k konto) error {
+		{"Sicherung speichern", func(_ *testing.T, ts *testServer, k konto) error {
 			geholt, err := ts.sicherungHolen(k.laptopSitzung)
 			if err != nil {
 				return err
 			}
-			_, err = ts.sicherungSpeichern(k.laptopSitzung, []byte("sicherung-laptop"), geholt.Version)
-			return err
+			if _, err = ts.sicherungSpeichern(k.laptopSitzung, []byte("sicherung-laptop"), geholt.Version); err != nil {
+				return err
+			}
+			if s, err := ts.sicherungHolen(k.handySitzung); err != nil || string(s.Chiffrat) != "sicherung-laptop" {
+				return fmt.Errorf("Sicherung danach = %v, Fehler %w", s, err)
+			}
+			return nil
 		}},
-		{"Sicherung löschen", func(ts *testServer, k konto) error {
-			return ts.sicherungLoeschen(k.laptopSitzung)
+		{"Sicherung löschen", func(_ *testing.T, ts *testServer, k konto) error {
+			if err := ts.sicherungLoeschen(k.laptopSitzung); err != nil {
+				return err
+			}
+			if _, err := ts.sicherungHolen(k.handySitzung); connect.CodeOf(err) != connect.CodeNotFound {
+				return fmt.Errorf("Sicherung nach dem Löschen: Code %v, erwartet not_found", connect.CodeOf(err))
+			}
+			return nil
 		}},
 	}
 	for _, fall := range faelle {
 		t.Run("lehnt ab: "+fall.name, func(t *testing.T) {
 			ts := neuerTestServer(t)
 			k := ts.kontoMitNeuemGeraet(t)
-			erwarteCode(t, fall.aktion(ts, k), connect.CodePermissionDenied)
+			erwarteCode(t, fall.aktion(t, ts, k), connect.CodePermissionDenied)
 			ts.erwarteUnveraendert(t, k)
 		})
 		t.Run("erlaubt nach Freischaltung: "+fall.name, func(t *testing.T) {
 			ts := neuerTestServer(t)
 			k := ts.kontoMitNeuemGeraet(t)
 			ts.geraetFreischaltenOK(t, k.handySitzung, k.laptop.ID())
-			if err := fall.aktion(ts, k); err != nil {
+			if err := fall.aktion(t, ts, k); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -189,6 +234,14 @@ func TestNichtFreigeschaltetesGeraetDarfLesenUndSichAbmelden(t *testing.T) {
 	})
 	t.Run("Sitzung erneuern", func(t *testing.T) {
 		if _, err := ts.anmelde.SitzungErneuern(ctx, connect.NewRequest(ts.erneuerAnfrage(t, k.laptop, ts.jetzt))); err != nil {
+			t.Fatal(err)
+		}
+	})
+	// geraete.proto erlaubt Diagnosen (das Konto muss dafür freigeschaltet
+	// sein, E-D-3). Ob das so bleibt, ist eine offene Frage aus Review-Lauf 8.
+	t.Run("Diagnose senden", func(t *testing.T) {
+		ts.diagnoseKonten[k.kontoID] = true
+		if err := ts.diagnoseSenden(k.laptopSitzung, gzipJSON(t, `{"ereignis":"test"}`)); err != nil {
 			t.Fatal(err)
 		}
 	})

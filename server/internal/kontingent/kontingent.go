@@ -4,7 +4,7 @@
 // den Bucket nicht unbegrenzt füllen.
 //
 // Eigenes Paket statt Teil von speicher.Speicher (Review-Empfehlung A5: je
-// Aufgabe eine eigene, kleine Ablage). Diagnose-Log und später das Upload-Limit
+// Aufgabe eine eigene, kleine Ablage). Diagnose-Log und das Upload-Limit
 // der Datensicherung nutzen denselben Zähler mit verschiedener Art.
 package kontingent
 

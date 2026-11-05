@@ -65,21 +65,42 @@ fun mitSitzung(token: String): Headers = mapOf("Authorization" to listOf("Bearer
 fun <T> ResponseMessage<T>.ergebnis(): T =
     when (this) {
         is ResponseMessage.Success -> message
-        is ResponseMessage.Failure -> throw Serverfehler(cause)
+        is ResponseMessage.Failure -> throw Serverfehler(cause, vomDienst = istConnectFehler(headers))
     }
 
-/** Der Server hat mit einem Fehlercode geantwortet. */
-class Serverfehler(val ursache: ConnectException) : Exception("Server: ${ursache.code.codeName} - ${ursache.message}", ursache) {
+/**
+ * Eine Fehlerantwort des Dienstes selbst kommt bei Connect als JSON. Antworten
+ * ohne JSON stammen von etwas davor (Google bei gesperrtem Dienst: 403 als
+ * HTML, ein Proxy, eine falsche Adresse); Connect leitet den Code dann nur aus
+ * dem HTTP-Status ab.
+ */
+private fun istConnectFehler(headers: Headers): Boolean =
+    headers.entries.any { (name, werte) ->
+        name.equals("content-type", ignoreCase = true) && werte.any { it.trim().startsWith("application/json", ignoreCase = true) }
+    }
+
+/**
+ * Ein Fehler beim Aufruf. [vomDienst] = false: Die Antwort kam nicht vom
+ * Dienst (kein Connect-Fehler), der Code ist nur aus dem HTTP-Status geraten.
+ */
+class Serverfehler(val ursache: ConnectException, val vomDienst: Boolean = true) :
+    Exception("Server: ${ursache.code.codeName} - ${ursache.message}", ursache) {
     val code: Code get() = ursache.code
+
+    /** permission_denied, gesagt vom Dienst selbst (nicht von einer Sperre davor). */
+    internal val keineErlaubnis: Boolean get() = vomDienst && code == Code.PERMISSION_DENIED
 }
 
 /**
  * permission_denied heißt bei den ändernden Aufrufen: Dieses Gerät ist noch
- * nicht freigeschaltet (geraete.proto, E-B2b-13). Gleiche Grenze wie bei
- * [ServerDiagnoseAblage]: Ein 403 ohne Connect-Fehler landet ebenfalls hier.
+ * nicht freigeschaltet (geraete.proto, E-B2b-13).
+ *
+ * KRITISCH: Nur wenn der Dienst selbst das sagt. Ein 403 ohne Connect-Fehler
+ * (Kill-Switch hat den Dienst gesperrt) bleibt ein Serverfehler; sonst führte
+ * die App ein freigeschaltetes Gerät in die Freischaltung.
  */
 private fun Serverfehler.nichtFreigeschaltetOder(): Exception =
-    if (code == Code.PERMISSION_DENIED) GeraetNichtFreigeschaltet() else this
+    if (keineErlaubnis) GeraetNichtFreigeschaltet() else this
 
 /** Die Backup-Ablage des Servers für die Einrichtung (protokoll). */
 class ServerBackupAblage(private val verbindung: Verbindung, private val token: String) : BackupAblage {
@@ -194,10 +215,7 @@ class ServerSicherungsAblage(private val verbindung: Verbindung, private val tok
  * resource_exhausted heißt „zu groß“ oder „Tageslimit“; wie bei der Datensicherung
  * unterscheidet die Größe des Gesendeten: Bis 256 KiB lehnt der Server nur wegen
  * des Limits ab. Zu große Sendungen hält schon [Diagnose.senden] zurück.
- *
- * Bekannte Grenze: Ein HTTP-403 ohne Connect-Fehler (etwa von einem Proxy) macht
- * Connect selbst zu permission_denied; dann meldet der Adapter fälschlich „nicht
- * freigeschaltet“. Folgen hat das keine: Gesendet wird nichts, verloren geht nichts.
+ * Ein 403 ohne Connect-Fehler (Kill-Switch, Proxy) bleibt ein Serverfehler.
  */
 class ServerDiagnoseAblage(private val verbindung: Verbindung, private val token: String) : DiagnoseAblage {
     override suspend fun senden(nutzlast: ByteArray) {
@@ -205,9 +223,9 @@ class ServerDiagnoseAblage(private val verbindung: Verbindung, private val token
             val anfrage = DiagnoseSendenRequest.newBuilder().setNutzlast(ByteString.copyFrom(nutzlast)).build()
             verbindung.diagnose.diagnoseSenden(anfrage, mitSitzung(token)).ergebnis()
         } catch (e: Serverfehler) {
-            when (e.code) {
-                Code.PERMISSION_DENIED -> throw DiagnoseNichtFreigeschaltet()
-                Code.RESOURCE_EXHAUSTED ->
+            when {
+                e.keineErlaubnis -> throw DiagnoseNichtFreigeschaltet()
+                e.code == Code.RESOURCE_EXHAUSTED ->
                     if (nutzlast.size > Diagnose.MAX_NUTZLAST) throw DiagnoseZuGross(nutzlast.size) else throw DiagnoseTageslimit()
                 else -> throw e
             }

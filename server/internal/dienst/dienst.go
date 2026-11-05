@@ -1,13 +1,15 @@
 // Package dienst verbindet die Schnittstelle (Connect) mit Anmeldung, Sitzung
-// und Speicher. Hier steht keine Sicherheitslogik; die liegt in den Paketen
-// anmeldung, sitzung und speicher. Dieses Paket übersetzt nur Anfragen und
-// Fehler.
+// und Speicher. Die Prüfung von Anmeldung, Sitzung und Versionen liegt in den
+// Paketen anmeldung, sitzung und speicher. Hier stehen nur die Regeln, welcher
+// Aufruf was darf (Freischaltung neuer Geräte, freischaltung.go; Ersetzen des
+// Backups, schluessel.go), sowie die Übersetzung von Anfragen und Fehlern.
 package dienst
 
 import (
 	"context"
 	"errors"
 	"log/slog"
+	"math"
 	"net/http"
 	"time"
 
@@ -40,7 +42,7 @@ type Konfiguration struct {
 	Speicher    speicher.Speicher
 	Sicherungen datensicherung.Ablage
 	Diagnosen   diagnose.Ablage
-	Kontingente kontingent.Zaehler // Tageszähler je Konto (Diagnosen)
+	Kontingente kontingent.Zaehler // Tageszähler je Konto (Diagnosen und Sicherungen)
 	// DiagnoseErlaubt sagt, ob ein Konto Diagnosen senden darf (freigeschaltete
 	// Konten, E-D-3). nil = keines.
 	DiagnoseErlaubt func(kontoID string) bool
@@ -87,9 +89,11 @@ func NeuerHandler(k Konfiguration) (http.Handler, error) {
 	mux.Handle(avlreminderv1connect.NewSchluesselDienstHandler(d, optionen...))
 
 	// Datensicherungen sind bis zu 8 MiB groß: eigene, größere Grenze für die
-	// Anfrage (die spätere Option gilt), dafür nur wenige gleichzeitig.
+	// Anfrage (die spätere Option gilt), dafür nur wenige gleichzeitig. Antworten
+	// gehen nie komprimiert hinaus: Das Chiffrat ist zufällig, gzip kostete nur
+	// Rechenzeit (komprimierte Anfragen nimmt der Dienst weiter an).
 	pfad, sicherungen := avlreminderv1connect.NewDatensicherungDienstHandler(d,
-		append(optionen, connect.WithReadMaxBytes(MaxSicherungsanfrage))...)
+		append(optionen, connect.WithReadMaxBytes(MaxSicherungsanfrage), connect.WithCompressMinBytes(math.MaxInt))...)
 	// Reihenfolge: erst die Sitzung (ohne den Inhalt zu lesen), dann die Plätze.
 	// So belegen Anfragen ohne Anmeldung weder Plätze noch Speicher.
 	mux.Handle(pfad, interceptor.VorDemLesen(begrenze(k.GleichzeitigeSicherungen, sicherungen)))
