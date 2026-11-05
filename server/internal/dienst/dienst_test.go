@@ -39,6 +39,7 @@ type testServer struct {
 	diagnose avlreminderv1connect.DiagnoseDienstClient
 	speicher *speicher.Arbeitsspeicher
 	jetzt    time.Time // die Uhr des Servers; Tests stellen sie vor
+	url      string    // Adresse des Testservers (für Anfragen ohne Connect-Client)
 
 	diagnosen      *diagnose.Arbeitsspeicher
 	diagnoseKonten map[string]bool // Konten, die Diagnosen senden dürfen
@@ -86,6 +87,7 @@ func neuerTestServerMit(t *testing.T, sicherungen datensicherung.Ablage, gleichz
 	}
 	srv := httptest.NewServer(h)
 	t.Cleanup(srv.Close)
+	ts.url = srv.URL
 	ts.anmelde = avlreminderv1connect.NewAnmeldeDienstClient(http.DefaultClient, srv.URL)
 	ts.geraete = avlreminderv1connect.NewGeraeteDienstClient(http.DefaultClient, srv.URL)
 	ts.backup = avlreminderv1connect.NewSchluesselDienstClient(http.DefaultClient, srv.URL)
