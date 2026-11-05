@@ -41,7 +41,7 @@ type Konfiguration struct {
 	Speicher    speicher.Speicher
 	Sicherungen datensicherung.Ablage
 	Diagnosen   diagnose.Ablage
-	Kontingente kontingent.Zaehler // Tageszähler je Konto (Diagnosen)
+	Kontingente kontingent.Zaehler // Tageszähler je Konto (Diagnosen und Sicherungen)
 	// DiagnoseErlaubt sagt, ob ein Konto Diagnosen senden darf (freigeschaltete
 	// Konten, E-D-3). nil = keines.
 	DiagnoseErlaubt func(kontoID string) bool

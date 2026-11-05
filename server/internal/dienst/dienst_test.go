@@ -50,8 +50,9 @@ func neuerTestServer(t *testing.T) *testServer {
 }
 
 // neuerTestServerMit erlaubt eine eigene Ablage für Sicherungen und eine eigene
-// Grenze für gleichzeitige Sicherungen (0 = Standard).
-func neuerTestServerMit(t *testing.T, sicherungen datensicherung.Ablage, gleichzeitig int) *testServer {
+// Grenze für gleichzeitige Sicherungen (0 = Standard); aendern passt die
+// Konfiguration weiter an (z. B. ein kaputter Tageszähler).
+func neuerTestServerMit(t *testing.T, sicherungen datensicherung.Ablage, gleichzeitig int, aendern ...func(*Konfiguration)) *testServer {
 	t.Helper()
 	ts := &testServer{
 		google:         testhilfe.NeuesGoogle(t, clientID),
@@ -65,7 +66,7 @@ func neuerTestServerMit(t *testing.T, sicherungen datensicherung.Ablage, gleichz
 	if err != nil {
 		t.Fatal(err)
 	}
-	h, err := NeuerHandler(Konfiguration{
+	k := Konfiguration{
 		Pruefer:                  pruefer,
 		Speicher:                 ts.speicher,
 		Sicherungen:              sicherungen,
@@ -75,7 +76,11 @@ func neuerTestServerMit(t *testing.T, sicherungen datensicherung.Ablage, gleichz
 		Pfeffer:                  []byte("0123456789abcdef0123456789abcdef"),
 		Jetzt:                    uhr,
 		GleichzeitigeSicherungen: gleichzeitig,
-	})
+	}
+	for _, a := range aendern {
+		a(&k)
+	}
+	h, err := NeuerHandler(k)
 	if err != nil {
 		t.Fatal(err)
 	}
