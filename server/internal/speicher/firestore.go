@@ -82,7 +82,8 @@ func nichtGefunden(err error) bool {
 // Grenze: Melden sich zwei neue Geräte eines Kontos, das nichts zu schützen
 // hat, im selben Augenblick an, sieht keins das andere, und beide werden
 // freigeschaltet. Geschützt ist dabei noch nichts; ab dem ersten
-// freigeschalteten Gerät oder Backup greift die Regel.
+// freigeschalteten Gerät oder Backup greift die Regel. Aus demselben Grund
+// können gleichzeitige Anmeldungen MaxOffeneGeraete um wenige überschreiten.
 func (f *Firestore) Anmelden(ctx context.Context, kennung string, g Geraet, s NeueSitzung) (AnmeldeErgebnis, error) {
 	var ergebnis AnmeldeErgebnis
 	// RunTransaction wiederholt die Funktion bei Konflikten mit gleichzeitigen
@@ -130,7 +131,15 @@ func (f *Firestore) Anmelden(ctx context.Context, kennung string, g Geraet, s Ne
 			return err
 		}
 		if geraetNeu {
-			frei, err := f.nichtsZuSchuetzen(tx, kd.KontoID)
+			geraete, err := f.geraeteIn(tx, kd.KontoID)
+			if err != nil {
+				return err
+			}
+			mitSchluessel, err := f.backupMitSchluessel(tx, kd.KontoID)
+			if err != nil {
+				return err
+			}
+			frei, err := neuesGeraetFreigeschaltet(geraete, mitSchluessel)
 			if err != nil {
 				return err
 			}
@@ -170,27 +179,31 @@ func (f *Firestore) Anmelden(ctx context.Context, kennung string, g Geraet, s Ne
 	return ergebnis, nil
 }
 
-// nichtsZuSchuetzen liest in der Transaktion, ob das Konto ein
-// freigeschaltetes, ungesperrtes Gerät oder ein Backup mit Freischaltschlüssel
-// hat (Regel bei Speicher.Anmelden). Nur lesen: muss vor allen Schreibzugriffen
-// der Transaktion stehen.
-func (f *Firestore) nichtsZuSchuetzen(tx *firestore.Transaction, kontoID string) (bool, error) {
-	geraete, err := tx.Documents(f.c.Collection(sammlungGeraete).Where("konto_id", "==", kontoID)).GetAll()
+// geraeteIn liest die Geräte eines Kontos in der Transaktion (für die Regeln
+// in speicher.go). Nur lesen: muss vor allen Schreibzugriffen der Transaktion
+// stehen.
+func (f *Firestore) geraeteIn(tx *firestore.Transaction, kontoID string) ([]Geraet, error) {
+	snaps, err := tx.Documents(f.c.Collection(sammlungGeraete).Where("konto_id", "==", kontoID)).GetAll()
 	if err != nil {
-		return false, err
+		return nil, err
 	}
-	for _, snap := range geraete {
+	liste := make([]Geraet, 0, len(snaps))
+	for _, snap := range snaps {
 		g, err := geraetAus(snap)
 		if err != nil {
-			return false, err
+			return nil, err
 		}
-		if g.Freigeschaltet && !g.Gesperrt {
-			return false, nil
-		}
+		liste = append(liste, g)
 	}
+	return liste, nil
+}
+
+// backupMitSchluessel liest in der Transaktion, ob das Konto ein Backup mit
+// Freischaltschlüssel hat.
+func (f *Firestore) backupMitSchluessel(tx *firestore.Transaction, kontoID string) (bool, error) {
 	snap, err := tx.Get(f.c.Collection(sammlungBackups).Doc(kontoID))
 	if nichtGefunden(err) {
-		return true, nil
+		return false, nil
 	}
 	if err != nil {
 		return false, err
@@ -199,7 +212,7 @@ func (f *Firestore) nichtsZuSchuetzen(tx *firestore.Transaction, kontoID string)
 	if err := snap.DataTo(&bd); err != nil {
 		return false, err
 	}
-	return len(bd.Freischaltschluessel) == 0, nil
+	return len(bd.Freischaltschluessel) > 0, nil
 }
 
 func (f *Firestore) Geraet(ctx context.Context, geraetID string) (Geraet, error) {
@@ -282,13 +295,29 @@ func (f *Firestore) Geraete(ctx context.Context, kontoID string) ([]Geraet, erro
 	return liste, nil
 }
 
+// sitzungenJeStapel: so viele Sitzungen löscht GeraetSperren je Transaktion.
+// Bleibt weit unter den Grenzen einer Firestore-Transaktion (10 MiB).
+const sitzungenJeStapel = 400
+
 // GeraetSperren erfüllt Speicher.GeraetSperren.
 //
-// KRITISCH: Gerät sperren und seine Sitzungen suchen und löschen geschieht in
-// einer Transaktion. Der Interceptor prüft nur die Sitzung, nicht das Gerät:
-// Bliebe eine Sitzung übrig, wäre das gesperrte Gerät nicht draußen.
+// KRITISCH: Erst das Gerät sperren (eine Transaktion, die nur das Gerät liest
+// und schreibt), dann die Sitzungen in Stapeln löschen. Ab dem ersten Schritt
+// stellen SitzungAnlegen und Anmelden keine Sitzung mehr aus, und der
+// Interceptor lehnt die vorhandenen ab.
 func (f *Firestore) GeraetSperren(ctx context.Context, kontoID, geraetID string, jetzt time.Time) error {
-	err := f.c.RunTransaction(ctx, func(ctx context.Context, tx *firestore.Transaction) error {
+	if err := f.sperreGeraet(ctx, kontoID, geraetID, jetzt); err != nil {
+		// errors.Is funktioniert weiter, weil %w den Fehler einpackt.
+		return fmt.Errorf("Gerät sperren: %w", err)
+	}
+	if err := f.loescheSitzungen(ctx, geraetID); err != nil {
+		return fmt.Errorf("Sitzungen des gesperrten Geräts löschen: %w", err)
+	}
+	return nil
+}
+
+func (f *Firestore) sperreGeraet(ctx context.Context, kontoID, geraetID string, jetzt time.Time) error {
+	return f.c.RunTransaction(ctx, func(ctx context.Context, tx *firestore.Transaction) error {
 		geraetRef := f.c.Collection(sammlungGeraete).Doc(geraetID)
 		snap, err := tx.Get(geraetRef)
 		if nichtGefunden(err) {
@@ -304,32 +333,42 @@ func (f *Firestore) GeraetSperren(ctx context.Context, kontoID, geraetID string,
 		if g.KontoID != kontoID {
 			return ErrNichtGefunden
 		}
-		sitzungen, err := tx.Documents(f.c.Collection(sammlungSitzungen).Where("geraet_id", "==", geraetID)).GetAll()
+		if g.Gesperrt {
+			return nil // schon gesperrt: Zeitpunkt der ersten Sperre bleibt
+		}
+		return tx.Update(geraetRef, []firestore.Update{
+			{Path: "gesperrt", Value: true},
+			{Path: "gesperrt_am", Value: jetzt.UTC().Truncate(time.Millisecond)},
+		})
+	})
+}
+
+// loescheSitzungen löscht alle Sitzungen eines Geräts, je Durchgang höchstens
+// sitzungenJeStapel. Endet, wenn keine mehr da ist; das gesperrte Gerät bekommt
+// keine neuen.
+func (f *Firestore) loescheSitzungen(ctx context.Context, geraetID string) error {
+	for {
+		// Select() ohne Felder: nur die Verweise, nicht die Inhalte.
+		snaps, err := f.c.Collection(sammlungSitzungen).Where("geraet_id", "==", geraetID).
+			Select().Limit(sitzungenJeStapel).Documents(ctx).GetAll()
 		if err != nil {
 			return err
 		}
-
-		if !g.Gesperrt {
-			gesperrtAm := jetzt.UTC().Truncate(time.Millisecond)
-			if err := tx.Update(geraetRef, []firestore.Update{
-				{Path: "gesperrt", Value: true},
-				{Path: "gesperrt_am", Value: gesperrtAm},
-			}); err != nil {
-				return err
-			}
+		if len(snaps) == 0 {
+			return nil
 		}
-		for _, s := range sitzungen {
-			if err := tx.Delete(s.Ref); err != nil {
-				return err
+		err = f.c.RunTransaction(ctx, func(_ context.Context, tx *firestore.Transaction) error {
+			for _, s := range snaps {
+				if err := tx.Delete(s.Ref); err != nil {
+					return err
+				}
 			}
+			return nil
+		})
+		if err != nil {
+			return err
 		}
-		return nil
-	})
-	if err != nil {
-		// errors.Is funktioniert weiter, weil %w den Fehler einpackt.
-		return fmt.Errorf("Gerät sperren: %w", err)
 	}
-	return nil
 }
 
 // GeraetFreischalten erfüllt Speicher.GeraetFreischalten. Lesen und Schreiben
@@ -367,11 +406,22 @@ func (f *Firestore) GeraetFreischalten(ctx context.Context, kontoID, geraetID st
 //
 // KRITISCH: Version lesen und Backup schreiben in einer Transaktion. Ändert
 // ein anderes Gerät das Backup dazwischen, wiederholt Firestore die Funktion,
-// und die Versionsprüfung schlägt dann fehl – nie gewinnen beide.
-func (f *Firestore) BackupSpeichern(ctx context.Context, kontoID string, chiffrat, freischaltschluessel []byte, erwartet int64, jetzt time.Time) (int64, error) {
+// und die Versionsprüfung schlägt dann fehl – nie gewinnen beide. Ebenso wird
+// mit nurUngeschuetzt in der Transaktion geprüft, dass das Konto kein
+// freigeschaltetes Gerät hat; ein gleichzeitiges Freischalten wiederholt sie.
+func (f *Firestore) BackupSpeichern(ctx context.Context, kontoID string, chiffrat, freischaltschluessel []byte, erwartet int64, nurUngeschuetzt bool, jetzt time.Time) (int64, error) {
 	ref := f.c.Collection(sammlungBackups).Doc(kontoID)
 	var neu int64
 	err := f.c.RunTransaction(ctx, func(ctx context.Context, tx *firestore.Transaction) error {
+		if nurUngeschuetzt {
+			geraete, err := f.geraeteIn(tx, kontoID)
+			if err != nil {
+				return err
+			}
+			if gibtFreigeschaltetes(geraete) {
+				return ErrKontoGeschuetzt
+			}
+		}
 		var aktuell int64 // 0, falls es noch keins gibt
 		snap, err := tx.Get(ref)
 		switch {

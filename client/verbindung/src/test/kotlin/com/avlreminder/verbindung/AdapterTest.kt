@@ -262,6 +262,9 @@ class AdapterTest {
             Fall("Sicherung holen: nicht gefunden heißt keine Sicherung", Code.NOT_FOUND, { sicherung(it).holen() }, null),
             Fall("Sicherung holen: ungültige Sitzung bleibt Serverfehler", Code.UNAUTHENTICATED, { sicherung(it).holen() }, Serverfehler::class),
             Fall("Sicherung holen: Überlastung bleibt Serverfehler", Code.UNAVAILABLE, { sicherung(it).holen() }, Serverfehler::class),
+            // Entscheidung nach Review-Lauf 8: Holen und Löschen sind je Tag begrenzt.
+            Fall("Sicherung holen: erschöpft heißt Tageslimit", Code.RESOURCE_EXHAUSTED, { sicherung(it).holen() }, SicherungTageslimit::class),
+            Fall("Sicherung löschen: erschöpft heißt Tageslimit", Code.RESOURCE_EXHAUSTED, { sicherung(it).loeschen() }, SicherungTageslimit::class),
             Fall("Sicherung speichern: Bedingung verletzt heißt veraltet", Code.FAILED_PRECONDITION, { sicherung(it).speichern(CHIFFRAT, 1) }, VersionVeraltet::class),
             // KRITISCH: Bis 8 MiB heißt erschöpft "Tageslimit", sonst meldete die App
             // fälschlich "zu groß" (und der Mensch suchte den Fehler bei sich).
@@ -281,6 +284,7 @@ class AdapterTest {
             // Schlüssel-Backup
             Fall("Backup holen: nicht gefunden heißt kein Backup", Code.NOT_FOUND, { backup(it).holen() }, null),
             Fall("Backup holen: ungültige Sitzung bleibt Serverfehler", Code.UNAUTHENTICATED, { backup(it).holen() }, Serverfehler::class),
+            Fall("Backup holen: erschöpft bleibt Serverfehler", Code.RESOURCE_EXHAUSTED, { backup(it).holen() }, Serverfehler::class),
             Fall("Backup speichern: Bedingung verletzt heißt veraltet", Code.FAILED_PRECONDITION, { backup(it).speichern(CHIFFRAT, SCHLUESSEL, 1) }, VersionVeraltet::class),
             Fall("Backup speichern: zu groß bleibt Serverfehler", Code.RESOURCE_EXHAUSTED, { backup(it).speichern(CHIFFRAT, SCHLUESSEL, 1) }, Serverfehler::class),
             Fall("Backup speichern: nicht gefunden bleibt Serverfehler", Code.NOT_FOUND, { backup(it).speichern(CHIFFRAT, SCHLUESSEL, 1) }, Serverfehler::class),

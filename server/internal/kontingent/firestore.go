@@ -35,8 +35,8 @@ func NeuerFirestore(c *firestore.Client) *Firestore { return &Firestore{c: c} }
 
 // dokID: art zuerst und der Tag mit fester Länge in der Mitte, damit sich zwei
 // Kombinationen nie denselben Namen teilen.
-func dokID(art, kontoID string, jetzt time.Time) string {
-	return art + "-" + tag(jetzt) + "-" + kontoID
+func dokID(art, id string, jetzt time.Time) string {
+	return art + "-" + tag(jetzt) + "-" + id
 }
 
 // Verbrauche erfüllt Zaehler.Verbrauche.
@@ -44,11 +44,11 @@ func dokID(art, kontoID string, jetzt time.Time) string {
 // KRITISCH: Lesen und Erhöhen in einer Transaktion. Zwei gleichzeitige Aufrufe
 // beim Stand max-1 dürfen nicht beide durchkommen; Firestore wiederholt dann
 // einen von beiden, und der sieht den neuen Stand.
-func (f *Firestore) Verbrauche(ctx context.Context, art, kontoID string, jetzt time.Time, max int) error {
-	if art == "" || kontoID == "" {
-		return errors.New("Art und Konto-ID sind Pflicht")
+func (f *Firestore) Verbrauche(ctx context.Context, art, id string, jetzt time.Time, max int) error {
+	if art == "" || id == "" {
+		return errors.New("Art und ID sind Pflicht")
 	}
-	ref := f.c.Collection(sammlung).Doc(dokID(art, kontoID, jetzt))
+	ref := f.c.Collection(sammlung).Doc(dokID(art, id, jetzt))
 	return f.c.RunTransaction(ctx, func(_ context.Context, tx *firestore.Transaction) error {
 		var d zaehlerDok
 		snap, err := tx.Get(ref)

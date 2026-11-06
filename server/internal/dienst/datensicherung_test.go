@@ -223,6 +223,78 @@ func TestSicherungSpeichernHatEinTageslimitJeKonto(t *testing.T) {
 	})
 }
 
+// Grenzen aus datensicherung.proto als eigene Zahlen (nicht AbrufeJeTag,
+// LoeschungenJeTag).
+const (
+	abrufeAmTag      = 50
+	loeschungenAmTag = 20
+)
+
+// KRITISCH: Holen und Löschen sind je Konto und Tag begrenzt (Entscheidung nach
+// Review-Lauf 8): Holen kostet ausgehende Daten (bis 8 MiB je Abruf), Löschen
+// listet und löscht bis zu 200 Fassungen.
+func TestSicherungHolenUndLoeschenHabenEinTageslimitJeKonto(t *testing.T) {
+	faelle := []struct {
+		name   string
+		max    int
+		aufruf func(ts *testServer, token string) error
+		// erlaubt: Code einer erlaubten Antwort (Holen ohne Sicherung: not_found)
+		erlaubt connect.Code
+	}{
+		{"Sicherung holen", abrufeAmTag, func(ts *testServer, token string) error {
+			_, err := ts.sicherungHolen(token)
+			return err
+		}, connect.CodeNotFound},
+		{"Sicherung löschen", loeschungenAmTag, func(ts *testServer, token string) error {
+			return ts.sicherungLoeschen(token)
+		}, 0},
+	}
+	erwarteErlaubt := func(t *testing.T, err error, code connect.Code) {
+		t.Helper()
+		if code == 0 && err != nil {
+			t.Fatal(err)
+		}
+		if code != 0 {
+			erwarteCode(t, err, code)
+		}
+	}
+	for _, fall := range faelle {
+		t.Run(fall.name, func(t *testing.T) {
+			ts := neuerTestServer(t)
+			kevinGeraet := testhilfe.NeuesGeraet(t)
+			kevin := ts.anmelden(t, "google-kevin", kevinGeraet).Sitzung.Token
+			anna := ts.anmelden(t, "google-anna", testhilfe.NeuesGeraet(t)).Sitzung.Token
+			for i := range fall.max {
+				if err := fall.aufruf(ts, kevin); connect.CodeOf(err) != fall.erlaubt && err != nil {
+					t.Fatalf("Aufruf %d: %v", i+1, err)
+				}
+			}
+			t.Run("danach lehnt der Server ab", func(t *testing.T) {
+				err := fall.aufruf(ts, kevin)
+				erwarteCode(t, err, connect.CodeResourceExhausted)
+				if !strings.Contains(err.Error(), "Tageslimit") {
+					t.Errorf("Meldung nennt das Tageslimit nicht: %v", err)
+				}
+			})
+			t.Run("Speichern hat ein eigenes Tageslimit", func(t *testing.T) {
+				if _, err := ts.sicherungSpeichern(kevin, []byte("sicherung"), 0); err != nil {
+					t.Fatal(err)
+				}
+			})
+			t.Run("ein anderes Konto hat sein eigenes Limit", func(t *testing.T) {
+				erwarteErlaubt(t, fall.aufruf(ts, anna), fall.erlaubt)
+			})
+			t.Run("am nächsten Tag (UTC) geht es wieder", func(t *testing.T) {
+				ts.jetzt = time.Date(start.Year(), start.Month(), start.Day()+1, 0, 0, 1, 0, time.UTC)
+				neu := ts.anmelden(t, "google-kevin", kevinGeraet).Sitzung.Token
+				if err := fall.aufruf(ts, neu); err != nil {
+					t.Fatal(err) // es gibt jetzt eine Sicherung (siehe oben)
+				}
+			})
+		})
+	}
+}
+
 // KRITISCH: Jedes Konto sieht, schreibt und löscht nur seine eigene Sicherung.
 func TestSicherungGehoertNurZumEigenenKonto(t *testing.T) {
 	ts := neuerTestServer(t)

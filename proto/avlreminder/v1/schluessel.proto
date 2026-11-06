@@ -15,7 +15,9 @@ option java_package = "com.avlreminder.schnittstelle.v1";
 // Fehlercodes (Connect):
 //   unauthenticated     Sitzung fehlt, ist ungültig oder abgelaufen.
 //   permission_denied   Das Gerät ist nicht freigeschaltet (geraete.proto):
-//                       BackupLoeschen, BackupSpeichern mit erwartete_version > 0.
+//                       BackupLoeschen, BackupSpeichern mit erwartete_version > 0,
+//                       und das erste BackupSpeichern, wenn das Konto ein
+//                       freigeschaltetes, ungesperrtes Gerät hat.
 //   invalid_argument    BackupSpeichern: chiffrat leer oder größer als 16 KiB,
 //                       freischaltschluessel nicht genau 32 Bytes, oder
 //                       erwartete_version negativ.

@@ -11,12 +11,13 @@ import (
 
 	"github.com/FairPlayer4/avlreminder-backend/server/internal/datensicherung"
 	"github.com/FairPlayer4/avlreminder-backend/server/internal/kontingent"
+	"github.com/FairPlayer4/avlreminder-backend/server/internal/speicher"
+	"github.com/FairPlayer4/avlreminder-backend/server/internal/testhilfe"
 )
 
-// Tageslimits für Sicherungen (E-B2b-12) und Diagnosen (E-D-5), soweit es um
-// das Zusammenspiel mit dem Zähler geht. Die Grenzen selbst prüfen
-// TestSicherungSpeichernHatEinTageslimitJeKonto und
-// TestDiagnoseSendenHatEinTageslimitJeKonto.
+// Tageslimits für Sicherungen (E-B2b-12), Diagnosen (E-D-5) und Sitzungen,
+// soweit es um das Zusammenspiel mit dem Zähler geht. Die Grenzen selbst prüfen
+// die Tests *HatEinTageslimitJe* und *HabenEinTageslimitJe*.
 
 // zaehlerAttrappe zählt die Aufrufe und gibt einen festen Fehler zurück (nil:
 // zählt wie der echte Zähler im Arbeitsspeicher).
@@ -25,16 +26,32 @@ type zaehlerAttrappe struct {
 	aufrufe int
 	fehler  error
 	echt    kontingent.Zaehler
+	// mitSitzungen: auch Sitzungen (Anmelden, SitzungErneuern) zählen und
+	// scheitern lassen. Sonst lässt die Attrappe sie ungezählt durch, damit
+	// sich die Tests anmelden können.
+	mitSitzungen bool
 }
 
-func (z *zaehlerAttrappe) Verbrauche(ctx context.Context, art, kontoID string, jetzt time.Time, max int) error {
+func (z *zaehlerAttrappe) Verbrauche(ctx context.Context, art, id string, jetzt time.Time, max int) error {
 	z.mu.Lock()
-	z.aufrufe++
-	z.mu.Unlock()
-	if z.fehler != nil {
-		return z.fehler
+	if art == kontingentSitzung && !z.mitSitzungen {
+		z.mu.Unlock()
+		return nil
 	}
-	return z.echt.Verbrauche(ctx, art, kontoID, jetzt, max)
+	z.aufrufe++
+	fehler := z.fehler
+	z.mu.Unlock()
+	if fehler != nil {
+		return fehler
+	}
+	return z.echt.Verbrauche(ctx, art, id, jetzt, max)
+}
+
+// setzeFehler lässt ab jetzt jeden Aufruf mit err scheitern.
+func (z *zaehlerAttrappe) setzeFehler(err error) {
+	z.mu.Lock()
+	defer z.mu.Unlock()
+	z.fehler = err
 }
 
 func (z *zaehlerAttrappe) anzahl() int {
@@ -48,18 +65,40 @@ func mitZaehler(z kontingent.Zaehler) func(*Konfiguration) {
 }
 
 // KRITISCH: Ist der Tageszähler nicht erreichbar (Firestore weg), lässt der
-// Server nichts durch. Sonst wäre das Limit genau dann aus, wenn es gebraucht
-// wird (eine App in einer Schleife bei gestörtem Firestore).
-func TestOhneTageszaehlerWirdNichtsAbgelegt(t *testing.T) {
-	ts := neuerTestServerMit(t, datensicherung.NeuerArbeitsspeicher(), 0,
-		mitZaehler(&zaehlerAttrappe{fehler: errors.New("Firestore nicht erreichbar")}))
-	token, _ := ts.diagnoseFreischalten(t, "google-kevin")
+// Server nichts durch, auch kein Holen oder Löschen. Sonst wäre das Limit genau
+// dann aus, wenn es gebraucht wird (eine App in einer Schleife bei gestörtem
+// Firestore).
+func TestOhneTageszaehlerGehtNichts(t *testing.T) {
+	ablage := datensicherung.NeuerArbeitsspeicher()
+	z := &zaehlerAttrappe{echt: kontingent.NeuerArbeitsspeicher()}
+	ts := neuerTestServerMit(t, ablage, 0, mitZaehler(z))
+	token, kontoID := ts.diagnoseFreischalten(t, "google-kevin")
+	// Gegenprobe: Mit Zähler geht das Speichern.
+	if _, err := ts.sicherungSpeichern(token, []byte("vorher"), 0); err != nil {
+		t.Fatal(err)
+	}
+	z.setzeFehler(errors.New("Firestore nicht erreichbar"))
+	// erwarteVorher prüft direkt in der Ablage, dass die Sicherung unverändert ist.
+	erwarteVorher := func(t *testing.T) {
+		t.Helper()
+		f, err := ablage.Holen(context.Background(), kontoID)
+		if err != nil || string(f.Chiffrat) != "vorher" {
+			t.Errorf("Sicherung = %q, Fehler %v", f.Chiffrat, err)
+		}
+	}
 
 	t.Run("Sicherung speichern", func(t *testing.T) {
-		_, err := ts.sicherungSpeichern(token, []byte("sicherung"), 0)
+		_, err := ts.sicherungSpeichern(token, []byte("sicherung"), 1)
 		erwarteCode(t, err, connect.CodeUnavailable)
-		_, err = ts.sicherungHolen(token)
-		erwarteCode(t, err, connect.CodeNotFound)
+		erwarteVorher(t)
+	})
+	t.Run("Sicherung holen", func(t *testing.T) {
+		_, err := ts.sicherungHolen(token)
+		erwarteCode(t, err, connect.CodeUnavailable)
+	})
+	t.Run("Sicherung löschen", func(t *testing.T) {
+		erwarteCode(t, ts.sicherungLoeschen(token), connect.CodeUnavailable)
+		erwarteVorher(t)
 	})
 	t.Run("Diagnose senden", func(t *testing.T) {
 		erwarteCode(t, ts.diagnoseSenden(token, gzipJSON(t, "{}")), connect.CodeUnavailable)
@@ -67,14 +106,25 @@ func TestOhneTageszaehlerWirdNichtsAbgelegt(t *testing.T) {
 			t.Errorf("%d Diagnosen abgelegt, erwartet keine", n)
 		}
 	})
-	// Gegenprobe: Holen und Löschen zählen nicht und gehen weiter.
-	t.Run("Holen und Löschen gehen weiter", func(t *testing.T) {
-		_, err := ts.sicherungHolen(token)
-		erwarteCode(t, err, connect.CodeNotFound)
-		if err := ts.sicherungLoeschen(token); err != nil {
-			t.Fatal(err)
-		}
-	})
+}
+
+// KRITISCH: Ohne Tageszähler gibt es auch keine neue Sitzung und kein neues
+// Gerät: Das Sitzungslimit wäre sonst genau bei gestörtem Firestore aus.
+func TestOhneTageszaehlerGibtEsKeineSitzung(t *testing.T) {
+	z := &zaehlerAttrappe{echt: kontingent.NeuerArbeitsspeicher(), mitSitzungen: true}
+	ts := neuerTestServerMit(t, datensicherung.NeuerArbeitsspeicher(), 0, mitZaehler(z))
+	handy, laptop := testhilfe.NeuesGeraet(t), testhilfe.NeuesGeraet(t)
+	ts.anmelden(t, "google-kevin", handy) // Gegenprobe: mit Zähler geht es
+	z.setzeFehler(errors.New("Firestore nicht erreichbar"))
+	ctx := context.Background()
+
+	_, err := ts.anmelde.SitzungErneuern(ctx, connect.NewRequest(ts.erneuerAnfrage(t, handy, ts.jetzt)))
+	erwarteCode(t, err, connect.CodeUnavailable)
+	_, err = ts.anmelde.Anmelden(ctx, connect.NewRequest(ts.anmeldeAnfrage(t, "google-kevin", laptop)))
+	erwarteCode(t, err, connect.CodeUnavailable)
+	if _, err := ts.speicher.Geraet(ctx, laptop.ID()); !errors.Is(err, speicher.ErrNichtGefunden) {
+		t.Errorf("Laptop ist trotzdem angelegt (Fehler %v)", err)
+	}
 }
 
 // KRITISCH: Was der Server ablehnt, bevor er etwas ablegt, verbraucht nichts
@@ -86,6 +136,7 @@ func TestAbgelehnteAnfragenVerbrauchenNichtsVomTageslimit(t *testing.T) {
 	k := ts.kontoMitNeuemGeraet(t) // Handy hat schon eine Sicherung gespeichert
 	ohneDiagnose := k.handySitzung // Konto nicht für Diagnosen freigeschaltet
 	mitDiagnose, _ := ts.diagnoseFreischalten(t, "google-anna")
+	annasLaptop := ts.anmelden(t, "google-anna", testhilfe.NeuesGeraet(t)).Sitzung.Token // nicht freigeschaltet
 
 	tests := []struct {
 		name    string
@@ -95,6 +146,9 @@ func TestAbgelehnteAnfragenVerbrauchenNichtsVomTageslimit(t *testing.T) {
 		{"Sicherung vom nicht freigeschalteten Gerät", func() error {
 			_, err := ts.sicherungSpeichern(k.laptopSitzung, []byte("vom laptop"), 1)
 			return err
+		}, connect.CodePermissionDenied},
+		{"Sicherung löschen vom nicht freigeschalteten Gerät", func() error {
+			return ts.sicherungLoeschen(k.laptopSitzung)
 		}, connect.CodePermissionDenied},
 		{"leere Sicherung", func() error {
 			_, err := ts.sicherungSpeichern(k.handySitzung, nil, 1)
@@ -110,6 +164,9 @@ func TestAbgelehnteAnfragenVerbrauchenNichtsVomTageslimit(t *testing.T) {
 		}, connect.CodeResourceExhausted},
 		{"Diagnose von Konto ohne Freigabe", func() error {
 			return ts.diagnoseSenden(ohneDiagnose, gzipJSON(t, "{}"))
+		}, connect.CodePermissionDenied},
+		{"Diagnose vom nicht freigeschalteten Gerät", func() error {
+			return ts.diagnoseSenden(annasLaptop, gzipJSON(t, "{}"))
 		}, connect.CodePermissionDenied},
 		{"zu große Diagnose", func() error {
 			return ts.diagnoseSenden(mitDiagnose, mitGzipKopf(kiB256+1))

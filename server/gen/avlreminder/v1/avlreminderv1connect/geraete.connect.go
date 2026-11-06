@@ -50,8 +50,10 @@ const (
 // GeraeteDienstClient is a client for the avlreminder.v1.GeraeteDienst service.
 type GeraeteDienstClient interface {
 	GeraeteAuflisten(context.Context, *connect.Request[v1.GeraeteAuflistenRequest]) (*connect.Response[v1.GeraeteAuflistenResponse], error)
-	// Sperrt ein eigenes Gerät sofort: Seine Sitzungen werden gelöscht, und es
-	// bekommt keine neue mehr. Das eigene Gerät zu sperren heißt abmelden.
+	// Sperrt ein eigenes Gerät sofort: Ab der Antwort lässt der Server keine
+	// seiner Sitzungen mehr durch, und es bekommt keine neue. Danach löscht er
+	// die Sitzungen; scheitert das, meldet er einen Fehler, und ein zweiter
+	// Aufruf räumt den Rest auf (das Gerät bleibt gesperrt). Das eigene Gerät zu sperren heißt abmelden.
 	// Endgültig: Mit demselben Geräteschlüssel lehnt der Server auch Anmelden
 	// ab (permission_denied). Wer sich wieder anmelden will, erzeugt einen
 	// neuen Geräteschlüssel; es gibt kein Entsperren.
@@ -135,8 +137,10 @@ func (c *geraeteDienstClient) MitWiederherstellungFreischalten(ctx context.Conte
 // GeraeteDienstHandler is an implementation of the avlreminder.v1.GeraeteDienst service.
 type GeraeteDienstHandler interface {
 	GeraeteAuflisten(context.Context, *connect.Request[v1.GeraeteAuflistenRequest]) (*connect.Response[v1.GeraeteAuflistenResponse], error)
-	// Sperrt ein eigenes Gerät sofort: Seine Sitzungen werden gelöscht, und es
-	// bekommt keine neue mehr. Das eigene Gerät zu sperren heißt abmelden.
+	// Sperrt ein eigenes Gerät sofort: Ab der Antwort lässt der Server keine
+	// seiner Sitzungen mehr durch, und es bekommt keine neue. Danach löscht er
+	// die Sitzungen; scheitert das, meldet er einen Fehler, und ein zweiter
+	// Aufruf räumt den Rest auf (das Gerät bleibt gesperrt). Das eigene Gerät zu sperren heißt abmelden.
 	// Endgültig: Mit demselben Geräteschlüssel lehnt der Server auch Anmelden
 	// ab (permission_denied). Wer sich wieder anmelden will, erzeugt einen
 	// neuen Geräteschlüssel; es gibt kein Entsperren.

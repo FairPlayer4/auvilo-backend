@@ -31,6 +31,16 @@ import (
 // die Grenze schützt vor absichtlich riesigen Anfragen.
 const MaxAnfrage = 64 << 10 // 64 KiB
 
+// SitzungenJeTag gibt an, wie viele Sitzungen ein Gerät am Tag (UTC) höchstens
+// bekommt, über Anmelden und SitzungErneuern zusammen (Entscheidung nach
+// Review-Lauf 8). Eine Sitzung gilt 1 Stunde; die App braucht etwa 24 am Tag.
+// Ohne Grenze könnte, wer den Geräteschlüssel hat, beliebig viele Sitzungen
+// anlegen (Kosten, und das Sperren müsste sie alle löschen).
+const SitzungenJeTag = 200
+
+// kontingentSitzung ist die Art im Tageszähler; gezählt wird je Gerät.
+const kontingentSitzung = "sitzung"
+
 // AnmeldePruefer ist der Teil von anmeldung.Pruefer, den die Dienste brauchen.
 type AnmeldePruefer interface {
 	Pruefe(ctx context.Context, a anmeldung.Anfrage) (anmeldung.Ergebnis, error)
@@ -151,12 +161,20 @@ func (d *dienste) Anmelden(ctx context.Context, req *connect.Request[v1.Anmelden
 		slog.WarnContext(ctx, "Anmeldung abgelehnt", "grund", err.Error())
 		return nil, errAnmeldungAbgelehnt()
 	}
+	// Erst nach der Prüfung zählen: Nur wer den Geräteschlüssel hat, verbraucht
+	// etwas vom Limit dieses Geräts.
+	if err := d.verbrauche(ctx, kontingentSitzung, erg.GeraetID, SitzungenJeTag, "Tageslimit für Sitzungen dieses Geräts erreicht – morgen wieder"); err != nil {
+		return nil, err
+	}
 
 	jetzt := d.k.Jetzt()
 	token, neueSitzung := sitzung.Neu(jetzt)
 	geraet := speicher.Geraet{ID: erg.GeraetID, Schluessel: req.Msg.GetGeraeteschluessel(), Erstellt: jetzt}
 	ergebnis, err := d.k.Speicher.Anmelden(ctx, anmeldung.Kennung(d.k.Pfeffer, erg.GoogleSub), geraet, neueSitzung)
 	switch {
+	case errors.Is(err, speicher.ErrZuVieleGeraete):
+		slog.WarnContext(ctx, "Anmeldung abgelehnt: zu viele nicht freigeschaltete Geräte", "geraet", erg.GeraetID)
+		return nil, connect.NewError(connect.CodeResourceExhausted, errors.New("zu viele neue Geräte – erst eins freischalten oder sperren"))
 	case errors.Is(err, speicher.ErrGeraetGesperrt):
 		slog.WarnContext(ctx, "Anmeldung eines gesperrten Geräts", "geraet", erg.GeraetID)
 		return nil, errGesperrt()
@@ -198,6 +216,9 @@ func (d *dienste) SitzungErneuern(ctx context.Context, req *connect.Request[v1.S
 			return nil, errGesperrt()
 		}
 		return nil, errErneuernAbgelehnt()
+	}
+	if err := d.verbrauche(ctx, kontingentSitzung, geraetID, SitzungenJeTag, "Tageslimit für Sitzungen dieses Geräts erreicht – morgen wieder"); err != nil {
+		return nil, err
 	}
 
 	token, neueSitzung := sitzung.Neu(jetzt)

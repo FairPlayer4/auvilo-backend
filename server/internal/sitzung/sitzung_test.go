@@ -98,6 +98,38 @@ func (fehlerSpeicher) Sitzung(context.Context, string) (speicher.Sitzung, error)
 	return speicher.Sitzung{}, errors.New("Firestore nicht erreichbar")
 }
 
+func (fehlerSpeicher) Geraet(context.Context, string) (speicher.Geraet, error) {
+	return speicher.Geraet{}, errors.New("Firestore nicht erreichbar")
+}
+
+// uebrigeSitzung hat genau eine gültige Sitzung (Token "uebrig") für
+// "geraet-1" in "konto-1"; das Gerät dazu ist so, wie der Fall es vorgibt. So
+// entsteht der Zustand, den GeraetSperren kurz zurücklässt: Gerät gesperrt,
+// Sitzung noch da.
+type uebrigeSitzung struct {
+	geraet speicher.Geraet
+	fehler error // Fehler beim Lesen des Geräts
+}
+
+func (u uebrigeSitzung) Sitzung(_ context.Context, hash string) (speicher.Sitzung, error) {
+	if hash != Hash("uebrig") {
+		return speicher.Sitzung{}, speicher.ErrNichtGefunden
+	}
+	return speicher.Sitzung{Hash: hash, KontoID: "konto-1", GeraetID: "geraet-1", LaeuftAb: jetzt.Add(time.Hour)}, nil
+}
+
+func (u uebrigeSitzung) Geraet(context.Context, string) (speicher.Geraet, error) {
+	return u.geraet, u.fehler
+}
+
+var (
+	geraetAktiv    = uebrigeSitzung{geraet: speicher.Geraet{ID: "geraet-1", KontoID: "konto-1"}}
+	geraetGesperrt = uebrigeSitzung{geraet: speicher.Geraet{ID: "geraet-1", KontoID: "konto-1", Gesperrt: true}}
+	geraetFremd    = uebrigeSitzung{geraet: speicher.Geraet{ID: "geraet-1", KontoID: "konto-2"}}
+	geraetFehlt    = uebrigeSitzung{fehler: speicher.ErrNichtGefunden}
+	geraetAusfall  = uebrigeSitzung{fehler: errors.New("Firestore nicht erreichbar")}
+)
+
 func TestInterceptor(t *testing.T) {
 	const (
 		offen      = "/test.v1.TestDienst/Offen"
@@ -151,6 +183,12 @@ func TestInterceptor(t *testing.T) {
 		{"lehnt den Hash als Token ab", sp, geschuetzt, "Bearer " + Hash(gueltig), connect.CodeUnauthenticated, ""},
 		{"lehnt abgelaufene Sitzung ab", sp, geschuetzt, "Bearer " + abgelaufen, connect.CodeUnauthenticated, ""},
 		{"meldet Speicherausfall als nicht verfügbar, nicht als erlaubt", fehlerSpeicher{}, geschuetzt, "Bearer " + gueltig, connect.CodeUnavailable, ""},
+		// Gerät der Sitzung: Gegenprobe und die Ablehnungen (KRITISCH).
+		{"übrige Sitzung eines aktiven Geräts gilt", geraetAktiv, geschuetzt, "Bearer uebrig", 0, "konto-1"},
+		{"lehnt übrige Sitzung eines gesperrten Geräts ab", geraetGesperrt, geschuetzt, "Bearer uebrig", connect.CodeUnauthenticated, ""},
+		{"lehnt Sitzung ab, deren Gerät zu einem anderen Konto gehört", geraetFremd, geschuetzt, "Bearer uebrig", connect.CodeUnauthenticated, ""},
+		{"lehnt Sitzung ohne Gerät ab", geraetFehlt, geschuetzt, "Bearer uebrig", connect.CodeUnauthenticated, ""},
+		{"meldet Ausfall beim Lesen des Geräts als nicht verfügbar", geraetAusfall, geschuetzt, "Bearer uebrig", connect.CodeUnavailable, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -208,6 +246,7 @@ func TestVorDemLesen(t *testing.T) {
 		{"lehnt unbekanntes Token ab", sp, "Bearer erfunden", connect.CodeUnauthenticated},
 		{"lehnt abgelaufene Sitzung ab", sp, "Bearer " + abgelaufen, connect.CodeUnauthenticated},
 		{"meldet Speicherausfall als nicht verfügbar, nicht als erlaubt", fehlerSpeicher{}, "Bearer " + gueltig, connect.CodeUnavailable},
+		{"lehnt übrige Sitzung eines gesperrten Geräts ab", geraetGesperrt, "Bearer uebrig", connect.CodeUnauthenticated},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -176,7 +176,11 @@ class ServerSicherungsAblage(private val verbindung: Verbindung, private val tok
             val s = verbindung.sicherung.sicherungHolen(SicherungHolenRequest.getDefaultInstance(), mitSitzung(token)).ergebnis()
             GeholteSicherung(s.chiffrat.toByteArray(), s.version)
         } catch (e: Serverfehler) {
-            if (e.code == Code.NOT_FOUND) null else throw e
+            when (e.code) {
+                Code.NOT_FOUND -> null
+                Code.RESOURCE_EXHAUSTED -> throw SicherungTageslimit("Abrufe der Sicherung")
+                else -> throw e
+            }
         }
 
     override suspend fun speichern(chiffrat: ByteArray, erwartet: Long): Long =
@@ -202,6 +206,7 @@ class ServerSicherungsAblage(private val verbindung: Verbindung, private val tok
         try {
             verbindung.sicherung.sicherungLoeschen(SicherungLoeschenRequest.getDefaultInstance(), mitSitzung(token)).ergebnis()
         } catch (e: Serverfehler) {
+            if (e.code == Code.RESOURCE_EXHAUSTED) throw SicherungTageslimit("das Löschen der Sicherung")
             throw e.nichtFreigeschaltetOder()
         }
     }

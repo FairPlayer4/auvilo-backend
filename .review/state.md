@@ -118,10 +118,8 @@ Vom Entwickler bestätigt am 2026-11-01.
     (E1); Deploy ohne CI-Gate (E3).
 
 ## Offene Fragen an den Entwickler
-Aus Lauf 8 (runs/2026-11-05.md, je mit Vorschlag): 1 Diagnose von nicht freigeschalteten
-Geräten; 2 erstes Backup nur ohne Schützenswertes; 3 `SicherungHolen` begrenzen;
-4 Sperren bei vielen Sitzungen (Interceptor prüft „gesperrt“); 5 Gerätelimit je Konto;
-6 abgelehnte Übernahme lokal merken; 7 zwei Instanzen = 8 gleichzeitige Sicherungen.
+Aus Lauf 8 (runs/2026-11-05.md, je mit Vorschlag): 6 abgelehnte Übernahme lokal
+merken; 7 zwei Instanzen = 8 gleichzeitige Sicherungen. (1–5 am 2026-11-06 entschieden.)
 Aus Lauf 7 (runs/2026-11-04.md, je mit Vorschlag): 1 gescheitertes Ablegen zählt zum
 Tageslimit (seit Lauf 8 durch `TestGescheitertesAblegenZaehltTrotzdem` festgehalten);
 3 Pfeffer-Wiederherstellung einmal durchspielen.
@@ -171,3 +169,9 @@ Erledigt am 2026-11-05: Sperren ohne actAs (Kill-Switch entfernt `allUsers`, Mod
   Sync-Operationen ab B3; SE3 ohne eigenen Scanner. Nicht erneut als Fund melden.
 - 2026-11-03: Bucket ohne Soft Delete; `GOMEMLIMIT=192MiB`, Parallelität 80;
   Absenz-Alarm 23,5 h.
+- 2026-11-06 (nach Lauf 8, Fragen 1–5 wie vorgeschlagen, umgesetzt): Diagnosen nur
+  von freigeschalteten Geräten; erstes Backup eines nicht freigeschalteten Geräts nur,
+  wenn das Konto kein freigeschaltetes, ungesperrtes Gerät hat; Holen 50, Löschen 20,
+  Sitzungen 200 je Gerät und Tag; Interceptor prüft „gesperrt“, Sperren löscht in
+  Stapeln; höchstens 10 offene Geräte je Konto. Egress-Alarm erst nach Kevins Go
+  (Kosten). Nicht erneut als Frage stellen.

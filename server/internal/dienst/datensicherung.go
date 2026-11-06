@@ -34,8 +34,36 @@ const StandardGleichzeitigeSicherungen = 4
 // Fassungen (infra/datensicherung.tf) höchstens 48, also nie die ganze Woche.
 const SicherungenJeTag = 48
 
-// kontingentSicherung ist die Art im Tageszähler.
-const kontingentSicherung = "sicherung"
+// AbrufeJeTag gibt an, wie oft ein Konto am Tag (UTC) seine Sicherung holen darf
+// (Entscheidung nach Review-Lauf 8). Ein Gerät holt sie beim Einrichten und nach
+// einem Konflikt, also selten. Schützt die Kosten für ausgehende Daten: Ohne
+// Grenze könnte jedes Google-Konto 8 MiB in einer Schleife abrufen.
+const AbrufeJeTag = 50
+
+// LoeschungenJeTag gibt an, wie oft ein Konto am Tag (UTC) seine Sicherung
+// löschen darf. Jedes Löschen listet und löscht bis zu 200 Fassungen.
+const LoeschungenJeTag = 20
+
+// Arten im Tageszähler.
+const (
+	kontingentSicherung = "sicherung"
+	kontingentAbruf     = "sicherung_holen"
+	kontingentLoeschen  = "sicherung_loeschen"
+)
+
+// verbrauche zählt einen Vorgang im Tageszähler; text sagt, welches Limit
+// erreicht ist (resource_exhausted).
+func (d *dienste) verbrauche(ctx context.Context, art, id string, max int, text string) error {
+	err := d.k.Kontingente.Verbrauche(ctx, art, id, d.k.Jetzt(), max)
+	if errors.Is(err, kontingent.ErrErschoepft) {
+		slog.WarnContext(ctx, "Tageslimit erreicht", "art", art)
+		return connect.NewError(connect.CodeResourceExhausted, errors.New(text))
+	}
+	if err != nil {
+		return speicherFehler(ctx, err)
+	}
+	return nil
+}
 
 var _ avlreminderv1connect.DatensicherungDienstHandler = (*dienste)(nil)
 
@@ -83,13 +111,8 @@ func (d *dienste) SicherungSpeichern(ctx context.Context, req *connect.Request[v
 	if len(chiffrat) > datensicherung.MaxChiffrat {
 		return nil, connect.NewError(connect.CodeResourceExhausted, errors.New("Sicherung größer als 8 MiB"))
 	}
-	err = d.k.Kontingente.Verbrauche(ctx, kontingentSicherung, id.KontoID, d.k.Jetzt(), SicherungenJeTag)
-	if errors.Is(err, kontingent.ErrErschoepft) {
-		slog.WarnContext(ctx, "Tageslimit für Sicherungen erreicht", "geraet", id.GeraetID)
-		return nil, connect.NewError(connect.CodeResourceExhausted, errors.New("Tageslimit für Sicherungen erreicht – morgen wieder"))
-	}
-	if err != nil {
-		return nil, speicherFehler(ctx, err)
+	if err := d.verbrauche(ctx, kontingentSicherung, id.KontoID, SicherungenJeTag, "Tageslimit für Sicherungen erreicht – morgen wieder"); err != nil {
+		return nil, err
 	}
 	version, err := d.k.Sicherungen.Speichern(ctx, id.KontoID, chiffrat, erwartet)
 	if errors.Is(err, datensicherung.ErrVersionVeraltet) {
@@ -104,9 +127,15 @@ func (d *dienste) SicherungSpeichern(ctx context.Context, req *connect.Request[v
 }
 
 // SicherungHolen liefert die neueste Fassung der Sicherung des eigenen Kontos.
+//
+// KRITISCH: Gezählt wird vor dem Holen, auch wenn es keine Sicherung gibt:
+// Erst das Zählen begrenzt die ausgehenden Daten.
 func (d *dienste) SicherungHolen(ctx context.Context, _ *connect.Request[v1.SicherungHolenRequest]) (*connect.Response[v1.SicherungHolenResponse], error) {
 	id, err := identitaet(ctx)
 	if err != nil {
+		return nil, err
+	}
+	if err := d.verbrauche(ctx, kontingentAbruf, id.KontoID, AbrufeJeTag, "Tageslimit für Abrufe der Sicherung erreicht – morgen wieder"); err != nil {
 		return nil, err
 	}
 	f, err := d.k.Sicherungen.Holen(ctx, id.KontoID)
@@ -123,13 +152,17 @@ func (d *dienste) SicherungHolen(ctx context.Context, _ *connect.Request[v1.Sich
 // SicherungLoeschen löscht die Sicherung des eigenen Kontos mit allen älteren
 // Fassungen.
 //
-// KRITISCH: Nur ein freigeschaltetes Gerät (E-B2b-13).
+// KRITISCH: Nur ein freigeschaltetes Gerät (E-B2b-13). Erst prüfen, dann
+// zählen: Eine Ablehnung verbraucht nichts vom Tageslimit.
 func (d *dienste) SicherungLoeschen(ctx context.Context, _ *connect.Request[v1.SicherungLoeschenRequest]) (*connect.Response[v1.SicherungLoeschenResponse], error) {
 	id, err := identitaet(ctx)
 	if err != nil {
 		return nil, err
 	}
 	if err := d.nurFreigeschaltetesGeraet(ctx, id); err != nil {
+		return nil, err
+	}
+	if err := d.verbrauche(ctx, kontingentLoeschen, id.KontoID, LoeschungenJeTag, "Tageslimit für das Löschen der Sicherung erreicht – morgen wieder"); err != nil {
 		return nil, err
 	}
 	if err := d.k.Sicherungen.Loeschen(ctx, id.KontoID); err != nil {
