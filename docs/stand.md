@@ -56,8 +56,9 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
   Ebenso kostet Speicher (Bucket der Datensicherungen) nach der Sperre weiter, bis
   zum Trennen; die Lebenszyklusregeln greifen erst verzögert. Das Hochladen
   begrenzt der Server auf 48 Sicherungen je Konto und Tag
-  ([b2b-entwurf.md](b2b-entwurf.md), E-B2b-12); Holen ist nicht begrenzt
-  (Ausgang kostet), nur durch höchstens 4 gleichzeitige Aufrufe.
+  ([b2b-entwurf.md](b2b-entwurf.md), E-B2b-12); Holen auf 50 und Löschen auf 20
+  je Konto und Tag (seit 2026-11-06), dazu höchstens 4 gleichzeitige Aufrufe und
+  der Egress-Alarm (1 GiB in 23 Stunden).
 - **Bekannte Grenze (Absenz-Alarm):** schlägt erst an, nachdem der Kill-Switch
   einmal aufgerufen wurde. Nach einem Neuaufbau einmal eine Meldung unter der
   Schwelle schicken (`gcloud pubsub topics publish budget-meldungen
@@ -77,10 +78,14 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
   Rechte auf Dienste vergeben, auch sich selbst (z. B. `run.admin`, dann könnte
   er Dienste löschen). Ein fremdes Image starten kann er auch so nicht (kein
   actAs); die Dienste prüfen die Anmeldung ohnehin selbst.
-  **Noch nicht in der Cloud getestet** (Stand Review-Lauf 8): Der Test vom
-  2026-11-01 galt dem alten Weg über den Ingress. Vor echten Daten einmal mit
-  einem Testdienst durchspielen (Meldung 21/20, `allUsers` weg, andere Bindungen
-  bleiben, Mail kommt; danach Testdienst löschen).
+  **In der Cloud getestet** am 2026-11-06 (Meldung 21/20, Testdienst `kstest`
+  mit Zusatzbindung): `allUsers` an `kstest` und `server` nach ca. 10 s entfernt,
+  die anderen Bindungen (`deploy` an beiden) blieben, `killswitch` selbst nicht
+  gesperrt, Log-WARNING „2 gefunden, 2 gesperrt“, nicht getrennt, Mail kam an.
+  `kstest` antwortete sofort mit 403, `server` erst nach ca. 2 Minuten
+  (IAM-Verzögerung). `tofu plan` brach danach wie gewollt ab; mit
+  `-var=gesperrte_dienste_oeffnen=true` kam nur die Bindung `allUsers` zurück,
+  danach `tofu plan` ohne Änderungen und Testclient-Aufrufe wieder möglich.
 - **Löschschutz** (seit 2026-11-05, vor echten Daten): Firestore, der Dienst
   `server` und der Bucket der Datensicherungen lassen sich nicht mit `tofu destroy`
   löschen. In GCP selbst schützt nur Firestore (`delete_protection_state`): Den
