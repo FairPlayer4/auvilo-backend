@@ -312,6 +312,34 @@ run "alarm_bei_stillem_kill_switch" {
   }
 }
 
+# Sendet der Server ungewöhnlich viel (viele Konten holen Sicherungen), kommt
+# eine Mail, bevor das Budget sich meldet (Review-Lauf 8, Frage 3).
+run "alarm_bei_viel_ausgehendem_verkehr" {
+  command = plan
+
+  assert {
+    condition     = strcontains(google_monitoring_alert_policy.egress.conditions[0].condition_threshold[0].filter, "sent_bytes_count")
+    error_message = "Der Egress-Alarm beobachtet nicht die gesendeten Bytes."
+  }
+  assert {
+    condition     = strcontains(google_monitoring_alert_policy.egress.conditions[0].condition_threshold[0].filter, "resource.labels.service_name=\"server\"")
+    error_message = "Der Egress-Alarm beobachtet nicht den Server."
+  }
+  assert {
+    # Ein Filter auf kind="internet" könnte Antworten über Googles Frontend übersehen.
+    condition     = !strcontains(google_monitoring_alert_policy.egress.conditions[0].condition_threshold[0].filter, "metric.labels.kind")
+    error_message = "Der Egress-Alarm zählt nicht alle gesendeten Bytes."
+  }
+  assert {
+    condition     = google_monitoring_alert_policy.egress.conditions[0].condition_threshold[0].aggregations[0].cross_series_reducer == "REDUCE_SUM"
+    error_message = "Ohne Summe über Revisionen verteilt sich der Verkehr auf mehrere Zeitreihen."
+  }
+  assert {
+    condition     = google_monitoring_alert_policy.egress.conditions[0].condition_threshold[0].threshold_value <= 1073741824
+    error_message = "Die Schwelle des Egress-Alarms liegt über 1 GiB."
+  }
+}
+
 # Pfeffer: Ohne ihn findet kein Gerät sein Konto, sein Schlüssel-Backup und seine
 # Datensicherung wieder. prevent_destroy prüft OpenTofu selbst; hier nur, was
 # außerhalb von OpenTofu schützt.

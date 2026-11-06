@@ -173,5 +173,5 @@ Erledigt am 2026-11-05: Sperren ohne actAs (Kill-Switch entfernt `allUsers`, Mod
   von freigeschalteten Geräten; erstes Backup eines nicht freigeschalteten Geräts nur,
   wenn das Konto kein freigeschaltetes, ungesperrtes Gerät hat; Holen 50, Löschen 20,
   Sitzungen 200 je Gerät und Tag; Interceptor prüft „gesperrt“, Sperren löscht in
-  Stapeln; höchstens 10 offene Geräte je Konto. Egress-Alarm erst nach Kevins Go
-  (Kosten). Nicht erneut als Frage stellen.
+  Stapeln; höchstens 10 offene Geräte je Konto. Egress-Alarm (1 GiB in 23 h) nach
+  Kevins Go in `infra/alarm.tf`. Nicht erneut als Frage stellen.

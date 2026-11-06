@@ -218,8 +218,10 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
    Tageslimits für Holen (50) und Löschen (20) der Sicherung und für Sitzungen
    (200 je Gerät); Interceptor prüft „gesperrt“, Sperren löscht Sitzungen in
    Stapeln; höchstens 10 offene Geräte je Konto. Server, Schnittstelle (nur
-   Kommentare), Adapter und Test-Client. Deploy über PR nach `main`; ein
-   Egress-Alarm erst nach Kevins Go.
+   Kommentare), Adapter und Test-Client. Deploy über PR nach `main`.
+   Egress-Alarm (`infra/alarm.tf`: Mail, wenn der Server in 23 Stunden mehr als
+   1 GiB sendet, ca. 0,40 $/Monat) am 2026-11-06 geschrieben, noch nicht
+   angewendet; der Plan baut dabei auch den Kill-Switch mit den Fixes aus Lauf 8 neu.
    **Weiter mit:** die Schritte, die nur Kevin macht
    (b2b-entwurf.md, „Vor echten Daten“, Punkte 1–3 und 6); Schritt 7 (App-Einbindung, eigener Entwurf im App-Repo). Offen aus
    Lauf 5: Empfehlungen E5–E7; aus Lauf 6: E1–E6.

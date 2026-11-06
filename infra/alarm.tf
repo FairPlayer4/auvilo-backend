@@ -116,3 +116,73 @@ resource "google_monitoring_alert_policy" "killswitch_still" {
 
   notification_channels = [google_monitoring_notification_channel.email.id]
 }
+
+# Alarm bei ungewöhnlich viel ausgehendem Datenverkehr des Servers (Entscheidung
+# nach Review-Lauf 8, Frage 3).
+#
+# Die Tageslimits gelten je Konto (Sicherung holen höchstens 50 × 8 MiB, also
+# etwa 400 MiB am Tag). Wer viele Google-Konten anlegt, vervielfacht das; das
+# Budget meldet sich erst bei 25 % (5 €). Diese Regel meldet sich früher: wenn
+# der Server in 23 Stunden mehr als 1 GiB sendet. Im Normalbetrieb sind es
+# wenige MiB (Sitzungen, gelegentlich eine Sicherung beim Einrichten).
+#
+# Gezählt wird alles, was der Server sendet (Metrik sent_bytes_count, alle Werte
+# des Labels kind): Antworten an Apps, aber auch Uploads nach Cloud Storage. Das
+# ist vorsichtig – lieber eine Mail zu viel. Antworten über Googles Frontend
+# könnten als kind="google" statt "internet" gezählt werden; ein Filter auf
+# "internet" könnte sie deshalb übersehen.
+#
+# Fenster 23 Stunden: Google empfiehlt höchstens 24 Stunden minus die
+# Verzögerung der Metrik (bis 120 s). Ein gleitendes Fenster fängt sowohl einen
+# schnellen Abfluss (Alarm nach wenigen Minuten) als auch einen langsamen.
+#
+# Kosten: eine Bedingung mit einer Zeitreihe, laut Preisbeispielen von Google
+# ca. 0,35 $ je Bedingung plus ca. 0,04 $ für die abgefragten Punkte im Monat.
+resource "google_monitoring_alert_policy" "egress" {
+  display_name = "Server sendet ungewöhnlich viele Daten"
+  combiner     = "OR"
+
+  conditions {
+    display_name = "Mehr als 1 GiB gesendet in 23 Stunden"
+    condition_threshold {
+      filter = join(" AND ", [
+        "metric.type=\"run.googleapis.com/container/network/sent_bytes_count\"",
+        "resource.type=\"cloud_run_revision\"",
+        "resource.labels.service_name=\"${google_cloud_run_v2_service.server.name}\"",
+      ])
+      comparison      = "COMPARISON_GT"
+      threshold_value = 1073741824 # 1 GiB in Bytes
+      duration        = "0s"
+
+      # Summe über alle Revisionen und Werte von kind: Jeder Deploy beginnt eine
+      # neue Zeitreihe; ohne Summe verteilte sich der Verkehr auf mehrere.
+      aggregations {
+        alignment_period     = "82800s"
+        per_series_aligner   = "ALIGN_SUM"
+        cross_series_reducer = "REDUCE_SUM"
+        group_by_fields      = ["resource.label.service_name"]
+      }
+
+      trigger {
+        count = 1
+      }
+    }
+  }
+
+  alert_strategy {
+    auto_close = "86400s"
+  }
+
+  documentation {
+    mime_type = "text/markdown"
+    content   = <<-EOT
+      Der Server hat in 23 Stunden mehr als 1 GiB gesendet. Normal sind wenige MiB.
+
+      - Wer holt? Logs „Sicherung geholt“ je Gerät: `gcloud logging read 'resource.labels.service_name="server" AND jsonPayload.message="Sicherung geholt"' --bucket=logs-eu --location=${var.region} --view=_AllLogs --limit=50`
+      - Viele neue Konten oder Geräte? Logs „Gerät angemeldet“ mit `neues_konto=true`.
+      - Notfalls den Dienst sperren wie der Kill-Switch (`allUsers` entfernen) und die Ursache klären.
+    EOT
+  }
+
+  notification_channels = [google_monitoring_notification_channel.email.id]
+}
