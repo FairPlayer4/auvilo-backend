@@ -1,6 +1,6 @@
 # Stand und nächste Schritte
 
-Stand: 2026-11-05. Bei jedem größeren Schritt aktualisieren.
+Stand: 2026-11-06. Bei jedem größeren Schritt aktualisieren.
 
 ## In GCP (Projekt `avlreminder-exp-1ef2`, Region `europe-west1`)
 Etappe **B0** ist angelegt (OpenTofu, `infra/`):
@@ -74,10 +74,19 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
   (`allUsers` entfernen) und darf nur Dienste auflisten und deren Richtlinie
   lesen und setzen. Er kann keinen Dienst ändern und kein Image starten.
   **Grenze:** Kompromittierter Code im Kill-Switch könnte Dienste sperren oder
-  Aufrufrechte vergeben; die Dienste prüfen die Anmeldung ohnehin selbst.
+  Rechte auf Dienste vergeben, auch sich selbst (z. B. `run.admin`, dann könnte
+  er Dienste löschen). Ein fremdes Image starten kann er auch so nicht (kein
+  actAs); die Dienste prüfen die Anmeldung ohnehin selbst.
+  **Noch nicht in der Cloud getestet** (Stand Review-Lauf 8): Der Test vom
+  2026-11-01 galt dem alten Weg über den Ingress. Vor echten Daten einmal mit
+  einem Testdienst durchspielen (Meldung 21/20, `allUsers` weg, andere Bindungen
+  bleiben, Mail kommt; danach Testdienst löschen).
 - **Löschschutz** (seit 2026-11-05, vor echten Daten): Firestore, der Dienst
-  `server` und der Bucket der Datensicherungen lassen sich weder mit `tofu destroy`
-  noch aus Versehen löschen. Das Projekt zu löschen geht weiterhin (Q7).
+  `server` und der Bucket der Datensicherungen lassen sich nicht mit `tofu destroy`
+  löschen. In GCP selbst schützt nur Firestore (`delete_protection_state`): Den
+  Dienst (ohne Daten) und den Bucket (mit den Sicherungen, ohne Soft Delete, also
+  endgültig) kann ein Owner in der Konsole oder mit `gcloud` weiter löschen. Das
+  Projekt zu löschen geht weiterhin (Q7).
 - Go-Tests: Entscheidung, Ausführung, Verarbeitung und Sperr-Logik (`sperren.go`)
   sind getestet. `gcp.go` enthält nur noch die Cloud-Aufrufe und wird durch den
   Test in der Cloud geprüft.
@@ -203,6 +212,16 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
    Testvektoren, Adapter, Test-Client (`freischalten <id>`, Anzeige in `geraete`).
    Deploy über PR nach `main`. Alte Testgeräte sind danach nicht freigeschaltet:
    mit neuem Gerätenamen anmelden.
+   **Fragen 1–5 aus Review-Lauf 8** am 2026-11-06 entschieden und lokal umgesetzt
+   (anforderungen.md Kap. 11): Diagnosen nur von freigeschalteten Geräten; erstes
+   Backup eines nicht freigeschalteten Geräts nur ohne vertrautes Gerät im Konto;
+   Tageslimits für Holen (50) und Löschen (20) der Sicherung und für Sitzungen
+   (200 je Gerät); Interceptor prüft „gesperrt“, Sperren löscht Sitzungen in
+   Stapeln; höchstens 10 offene Geräte je Konto. Server, Schnittstelle (nur
+   Kommentare), Adapter und Test-Client. Deploy über PR nach `main`.
+   Egress-Alarm (`infra/alarm.tf`: Mail, wenn der Server in 23 Stunden mehr als
+   1 GiB sendet, ca. 0,40 $/Monat) am 2026-11-06 angewendet (2 neu, 1 geändert,
+   1 entfernt); dabei wurde auch der Kill-Switch mit den Fixes aus Lauf 8 neu gebaut.
    **Weiter mit:** die Schritte, die nur Kevin macht
    (b2b-entwurf.md, „Vor echten Daten“, Punkte 1–3 und 6); Schritt 7 (App-Einbindung, eigener Entwurf im App-Repo). Offen aus
    Lauf 5: Empfehlungen E5–E7; aus Lauf 6: E1–E6.
@@ -257,6 +276,14 @@ Variable bricht `tofu plan` mit „gesperrt“ ab):
 
 ```bash
 tofu -chdir=infra apply -var=gesperrte_dienste_oeffnen=true
+```
+
+Die Variable öffnet **alle** gesperrten Dienste. Soll während der Sperre etwas
+anderes geändert werden und der Dienst zu bleiben, nur die betroffenen
+Ressourcen anwenden, z. B.:
+
+```bash
+tofu -chdir=infra apply -target=google_cloud_run_v2_service.server
 ```
 
 Logs lesen (liegen im EU-Bucket, nicht im Standard-Bucket):

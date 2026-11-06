@@ -51,7 +51,7 @@ oder das Projekt vom Rechnungskonto trennen. Deshalb gilt für die App:
 | E-B2b-8 | Schnittstelle | Neuer Dienst `DatensicherungDienst` mit `Speichern(chiffrat, erwartete_version)`, `Holen()`, `Loeschen()`. `Holen` liefert die neueste Fassung; ältere Fassungen holt **nur ein späterer Aufruf**, wenn er gebraucht wird. | Löschen gehört von Anfang an dazu (DSGVO, Art. 17), auch vor „Konto löschen“ in B4. Eigener Dienst und eigene Speicher-Schnittstelle statt einer Erweiterung von `SchluesselDienst`: Das ist der erste Schritt von A5. |
 | E-B2b-9 | Formate festschreiben (A3, aus B3 vorgezogen) | `docs/formate.md` beschreibt **maßgeblich** Schlüssel-Backup und Datensicherung: Felder, Verfahren, zugehörige Daten, Formatversion. Dazu **feste Testvektoren**: einmal erzeugte Chiffrate mit Wegwerf-Schlüsseln; Tests prüfen, dass sie sich weiter entschlüsseln lassen. | Sobald echte Daten im Format v1 liegen, muss jede künftige App-Version sie lesen können. Ein Test, der nur verschlüsselt und gleich wieder entschlüsselt, merkt eine Formatänderung nicht; ein festes Chiffrat schon. |
 | E-B2b-10 | Vorbereitung für die App | (a) **Gradle-Prüfsummen** (`verification-metadata.xml`) in `client/`. (b) Neues Modul **`verbindung`**: Connect-Clients, Sitzung, Adapter für `BackupAblage` und die Datensicherung, ohne CLI und ohne Dateiablage. `testclient` nutzt es. (c) Einbindung später per **Gradle Composite Build** (`includeBuild`) aus dem App-Repo. | (a) war für „vor der App“ entschieden. (b) Die App braucht dieselbe Anbindung; OkHttp und connect-kotlin laufen auf Android. (c) Beide Repos liegen nebeneinander; so braucht es keine veröffentlichten Pakete und keine Versionspflege. |
-| E-B2b-12 | Upload-Limit (2026-11-05) | Höchstens **48 Sicherungen je Konto und Tag** (UTC); danach `resource_exhausted` bis Mitternacht UTC. Gezählt wird nach den Prüfungen (leer, zu groß) und vor dem Speichern, also auch ein Konflikt. Holen und Löschen sind frei. Derselbe Tageszähler wie beim Diagnose-Log (`kontingent`, Firestore mit TTL), eigene Art `sicherung`. Die App meldet „Tageslimit“, nicht „zu groß“ (`SicherungTageslimit`; unterschieden an der gesendeten Größe). | Stündlich und nur bei Änderung sind höchstens 24; die andere Hälfte deckt Sicherungen von Hand und zweite Versuche nach Konflikten. Eine App, die in einer Schleife sichert, lädt so höchstens 48 × 8 MiB am Tag hoch (Eingang kostenlos, Schreibvorgänge Bruchteile eines Cents) und verdrängt von den 200 älteren Fassungen höchstens 48: Die Rückfallebene der letzten Tage bleibt. Mehr Schutz (z. B. je Stunde) braucht es erst, wenn das nicht reicht. |
+| E-B2b-12 | Upload-Limit (2026-11-05) | Höchstens **48 Sicherungen je Konto und Tag** (UTC); danach `resource_exhausted` bis Mitternacht UTC. Gezählt wird nach den Prüfungen (leer, zu groß) und vor dem Speichern, also auch ein Konflikt. Holen höchstens 50-mal, Löschen höchstens 20-mal am Tag (2026-11-06, nach Review-Lauf 8; eigene Arten `sicherung_holen`, `sicherung_loeschen`). Derselbe Tageszähler wie beim Diagnose-Log (`kontingent`, Firestore mit TTL), eigene Art `sicherung`. Die App meldet „Tageslimit“, nicht „zu groß“ (`SicherungTageslimit`; unterschieden an der gesendeten Größe). | Stündlich und nur bei Änderung sind höchstens 24; die andere Hälfte deckt Sicherungen von Hand und zweite Versuche nach Konflikten. Eine App, die in einer Schleife sichert, lädt so höchstens 48 × 8 MiB am Tag hoch (Eingang kostenlos, Schreibvorgänge Bruchteile eines Cents) und verdrängt von den 200 älteren Fassungen höchstens 48: Die Rückfallebene der letzten Tage bleibt. Mehr Schutz (z. B. je Stunde) braucht es erst, wenn das nicht reicht. |
 | E-B2b-11 | Wer darf das testen? | Nur Kevin und wenige Bekannte über den **internen Test-Track**, in einer eigenen App-Variante. Eine kurze Testerinformation reicht vorerst; die Datenschutzerklärung bleibt in B6. | Die Daten sind Ende-zu-Ende verschlüsselt; der Server sieht nur Chiffrat, Größe und Zeitpunkt. Konten kann zwar jedes Google-Konto anlegen, aber ohne die App-Variante nutzt das niemand. Größenlimit, ältere Fassungen begrenzt und Kill-Switch halten die Kosten bei Missbrauch klein; Play Integrity kommt in B6. |
 
 ## Abläufe
@@ -190,10 +190,16 @@ alles: andere Geräte sperren, Backup und Datensicherung löschen oder überschr
   behalten ihr Merkmal beim erneuten Anmelden.
 - Ein **nicht freigeschaltetes** Gerät darf nur: Sitzung erneuern, Geräte auflisten,
   sich selbst sperren (abmelden), Schlüssel-Backup und Datensicherung **holen**, das
-  Schlüssel-Backup anlegen, wenn es noch keins gibt (E-B2-5), und sich freischalten.
+  Schlüssel-Backup anlegen, wenn es noch keins gibt (E-B2-5) und das Konto kein
+  freigeschaltetes, ungesperrtes Gerät hat (2026-11-06), und sich freischalten.
   Alles andere (andere Geräte sperren oder freischalten, Backup überschreiben oder
-  löschen, Sicherung speichern oder löschen) lehnt der Server mit
-  `permission_denied` ab. Holen ist harmlos: Es sind Chiffrate.
+  löschen, Sicherung speichern oder löschen, Diagnosen senden) lehnt der Server
+  mit `permission_denied` ab. Holen ist harmlos: Es sind Chiffrate.
+- **Grenzen gegen Missbrauch** (2026-11-06, nach Review-Lauf 8): höchstens 10 nicht
+  freigeschaltete, ungesperrte Geräte je Konto (sonst `resource_exhausted` beim
+  Anmelden) und höchstens 200 Sitzungen je Gerät und Tag. Gesperrt wirkt sofort:
+  Der Interceptor liest bei jedem Aufruf das Gerät; `GeraetSperren` setzt erst das
+  Merkmal und löscht danach die Sitzungen in Stapeln.
 - **Freischalten auf zwei Wegen:**
   1. Ein freigeschaltetes Gerät bestätigt das neue (`GeraetFreischalten(Geräte-ID)`).
      Dafür braucht es noch keinen QR: Der Server muss nur wissen, dass ein
@@ -237,15 +243,25 @@ dem Deploy dieses Schritts erledigen oder die Testgeräte einmal freischalten.
 - **Gestohlenes Gerät mit Google-Login** kann sich nach dem Sperren neu anmelden,
   ist dann aber nicht freigeschaltet (E-B2b-13): Es kann Chiffrate holen, aber nichts
   sperren, überschreiben oder löschen.
-- **Erstes Backup schaltet frei.** Hat das Konto noch kein Schlüssel-Backup, darf
-  auch ein nicht freigeschaltetes Gerät das erste anlegen (E-B2-5), mit seinem
-  eigenen Freischaltschlüssel, und sich damit freischalten. Deshalb lädt die
-  Einrichtung das Backup sofort auf dem ersten Gerät hoch; die Lücke besteht nur
-  zwischen Anmelden und Hochladen oder wenn das Backup gelöscht wurde.
+- **Erstes Backup ohne vertrautes Gerät.** Hat das Konto noch kein Schlüssel-Backup
+  und kein freigeschaltetes, ungesperrtes Gerät, darf auch ein nicht
+  freigeschaltetes Gerät das erste anlegen (E-B2-5), mit seinem eigenen
+  Freischaltschlüssel, und sich damit freischalten. Gibt es ein vertrautes Gerät,
+  lehnt der Server ab (seit 2026-11-06; vorher war das eine Lücke zwischen
+  Anmelden und Hochladen). Die Einrichtung lädt das Backup trotzdem sofort auf dem
+  ersten Gerät hoch: Sperrt der Mensch sein einziges Gerät, bevor es ein Backup
+  gibt, ist das Konto wieder ungeschützt.
+- **Prüfen und Ausführen sind zwei Schritte.** Der Server liest die Freischaltung
+  des anfragenden Geräts vor dem Aufruf, nicht in derselben Transaktion. Sperrt
+  ein Gerät ein anderes, kann eine Anfrage, die das gesperrte Gerät im selben
+  Moment (Millisekunden) gestellt hat, noch ausgeführt werden. Dasselbe gilt für
+  die Sitzung (Interceptor).
 - **Zwei neue Geräte gleichzeitig.** Melden sich zwei Geräte eines Kontos ohne
   freigeschaltetes Gerät im selben Moment an, kann Firestore beide freischalten
   (die Abfrage der Geräte ist kein Teil der Sperre der Transaktion). Ohne vertrautes
   Gerät gibt es dann ohnehin nichts zu schützen.
+  Aus demselben Grund kann die Grenze von 10 nicht freigeschalteten Geräten bei
+  gleichzeitigen Anmeldungen um wenige überschritten werden.
 - **Testgeräte von vor E-B2b-13** sind in Firestore nicht freigeschaltet (das Feld
   fehlt). Mit einem neuen Gerätenamen anmelden oder sie werden vor echten Daten
   ohnehin gelöscht (Punkt 1).

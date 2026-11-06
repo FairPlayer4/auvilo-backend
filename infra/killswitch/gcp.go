@@ -65,11 +65,15 @@ func (p *gcpPlattform) Dienste(ctx context.Context) ([]Dienst, error) {
 		if err != nil {
 			return nil, err
 		}
+		// KRITISCH: Ist die Richtlinie eines Dienstes gerade nicht lesbar, gilt
+		// er als offen. Sperre liest sie noch einmal und meldet den Fehler, falls
+		// es wieder scheitert; die anderen Dienste werden trotzdem gesperrt.
 		pol, err := p.richtlinie(ctx, d.Name)
-		if err != nil {
-			return nil, fmt.Errorf("%s: Richtlinie lesen: %w", d.Name, err)
-		}
-		dienste = append(dienste, Dienst{Name: d.Name, Gesperrt: !istOeffentlich(pol)})
+		dienste = append(dienste, Dienst{
+			Name:               d.Name,
+			Gesperrt:           err == nil && !istOeffentlich(pol),
+			OhneAufrufpruefung: d.GetInvokerIamDisabled(),
+		})
 	}
 }
 
@@ -87,17 +91,19 @@ func (p *gcpPlattform) richtlinie(ctx context.Context, name string) (*iampb.Poli
 // zurückgeschrieben: Hat sie inzwischen jemand anders geändert, lehnt die API
 // ab, statt dessen Änderung zu überschreiben (Fehler im Log, nächste
 // Budget-Meldung versucht es wieder). Braucht kein actAs (siehe ohneOeffentlich).
-func (p *gcpPlattform) Sperre(ctx context.Context, name string) error {
+func (p *gcpPlattform) Sperre(ctx context.Context, name string) (bool, error) {
 	pol, err := p.richtlinie(ctx, name)
 	if err != nil {
-		return err
+		return false, fmt.Errorf("Richtlinie lesen: %w", err)
 	}
 	if !ohneOeffentlich(pol) {
-		return nil // inzwischen schon gesperrt
+		return false, nil // inzwischen schon gesperrt
 	}
 	pol.Version = 3
-	_, err = p.run.SetIamPolicy(ctx, &iampb.SetIamPolicyRequest{Resource: name, Policy: pol})
-	return err
+	if _, err := p.run.SetIamPolicy(ctx, &iampb.SetIamPolicyRequest{Resource: name, Policy: pol}); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // AbrechnungTrennen trennt das Projekt vom Rechnungskonto (leerer Kontoname).

@@ -60,6 +60,9 @@ func nichtFreigeschaltet() error {
 // KRITISCH:
 //   - Nur freigeschaltete Konten (E-D-3): Diagnosen sind unverschlüsselt; es
 //     sollen keine von Personen entstehen, die nicht eingewilligt haben.
+//   - Nur freigeschaltete Geräte (E-B2b-13, Entscheidung nach Review-Lauf 8):
+//     Claude liest Diagnosen. Ein fremdes Gerät mit dem Google-Login des
+//     Testers soll keinen Text dorthin bringen.
 //   - Die Konto-ID kommt aus der Sitzung, nie aus der Anfrage.
 //   - Erst alle Prüfungen, dann zählen, dann ablegen: Eine abgelehnte Sendung
 //     verbraucht nichts vom Tageslimit.
@@ -72,6 +75,9 @@ func (d *dienste) DiagnoseSenden(ctx context.Context, req *connect.Request[v1.Di
 	if !d.k.DiagnoseErlaubt(id.KontoID) {
 		slog.WarnContext(ctx, "Diagnose von nicht freigeschaltetem Konto", "geraet", id.GeraetID)
 		return nil, nichtFreigeschaltet()
+	}
+	if err := d.nurFreigeschaltetesGeraet(ctx, id); err != nil {
+		return nil, err
 	}
 	nutzlast := req.Msg.GetNutzlast()
 	if len(nutzlast) > diagnose.MaxNutzlast {

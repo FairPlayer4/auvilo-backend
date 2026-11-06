@@ -13,7 +13,9 @@ option java_package = "com.avlreminder.schnittstelle.v1";
 //
 // Jedes Konto darf höchstens 48-mal am Tag (UTC) speichern. Gezählt wird jede
 // Anfrage, die die Prüfungen von Größe und Inhalt besteht, auch ein Konflikt
-// (failed_precondition); Holen und Löschen sind nicht begrenzt.
+// (failed_precondition). Holen höchstens 50-mal, Löschen höchstens 20-mal am
+// Tag, gezählt vor dem Holen (auch ohne Sicherung) bzw. nach der Prüfung der
+// Freischaltung.
 //
 // Der Server kann die Sicherung nicht lesen: Sie ist mit dem Tresorschlüssel
 // verschlüsselt (Format: proto/avlreminder/inhalt/v1/datensicherung.proto,
@@ -31,6 +33,7 @@ option java_package = "com.avlreminder.schnittstelle.v1";
 //   resource_exhausted  SicherungSpeichern: Sicherung größer als 8 MiB ("zu
 //                       groß") oder Tageslimit erreicht ("morgen wieder"). Wer
 //                       höchstens 8 MiB gesendet hat, weiß: Es ist das Limit.
+//                       SicherungHolen, SicherungLoeschen: Tageslimit erreicht.
 //   unavailable         vorübergehend (auch: gerade zu viele Sicherungen
 //                       gleichzeitig); später wiederholen.
 //   internal            Fehler im Server.

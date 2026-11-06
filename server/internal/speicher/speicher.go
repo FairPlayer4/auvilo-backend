@@ -25,7 +25,19 @@ var (
 	// ErrVersionVeraltet: Das Backup wurde inzwischen von einem anderen Gerät
 	// geändert (die erwartete Version stimmt nicht).
 	ErrVersionVeraltet = errors.New("Backup-Version passt nicht")
+	// ErrZuVieleGeraete: Das Konto hat schon MaxOffeneGeraete neue Geräte, die
+	// weder freigeschaltet noch gesperrt sind.
+	ErrZuVieleGeraete = errors.New("zu viele nicht freigeschaltete Geräte")
+	// ErrKontoGeschuetzt: Ein nicht freigeschaltetes Gerät will das erste
+	// Backup anlegen, aber das Konto hat ein freigeschaltetes, ungesperrtes Gerät.
+	ErrKontoGeschuetzt = errors.New("Konto hat ein freigeschaltetes Gerät")
 )
+
+// MaxOffeneGeraete ist die Zahl neuer Geräte, die ein Konto höchstens hat,
+// ohne dass eins davon freigeschaltet oder gesperrt ist (Entscheidung nach
+// Review-Lauf 8). Wer nur den Google-Login hat, kann sonst beliebig viele
+// Geräte anlegen; die Liste der App liefe voll, und jedes Anmelden liest alle.
+const MaxOffeneGeraete = 10
 
 // Geraet ist ein angemeldetes Gerät.
 type Geraet struct {
@@ -91,6 +103,11 @@ type Speicher interface {
 	// mit Freischaltschlüssel – wenn es also nichts zu schützen gibt. Wer nur
 	// den Google-Login hat, bekommt sonst ein Gerät, das nichts ändern darf.
 	// Ein vorhandenes Gerät behält sein Merkmal.
+	//
+	// KRITISCH: Ein neues, nicht freigeschaltetes Gerät wird abgelehnt
+	// (ErrZuVieleGeraete), wenn das Konto schon MaxOffeneGeraete Geräte hat, die
+	// weder freigeschaltet noch gesperrt sind. Vorhandene Geräte melden sich
+	// immer an.
 	Anmelden(ctx context.Context, kennung string, geraet Geraet, sitzung NeueSitzung) (AnmeldeErgebnis, error)
 
 	// Geraet liefert ein Gerät oder ErrNichtGefunden.
@@ -110,10 +127,19 @@ type Speicher interface {
 	// Geraete liefert alle Geräte eines Kontos, sortiert nach Erstellung.
 	Geraete(ctx context.Context, kontoID string) ([]Geraet, error)
 
-	// GeraetSperren sperrt ein Gerät des Kontos und löscht seine Sitzungen.
+	// GeraetSperren sperrt ein Gerät des Kontos und löscht danach seine
+	// Sitzungen. Wiederholbar: Ein zweiter Aufruf löscht, was beim ersten
+	// übrig blieb.
 	//
 	// KRITISCH: Nur Geräte des angegebenen Kontos. Ein fremdes Gerät meldet
 	// ErrNichtGefunden – so verrät der Server nicht, ob es die ID gibt.
+	//
+	// KRITISCH: Das Sperren selbst ist ein kleiner Schritt (eine Transaktion
+	// über das Gerät); die Sitzungen werden danach in Stapeln gelöscht. Bei
+	// sehr vielen Sitzungen scheiterte eine einzige Transaktion, und das Gerät
+	// bliebe ungesperrt. Bis die Sitzungen weg sind, hält der Interceptor das
+	// Gerät draußen, weil er bei jeder Anfrage die Sperre liest. Scheitert das
+	// Löschen, ist das Gerät trotzdem gesperrt; der Fehler wird gemeldet.
 	GeraetSperren(ctx context.Context, kontoID, geraetID string, jetzt time.Time) error
 
 	// GeraetFreischalten schaltet ein Gerät des Kontos frei. Wiederholbar.
@@ -130,7 +156,14 @@ type Speicher interface {
 	// Sonst ErrVersionVeraltet und nichts ändert sich. So überschreibt ein Gerät
 	// nie unbemerkt ein Backup, das ein anderes Gerät inzwischen geändert hat.
 	// Der Freischaltschlüssel wird mit dem Backup gespeichert und ersetzt.
-	BackupSpeichern(ctx context.Context, kontoID string, chiffrat, freischaltschluessel []byte, erwartet int64, jetzt time.Time) (int64, error)
+	//
+	// KRITISCH: Mit nurUngeschuetzt (Aufruf eines nicht freigeschalteten
+	// Geräts) wird nur geschrieben, wenn das Konto kein freigeschaltetes,
+	// ungesperrtes Gerät hat – geprüft in derselben Transaktion. Sonst
+	// ErrKontoGeschuetzt. Wer nur den Google-Login hat, kann so kein erstes
+	// Backup mit eigenem Freischaltschlüssel anlegen und sich damit selbst
+	// freischalten.
+	BackupSpeichern(ctx context.Context, kontoID string, chiffrat, freischaltschluessel []byte, erwartet int64, nurUngeschuetzt bool, jetzt time.Time) (int64, error)
 
 	// BackupHolen liefert das Backup des Kontos oder ErrNichtGefunden.
 	BackupHolen(ctx context.Context, kontoID string) (Backup, error)
@@ -138,6 +171,42 @@ type Speicher interface {
 	// BackupLoeschen entfernt das Backup des Kontos samt Freischaltschlüssel. Gibt es keins, ist das
 	// kein Fehler. Danach beginnt ein neues Backup wieder mit Version 1.
 	BackupLoeschen(ctx context.Context, kontoID string) error
+}
+
+// Die Regeln zur Freischaltung als reine Funktionen: Beide Umsetzungen lesen
+// die Geräte des Kontos (und das Backup) in ihrer Transaktion und entscheiden
+// dann hier – so können sie nicht auseinanderlaufen.
+
+// gibtFreigeschaltetes: Hat das Konto ein freigeschaltetes, ungesperrtes Gerät?
+func gibtFreigeschaltetes(geraete []Geraet) bool {
+	for _, g := range geraete {
+		if g.Freigeschaltet && !g.Gesperrt {
+			return true
+		}
+	}
+	return false
+}
+
+// neuesGeraetFreigeschaltet wendet die Regeln aus Speicher.Anmelden auf ein
+// neues Gerät an. geraete sind die übrigen Geräte des Kontos.
+//
+// KRITISCH: Freigeschaltet nur, wenn es nichts zu schützen gibt (kein
+// freigeschaltetes, ungesperrtes Gerät, kein Backup mit Freischaltschlüssel).
+// Sonst höchstens MaxOffeneGeraete offene Geräte.
+func neuesGeraetFreigeschaltet(geraete []Geraet, backupMitSchluessel bool) (bool, error) {
+	if !gibtFreigeschaltetes(geraete) && !backupMitSchluessel {
+		return true, nil
+	}
+	offen := 0
+	for _, g := range geraete {
+		if !g.Freigeschaltet && !g.Gesperrt {
+			offen++
+		}
+	}
+	if offen >= MaxOffeneGeraete {
+		return false, ErrZuVieleGeraete
+	}
+	return false, nil
 }
 
 // neueKontoID erzeugt eine zufällige Konto-ID (128 Bit, hexadezimal).

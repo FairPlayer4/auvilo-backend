@@ -15,10 +15,12 @@ option java_package = "com.avlreminder.schnittstelle.v1";
 // (kein freigeschaltetes, ungesperrtes Gerät und kein Freischaltschlüssel am
 // Schlüssel-Backup). Ein nicht freigeschaltetes Gerät darf nur: Sitzung
 // erneuern, Geräte auflisten, sich selbst sperren, Schlüssel-Backup und
-// Datensicherung holen, das Schlüssel-Backup anlegen, wenn es keins gibt, sich
-// mit dem Wiederherstellungsschlüssel freischalten und Diagnosen senden. Alles
-// andere lehnt der Server mit permission_denied ab. Freigeschaltet bleibt ein
-// Gerät, bis es gesperrt wird.
+// Datensicherung holen, sich mit dem Wiederherstellungsschlüssel freischalten
+// und das Schlüssel-Backup anlegen, wenn es keins gibt und das Konto kein
+// freigeschaltetes, ungesperrtes Gerät hat. Alles andere (auch Diagnosen) lehnt
+// der Server mit permission_denied ab. Freigeschaltet bleibt ein Gerät, bis es
+// gesperrt wird. Ein Konto hat höchstens 10 nicht freigeschaltete, ungesperrte
+// Geräte; ein elftes lehnt Anmelden ab (anmeldung.proto).
 //
 // Fehlercodes (Connect):
 //   unauthenticated Sitzung fehlt, ist ungültig, abgelaufen oder gehört zu
@@ -37,8 +39,10 @@ option java_package = "com.avlreminder.schnittstelle.v1";
 service GeraeteDienst {
   rpc GeraeteAuflisten(GeraeteAuflistenRequest) returns (GeraeteAuflistenResponse);
 
-  // Sperrt ein eigenes Gerät sofort: Seine Sitzungen werden gelöscht, und es
-  // bekommt keine neue mehr. Das eigene Gerät zu sperren heißt abmelden.
+  // Sperrt ein eigenes Gerät sofort: Ab der Antwort lässt der Server keine
+  // seiner Sitzungen mehr durch, und es bekommt keine neue. Danach löscht er
+  // die Sitzungen; scheitert das, meldet er einen Fehler, und ein zweiter
+  // Aufruf räumt den Rest auf (das Gerät bleibt gesperrt). Das eigene Gerät zu sperren heißt abmelden.
   // Endgültig: Mit demselben Geräteschlüssel lehnt der Server auch Anmelden
   // ab (permission_denied). Wer sich wieder anmelden will, erzeugt einen
   // neuen Geräteschlüssel; es gibt kein Entsperren.

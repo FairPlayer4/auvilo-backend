@@ -7,14 +7,19 @@ import java.util.zip.GZIPOutputStream
 interface DiagnoseAblage {
     /**
      * Sendet eine gepackte Diagnose; wirft [DiagnoseNichtFreigeschaltet], wenn das
-     * Konto nicht senden darf, und [DiagnoseTageslimit], wenn der Server ablehnt,
+     * Konto oder Gerät nicht senden darf, und [DiagnoseTageslimit], wenn der Server ablehnt,
      * weil für heute genug gesendet wurde.
      */
     suspend fun senden(nutzlast: ByteArray)
 }
 
-/** Das Konto darf keine Diagnosen senden (docs/diagnose-entwurf.md, E-D-3). */
-class DiagnoseNichtFreigeschaltet : Exception("Dieses Konto ist für Diagnosen nicht freigeschaltet - nichts gesendet")
+/**
+ * Das Konto darf keine Diagnosen senden (docs/diagnose-entwurf.md, E-D-3), oder
+ * dieses Gerät ist noch nicht freigeschaltet (E-B2b-13). Der Server meldet beides
+ * mit demselben Code (diagnose.proto).
+ */
+class DiagnoseNichtFreigeschaltet :
+    Exception("Dieses Konto ist für Diagnosen oder dieses Gerät ist noch nicht freigeschaltet - nichts gesendet")
 
 /** Für heute ist das Limit erreicht (10 Sendungen je Konto und Tag, UTC; diagnose.proto). */
 class DiagnoseTageslimit : Exception("Tageslimit für Diagnosen erreicht - morgen wieder")

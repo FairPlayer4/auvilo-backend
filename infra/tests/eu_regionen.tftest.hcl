@@ -312,6 +312,34 @@ run "alarm_bei_stillem_kill_switch" {
   }
 }
 
+# Sendet der Server ungewöhnlich viel (viele Konten holen Sicherungen), kommt
+# eine Mail, bevor das Budget sich meldet (Review-Lauf 8, Frage 3).
+run "alarm_bei_viel_ausgehendem_verkehr" {
+  command = plan
+
+  assert {
+    condition     = strcontains(google_monitoring_alert_policy.egress.conditions[0].condition_threshold[0].filter, "sent_bytes_count")
+    error_message = "Der Egress-Alarm beobachtet nicht die gesendeten Bytes."
+  }
+  assert {
+    condition     = strcontains(google_monitoring_alert_policy.egress.conditions[0].condition_threshold[0].filter, "resource.labels.service_name=\"server\"")
+    error_message = "Der Egress-Alarm beobachtet nicht den Server."
+  }
+  assert {
+    # Ein Filter auf kind="internet" könnte Antworten über Googles Frontend übersehen.
+    condition     = !strcontains(google_monitoring_alert_policy.egress.conditions[0].condition_threshold[0].filter, "metric.labels.kind")
+    error_message = "Der Egress-Alarm zählt nicht alle gesendeten Bytes."
+  }
+  assert {
+    condition     = google_monitoring_alert_policy.egress.conditions[0].condition_threshold[0].aggregations[0].cross_series_reducer == "REDUCE_SUM"
+    error_message = "Ohne Summe über Revisionen verteilt sich der Verkehr auf mehrere Zeitreihen."
+  }
+  assert {
+    condition     = google_monitoring_alert_policy.egress.conditions[0].condition_threshold[0].threshold_value <= 1073741824
+    error_message = "Die Schwelle des Egress-Alarms liegt über 1 GiB."
+  }
+}
+
 # Pfeffer: Ohne ihn findet kein Gerät sein Konto, sein Schlüssel-Backup und seine
 # Datensicherung wieder. prevent_destroy prüft OpenTofu selbst; hier nur, was
 # außerhalb von OpenTofu schützt.
@@ -347,6 +375,12 @@ run "pfeffer_bleibt_wiederherstellbar" {
 # Server darf nur anlegen, freigeschaltet ist ohne Eintrag niemand.
 run "diagnosen_sind_geschuetzt_und_kurzlebig" {
   command = plan
+
+  # Ausdrücklich leer: Sonst nähme der Test lokal die Liste aus
+  # werte.auto.tfvars und schlüge fehl (in der CI gibt es die Datei nicht).
+  variables {
+    diagnose_konten = []
+  }
 
   assert {
     condition     = google_storage_bucket.diagnose.public_access_prevention == "enforced" && google_storage_bucket.diagnose.uniform_bucket_level_access
@@ -414,7 +448,9 @@ run "lehnt_zu_kurze_konto_id_ab" {
 }
 
 # Vor echten Daten (b2b-entwurf.md): Datenbank, Sicherungen und Server lassen
-# sich weder mit `tofu destroy` noch aus Versehen löschen.
+# sich nicht mit `tofu destroy` löschen. In GCP selbst (Konsole, gcloud) schützt
+# nur die Datenbank (delete_protection_state); deletion_protection am Dienst und
+# force_destroy am Bucket wirken nur in OpenTofu.
 run "echte_daten_sind_vor_dem_loeschen_geschuetzt" {
   command = plan
 
@@ -433,7 +469,7 @@ run "echte_daten_sind_vor_dem_loeschen_geschuetzt" {
   }
   assert {
     condition     = google_cloud_run_v2_service.server.deletion_protection
-    error_message = "Der Server-Dienst lässt sich löschen."
+    error_message = "`tofu destroy` würde den Server-Dienst löschen."
   }
 }
 
@@ -451,5 +487,26 @@ run "kill_switch_kann_keine_dienste_aendern" {
     # "server" starten.
     condition     = length([for p in google_project_iam_custom_role.killswitch_cloud_run.permissions : p if !startswith(p, "run.services.") || endswith(p, ".update") || endswith(p, ".create") || endswith(p, ".delete")]) == 0
     error_message = "Der Kill-Switch darf mehr als Dienste auflisten und ihre Richtlinie setzen."
+  }
+  assert {
+    # Auch keine weitere Rolle neben der eigenen (z. B. run.admin oder
+    # iam.serviceAccountUser = actAs).
+    condition     = toset(keys(google_project_iam_member.killswitch)) == toset(["cloud_run", "abrechnung", "eventarc"]) && google_project_iam_member.killswitch["abrechnung"].role == "roles/billing.projectManager" && google_project_iam_member.killswitch["eventarc"].role == "roles/eventarc.eventReceiver"
+    error_message = "Das Konto des Kill-Switch hat andere Rollen im Projekt als die eigene, Abrechnung trennen und Ereignisse empfangen."
+  }
+  assert {
+    condition     = length([for m in google_project_iam_member.killswitch : m if m.member != google_service_account.killswitch.member]) == 0
+    error_message = "Die Rollen des Kill-Switch gehen an ein anderes Konto."
+  }
+}
+
+# KO3: Ohne ausdrücklichen Wunsch öffnet `tofu apply` keinen gesperrten Dienst
+# (module/oeffentlich). Wäre der Standard true, bliebe der Modultest grün.
+run "gesperrte_dienste_bleiben_ohne_wunsch_zu" {
+  command = plan
+
+  assert {
+    condition     = !var.gesperrte_dienste_oeffnen
+    error_message = "tofu apply öffnet gesperrte Dienste ohne -var=gesperrte_dienste_oeffnen=true."
   }
 }

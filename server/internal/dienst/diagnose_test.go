@@ -141,7 +141,10 @@ func TestDiagnoseSendenPrueftDieAnfrage(t *testing.T) {
 
 func TestDiagnoseSendenHatEinTageslimitJeKonto(t *testing.T) {
 	ts := neuerTestServer(t)
-	kevin, _ := ts.diagnoseFreischalten(t, "google-kevin")
+	kevinsHandy := testhilfe.NeuesGeraet(t)
+	res := ts.anmelden(t, "google-kevin", kevinsHandy)
+	ts.diagnoseKonten[res.KontoId] = true
+	kevin := res.Sitzung.Token
 	anna, _ := ts.diagnoseFreischalten(t, "google-anna")
 	sendung := gzipJSON(t, "{}")
 
@@ -170,7 +173,8 @@ func TestDiagnoseSendenHatEinTageslimitJeKonto(t *testing.T) {
 	})
 	t.Run("am nächsten Tag (UTC) geht es wieder", func(t *testing.T) {
 		ts.jetzt = time.Date(start.Year(), start.Month(), start.Day()+1, 0, 0, 1, 0, time.UTC)
-		neu, _ := ts.diagnoseFreischalten(t, "google-kevin") // die alte Sitzung ist abgelaufen
+		// Die alte Sitzung ist abgelaufen; dasselbe (freigeschaltete) Gerät meldet sich neu an.
+		neu := ts.anmelden(t, "google-kevin", kevinsHandy).Sitzung.Token
 		if err := ts.diagnoseSenden(neu, sendung); err != nil {
 			t.Fatal(err)
 		}

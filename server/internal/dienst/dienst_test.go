@@ -2,6 +2,7 @@ package dienst
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -39,6 +40,7 @@ type testServer struct {
 	diagnose avlreminderv1connect.DiagnoseDienstClient
 	speicher *speicher.Arbeitsspeicher
 	jetzt    time.Time // die Uhr des Servers; Tests stellen sie vor
+	url      string    // Adresse des Testservers (für Anfragen ohne Connect-Client)
 
 	diagnosen      *diagnose.Arbeitsspeicher
 	diagnoseKonten map[string]bool // Konten, die Diagnosen senden dürfen
@@ -50,8 +52,9 @@ func neuerTestServer(t *testing.T) *testServer {
 }
 
 // neuerTestServerMit erlaubt eine eigene Ablage für Sicherungen und eine eigene
-// Grenze für gleichzeitige Sicherungen (0 = Standard).
-func neuerTestServerMit(t *testing.T, sicherungen datensicherung.Ablage, gleichzeitig int) *testServer {
+// Grenze für gleichzeitige Sicherungen (0 = Standard); aendern passt die
+// Konfiguration weiter an (z. B. ein kaputter Tageszähler).
+func neuerTestServerMit(t *testing.T, sicherungen datensicherung.Ablage, gleichzeitig int, aendern ...func(*Konfiguration)) *testServer {
 	t.Helper()
 	ts := &testServer{
 		google:         testhilfe.NeuesGoogle(t, clientID),
@@ -65,7 +68,7 @@ func neuerTestServerMit(t *testing.T, sicherungen datensicherung.Ablage, gleichz
 	if err != nil {
 		t.Fatal(err)
 	}
-	h, err := NeuerHandler(Konfiguration{
+	k := Konfiguration{
 		Pruefer:                  pruefer,
 		Speicher:                 ts.speicher,
 		Sicherungen:              sicherungen,
@@ -75,12 +78,17 @@ func neuerTestServerMit(t *testing.T, sicherungen datensicherung.Ablage, gleichz
 		Pfeffer:                  []byte("0123456789abcdef0123456789abcdef"),
 		Jetzt:                    uhr,
 		GleichzeitigeSicherungen: gleichzeitig,
-	})
+	}
+	for _, a := range aendern {
+		a(&k)
+	}
+	h, err := NeuerHandler(k)
 	if err != nil {
 		t.Fatal(err)
 	}
 	srv := httptest.NewServer(h)
 	t.Cleanup(srv.Close)
+	ts.url = srv.URL
 	ts.anmelde = avlreminderv1connect.NewAnmeldeDienstClient(http.DefaultClient, srv.URL)
 	ts.geraete = avlreminderv1connect.NewGeraeteDienstClient(http.DefaultClient, srv.URL)
 	ts.backup = avlreminderv1connect.NewSchluesselDienstClient(http.DefaultClient, srv.URL)
@@ -458,4 +466,97 @@ func TestWiederholteAnfrageImZeitfensterGiltBewusst(t *testing.T) {
 			t.Fatalf("Erneuern Nr. %d abgelehnt: %v", i+1, err)
 		}
 	}
+}
+
+// Die Grenzen aus anmeldung.proto als eigene Zahlen (nicht SitzungenJeTag,
+// speicher.MaxOffeneGeraete).
+const (
+	sitzungenAmTag = 200
+	offeneGeraete  = 10
+)
+
+// KRITISCH: Ein Gerät bekommt am Tag (UTC) nur begrenzt viele Sitzungen,
+// über Anmelden und SitzungErneuern zusammen (Entscheidung nach Review-Lauf 8).
+// Abgelehnte Anfragen zählen nicht; jedes Gerät hat sein eigenes Limit.
+func TestSitzungenHabenEinTageslimitJeGeraet(t *testing.T) {
+	ts := neuerTestServer(t)
+	handy, laptop := testhilfe.NeuesGeraet(t), testhilfe.NeuesGeraet(t)
+	ctx := context.Background()
+	erneuern := func(g *testhilfe.Geraet) error {
+		_, err := ts.anmelde.SitzungErneuern(ctx, connect.NewRequest(ts.erneuerAnfrage(t, g, ts.jetzt)))
+		return err
+	}
+	anmelden := func(g *testhilfe.Geraet) error {
+		_, err := ts.anmelde.Anmelden(ctx, connect.NewRequest(ts.anmeldeAnfrage(t, "google-kevin", g)))
+		return err
+	}
+
+	ts.anmelden(t, "google-kevin", handy)
+	for i := range sitzungenAmTag - 2 {
+		if err := erneuern(handy); err != nil {
+			t.Fatalf("Erneuern %d: %v", i+1, err)
+		}
+	}
+	// Abgelehnt, bevor gezählt wird: falsche Signatur, veralteter Zeitpunkt.
+	for range 3 {
+		r := ts.erneuerAnfrage(t, handy, ts.jetzt)
+		r.Signatur = laptop.Signiere(t, geraeteschluessel.SitzungsNachricht(handy.ID(), ts.jetzt))
+		_, err := ts.anmelde.SitzungErneuern(ctx, connect.NewRequest(r))
+		erwarteCode(t, err, connect.CodeUnauthenticated)
+		_, err = ts.anmelde.SitzungErneuern(ctx, connect.NewRequest(ts.erneuerAnfrage(t, handy, ts.jetzt.Add(-3*time.Minute))))
+		erwarteCode(t, err, connect.CodeUnauthenticated)
+	}
+	if err := anmelden(handy); err != nil {
+		t.Fatalf("letzte erlaubte Sitzung: %v", err)
+	}
+
+	t.Run("danach lehnt der Server Erneuern und Anmelden ab", func(t *testing.T) {
+		for _, err := range []error{erneuern(handy), anmelden(handy)} {
+			erwarteCode(t, err, connect.CodeResourceExhausted)
+			if !strings.Contains(err.Error(), "Tageslimit") {
+				t.Errorf("Meldung nennt das Tageslimit nicht: %v", err)
+			}
+		}
+	})
+	t.Run("ein anderes Gerät desselben Kontos hat sein eigenes Limit", func(t *testing.T) {
+		if err := anmelden(laptop); err != nil {
+			t.Fatal(err)
+		}
+	})
+	t.Run("am nächsten Tag (UTC) geht es wieder", func(t *testing.T) {
+		ts.jetzt = time.Date(start.Year(), start.Month(), start.Day()+1, 0, 0, 1, 0, time.UTC)
+		if err := erneuern(handy); err != nil {
+			t.Fatal(err)
+		}
+	})
+}
+
+// KRITISCH: Ein Konto hat höchstens 10 nicht freigeschaltete, ungesperrte
+// Geräte (Entscheidung nach Review-Lauf 8). Sonst könnte, wer nur den
+// Google-Login hat, beliebig viele Geräte anlegen (jedes mit eigenem
+// Sitzungslimit, und die Geräteliste der App liefe voll). Die Zählung im
+// Einzelnen prüft der Vertragstest des Speichers.
+func TestZuVieleNeueGeraeteWerdenAbgewiesen(t *testing.T) {
+	ts := neuerTestServer(t)
+	handySitzung := ts.anmelden(t, "google-kevin", testhilfe.NeuesGeraet(t)).Sitzung.Token
+	neue := make([]*testhilfe.Geraet, offeneGeraete)
+	for i := range neue {
+		neue[i] = testhilfe.NeuesGeraet(t)
+		ts.anmelden(t, "google-kevin", neue[i])
+	}
+	ctx := context.Background()
+	weiteres := testhilfe.NeuesGeraet(t)
+
+	_, err := ts.anmelde.Anmelden(ctx, connect.NewRequest(ts.anmeldeAnfrage(t, "google-kevin", weiteres)))
+	erwarteCode(t, err, connect.CodeResourceExhausted)
+	if _, err := ts.speicher.Geraet(ctx, weiteres.ID()); !errors.Is(err, speicher.ErrNichtGefunden) {
+		t.Errorf("abgewiesenes Gerät ist angelegt (Fehler %v)", err)
+	}
+	t.Run("ein vorhandenes Gerät meldet sich weiter an", func(t *testing.T) {
+		ts.anmelden(t, "google-kevin", neue[0])
+	})
+	t.Run("nach dem Freischalten eines Geräts ist wieder Platz", func(t *testing.T) {
+		ts.geraetFreischaltenOK(t, handySitzung, neue[0].ID())
+		ts.anmelden(t, "google-kevin", weiteres)
+	})
 }

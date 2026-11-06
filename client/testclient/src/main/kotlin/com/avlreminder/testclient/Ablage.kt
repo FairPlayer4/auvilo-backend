@@ -94,14 +94,14 @@ class Ablage(private val ordner: File) {
     fun sitzung(name: String): GespeicherteSitzung {
         val datei = datei("sitzung", name, "json")
         if (!datei.exists()) throw Bedienfehler("Keine Sitzung für Gerät \"$name\" - zuerst anmelden.")
-        return json.decodeFromString(datei.readText())
+        return lies(datei)
     }
 
     /** Die Schlüssel des Geräts, oder null, wenn es noch keine hat. */
     fun schluessel(name: String, kontoId: String): LokalerStand? {
         val datei = datei("schluessel", name, "json")
         if (!datei.exists()) return null
-        val s = json.decodeFromString<GespeicherteSchluessel>(datei.readText())
+        val s = lies<GespeicherteSchluessel>(datei)
         if (s.kontoId != kontoId) {
             throw Bedienfehler("Gerät \"$name\" hat Schlüssel eines anderen Kontos - anderen Gerätenamen wählen oder $datei löschen.")
         }
@@ -138,7 +138,7 @@ class Ablage(private val ordner: File) {
         override fun laden(): GemerkteSicherung? {
             val datei = datei("stand", name, "json")
             if (!datei.exists()) return null
-            val s = json.decodeFromString<GespeicherterStand>(datei.readText())
+            val s = lies<GespeicherterStand>(datei)
             if (s.kontoId != kontoId) {
                 throw Bedienfehler("Gerät \"$name\" hat den Sicherungsstand eines anderen Kontos - anderen Gerätenamen wählen oder $datei löschen.")
             }
@@ -170,6 +170,21 @@ class Ablage(private val ordner: File) {
 
     private companion object {
         val json = Json { prettyPrint = true }
+
+        /**
+         * Liest eine JSON-Datei der Ablage.
+         *
+         * KRITISCH: Die Meldungen von kotlinx.serialization zitieren die Datei
+         * („JSON input: …“), bei Sitzung und Schlüsseln also Token oder
+         * Schlüssel. Deshalb ein eigener Bedienfehler ohne Ursache: Er nennt nur
+         * die Datei und landet ohne Stacktrace im Terminal.
+         */
+        inline fun <reified T> lies(datei: File): T =
+            try {
+                json.decodeFromString<T>(datei.readText())
+            } catch (_: IllegalArgumentException) { // auch SerializationException
+                throw Bedienfehler("$datei ist unlesbar (kaputt oder von einer anderen Version) - löschen und neu anmelden.")
+            }
 
         fun pem(art: String, der: ByteArray) =
             "-----BEGIN $art-----\n" + Base64.getMimeEncoder(64, "\n".toByteArray()).encodeToString(der) + "\n-----END $art-----\n"

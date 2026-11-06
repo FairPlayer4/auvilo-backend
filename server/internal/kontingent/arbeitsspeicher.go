@@ -21,13 +21,13 @@ func NeuerArbeitsspeicher() *Arbeitsspeicher {
 	return &Arbeitsspeicher{zaehler: map[string]int{}}
 }
 
-func (a *Arbeitsspeicher) Verbrauche(_ context.Context, art, kontoID string, jetzt time.Time, max int) error {
-	if art == "" || kontoID == "" {
-		return errors.New("Art und Konto-ID sind Pflicht")
+func (a *Arbeitsspeicher) Verbrauche(_ context.Context, art, id string, jetzt time.Time, max int) error {
+	if art == "" || id == "" {
+		return errors.New("Art und ID sind Pflicht")
 	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	schluessel := dokID(art, kontoID, jetzt)
+	schluessel := dokID(art, id, jetzt)
 	if a.zaehler[schluessel] >= max {
 		return ErrErschoepft
 	}

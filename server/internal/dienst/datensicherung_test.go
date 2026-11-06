@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"log/slog"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"connectrpc.com/connect"
 
 	v1 "github.com/FairPlayer4/avlreminder-backend/server/gen/avlreminder/v1"
+	"github.com/FairPlayer4/avlreminder-backend/server/gen/avlreminder/v1/avlreminderv1connect"
 	"github.com/FairPlayer4/avlreminder-backend/server/internal/datensicherung"
 	"github.com/FairPlayer4/avlreminder-backend/server/internal/testhilfe"
 )
@@ -221,6 +223,78 @@ func TestSicherungSpeichernHatEinTageslimitJeKonto(t *testing.T) {
 	})
 }
 
+// Grenzen aus datensicherung.proto als eigene Zahlen (nicht AbrufeJeTag,
+// LoeschungenJeTag).
+const (
+	abrufeAmTag      = 50
+	loeschungenAmTag = 20
+)
+
+// KRITISCH: Holen und Löschen sind je Konto und Tag begrenzt (Entscheidung nach
+// Review-Lauf 8): Holen kostet ausgehende Daten (bis 8 MiB je Abruf), Löschen
+// listet und löscht bis zu 200 Fassungen.
+func TestSicherungHolenUndLoeschenHabenEinTageslimitJeKonto(t *testing.T) {
+	faelle := []struct {
+		name   string
+		max    int
+		aufruf func(ts *testServer, token string) error
+		// erlaubt: Code einer erlaubten Antwort (Holen ohne Sicherung: not_found)
+		erlaubt connect.Code
+	}{
+		{"Sicherung holen", abrufeAmTag, func(ts *testServer, token string) error {
+			_, err := ts.sicherungHolen(token)
+			return err
+		}, connect.CodeNotFound},
+		{"Sicherung löschen", loeschungenAmTag, func(ts *testServer, token string) error {
+			return ts.sicherungLoeschen(token)
+		}, 0},
+	}
+	erwarteErlaubt := func(t *testing.T, err error, code connect.Code) {
+		t.Helper()
+		if code == 0 && err != nil {
+			t.Fatal(err)
+		}
+		if code != 0 {
+			erwarteCode(t, err, code)
+		}
+	}
+	for _, fall := range faelle {
+		t.Run(fall.name, func(t *testing.T) {
+			ts := neuerTestServer(t)
+			kevinGeraet := testhilfe.NeuesGeraet(t)
+			kevin := ts.anmelden(t, "google-kevin", kevinGeraet).Sitzung.Token
+			anna := ts.anmelden(t, "google-anna", testhilfe.NeuesGeraet(t)).Sitzung.Token
+			for i := range fall.max {
+				if err := fall.aufruf(ts, kevin); connect.CodeOf(err) != fall.erlaubt && err != nil {
+					t.Fatalf("Aufruf %d: %v", i+1, err)
+				}
+			}
+			t.Run("danach lehnt der Server ab", func(t *testing.T) {
+				err := fall.aufruf(ts, kevin)
+				erwarteCode(t, err, connect.CodeResourceExhausted)
+				if !strings.Contains(err.Error(), "Tageslimit") {
+					t.Errorf("Meldung nennt das Tageslimit nicht: %v", err)
+				}
+			})
+			t.Run("Speichern hat ein eigenes Tageslimit", func(t *testing.T) {
+				if _, err := ts.sicherungSpeichern(kevin, []byte("sicherung"), 0); err != nil {
+					t.Fatal(err)
+				}
+			})
+			t.Run("ein anderes Konto hat sein eigenes Limit", func(t *testing.T) {
+				erwarteErlaubt(t, fall.aufruf(ts, anna), fall.erlaubt)
+			})
+			t.Run("am nächsten Tag (UTC) geht es wieder", func(t *testing.T) {
+				ts.jetzt = time.Date(start.Year(), start.Month(), start.Day()+1, 0, 0, 1, 0, time.UTC)
+				neu := ts.anmelden(t, "google-kevin", kevinGeraet).Sitzung.Token
+				if err := fall.aufruf(ts, neu); err != nil {
+					t.Fatal(err) // es gibt jetzt eine Sicherung (siehe oben)
+				}
+			})
+		})
+	}
+}
+
 // KRITISCH: Jedes Konto sieht, schreibt und löscht nur seine eigene Sicherung.
 func TestSicherungGehoertNurZumEigenenKonto(t *testing.T) {
 	ts := neuerTestServer(t)
@@ -400,4 +474,76 @@ func TestSicherungsinhaltLandetNieImLog(t *testing.T) {
 	if bytes.Contains(log.Bytes(), inhalt) {
 		t.Errorf("Inhalt der Sicherung im Log:\n%s", log.String())
 	}
+}
+
+// antwortKodierung ruft eine Prozedur ohne Connect-Client auf, bietet gzip an
+// und liefert den Content-Encoding-Kopf der Antwort ("" = unkomprimiert).
+func (ts *testServer) antwortKodierung(t *testing.T, prozedur, token string) string {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodPost, ts.url+prozedur, http.NoBody)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/proto")
+	req.Header.Set("Accept-Encoding", "gzip")
+	req.Header.Set("Authorization", "Bearer "+token)
+	// Eigener Transport: Der Standard packt gzip selbst aus und entfernt den Kopf.
+	res, err := (&http.Client{Transport: &http.Transport{DisableCompression: true}}).Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = res.Body.Close() }()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("Status %d", res.StatusCode)
+	}
+	return res.Header.Get("Content-Encoding")
+}
+
+// Das Chiffrat ist zufällig und lässt sich nicht komprimieren. Bis zu 8 MiB mit
+// gzip zu packen, kostet nur Rechenzeit auf Cloud Run und Zeit bis zur
+// Antwort. Deshalb antwortet der Datensicherungsdienst immer unkomprimiert,
+// auch wenn der Client gzip anbietet.
+func TestSicherungKommtUnkomprimiert(t *testing.T) {
+	ts := neuerTestServer(t)
+	token := ts.anmelden(t, "google-kevin", testhilfe.NeuesGeraet(t)).Sitzung.Token
+	// Nullen ließen sich gut packen: Bleibt die Antwort trotzdem unkomprimiert,
+	// liegt das am Server und nicht an den Daten.
+	if _, err := ts.sicherungSpeichern(token, make([]byte, 1<<20), 0); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ts.backupSpeichern(token, make([]byte, 16<<10), 0); err != nil {
+		t.Fatal(err)
+	}
+	if ce := ts.antwortKodierung(t, avlreminderv1connect.DatensicherungDienstSicherungHolenProcedure, token); ce != "" {
+		t.Errorf("Sicherung mit Content-Encoding %q, erwartet unkomprimiert", ce)
+	}
+	// Gegenprobe: Ein anderer Dienst packt weiter (sonst prüfte der Test nichts).
+	if ce := ts.antwortKodierung(t, avlreminderv1connect.SchluesselDienstBackupHolenProcedure, token); ce != "gzip" {
+		t.Errorf("Backup mit Content-Encoding %q, erwartet gzip", ce)
+	}
+}
+
+// Komprimierte Anfragen nimmt der Dienst weiter an (connect-kotlin könnte
+// gzip senden).
+func TestSicherungNimmtKomprimierteAnfragenAn(t *testing.T) {
+	ts := neuerTestServer(t)
+	token := ts.anmelden(t, "google-kevin", testhilfe.NeuesGeraet(t)).Sitzung.Token
+	gzipClient := avlreminderv1connect.NewDatensicherungDienstClient(http.DefaultClient, ts.url, connect.WithSendGzip())
+	res, err := gzipClient.SicherungSpeichern(context.Background(), mitSitzung(&v1.SicherungSpeichernRequest{Chiffrat: []byte("gepackt"), ErwarteteVersion: 0}, token))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ts.erwarteSicherung(t, token, "gepackt", res.Msg.Version)
+}
+
+// KRITISCH: Gepackt passen viele Nullen in wenige Bytes. Die Grenze von 8 MiB
+// gilt trotzdem für den ausgepackten Inhalt.
+func TestKomprimierteSicherungUeberAchtMiBWirdAbgelehnt(t *testing.T) {
+	ts := neuerTestServer(t)
+	token := ts.anmelden(t, "google-kevin", testhilfe.NeuesGeraet(t)).Sitzung.Token
+	gzipClient := avlreminderv1connect.NewDatensicherungDienstClient(http.DefaultClient, ts.url, connect.WithSendGzip())
+	_, err := gzipClient.SicherungSpeichern(context.Background(), mitSitzung(&v1.SicherungSpeichernRequest{Chiffrat: make([]byte, achtMiB+1), ErwarteteVersion: 0}, token))
+	erwarteCode(t, err, connect.CodeResourceExhausted)
+	_, err = ts.sicherungHolen(token)
+	erwarteCode(t, err, connect.CodeNotFound)
 }

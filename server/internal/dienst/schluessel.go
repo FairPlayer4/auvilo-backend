@@ -25,11 +25,12 @@ var _ avlreminderv1connect.SchluesselDienstHandler = (*dienste)(nil)
 //   - Die Konto-ID kommt aus der Sitzung, nie aus der Anfrage – ein Gerät kann
 //     nur das Backup seines eigenen Kontos schreiben.
 //   - Ein vorhandenes Backup ersetzen (erwartete Version > 0) darf nur ein
-//     freigeschaltetes Gerät (E-B2b-13). Ein neues anlegen darf jedes Gerät, damit
-//     ein Konto ohne Backup eins bekommt (E-B2-5). Grenze: Hat das erste Gerät
-//     noch kein Backup hochgeladen, kann ein fremdes Gerät mit Google-Login eins
-//     mit eigenem Freischaltschlüssel anlegen und sich damit freischalten. Die App
-//     lädt das Backup deshalb gleich bei der Einrichtung hoch.
+//     freigeschaltetes Gerät (E-B2b-13). Ein neues anlegen darf ein nicht
+//     freigeschaltetes Gerät nur, wenn das Konto kein freigeschaltetes,
+//     ungesperrtes Gerät hat (geprüft in der Transaktion des Speichers). Sonst
+//     legte ein fremdes Gerät mit Google-Login ein Backup mit eigenem
+//     Freischaltschlüssel an, solange das erste Gerät noch keins hochgeladen
+//     hat, und schaltete sich damit frei.
 func (d *dienste) BackupSpeichern(ctx context.Context, req *connect.Request[v1.BackupSpeichernRequest]) (*connect.Response[v1.BackupSpeichernResponse], error) {
 	id, err := identitaet(ctx)
 	if err != nil {
@@ -39,12 +40,19 @@ func (d *dienste) BackupSpeichern(ctx context.Context, req *connect.Request[v1.B
 	if len(chiffrat) == 0 || len(chiffrat) > MaxBackup || erwartet < 0 || len(fs) != freischaltung.SchluesselLaenge {
 		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("Backup leer, größer als 16 KiB, Version negativ oder Freischaltschlüssel nicht 32 Bytes"))
 	}
-	if erwartet > 0 {
-		if err := d.nurFreigeschaltetesGeraet(ctx, id); err != nil {
-			return nil, err
-		}
+	frei, err := d.istFreigeschaltet(ctx, id)
+	if err != nil {
+		return nil, err
 	}
-	version, err := d.k.Speicher.BackupSpeichern(ctx, id.KontoID, chiffrat, fs, erwartet, d.k.Jetzt())
+	if !frei && erwartet > 0 {
+		slog.WarnContext(ctx, "Backup ersetzen von nicht freigeschaltetem Gerät abgelehnt", "geraet", id.GeraetID)
+		return nil, errNichtFreigeschaltet()
+	}
+	version, err := d.k.Speicher.BackupSpeichern(ctx, id.KontoID, chiffrat, fs, erwartet, !frei, d.k.Jetzt())
+	if errors.Is(err, speicher.ErrKontoGeschuetzt) {
+		slog.WarnContext(ctx, "Erstes Backup von nicht freigeschaltetem Gerät abgelehnt", "geraet", id.GeraetID)
+		return nil, errNichtFreigeschaltet()
+	}
 	if errors.Is(err, speicher.ErrVersionVeraltet) {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("Backup wurde inzwischen geändert – neu holen"))
 	}

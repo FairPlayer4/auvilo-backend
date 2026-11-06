@@ -31,13 +31,16 @@ func IdentitaetAus(ctx context.Context) (Identitaet, bool) {
 	return id, ok
 }
 
-// SitzungLesen ist der Teil des Speichers, den der Interceptor braucht.
+// SitzungLesen ist der Teil des Speichers, den der Interceptor braucht: die
+// Sitzung und das Gerät, zu dem sie gehört.
 type SitzungLesen interface {
 	Sitzung(ctx context.Context, hash string) (speicher.Sitzung, error)
+	Geraet(ctx context.Context, geraetID string) (speicher.Geraet, error)
 }
 
-// Interceptor prüft vor jedem Aufruf die Sitzung. Er ist eine "Vorschaltstufe"
-// für alle Dienste (wie eine Middleware in ASP.NET).
+// Interceptor prüft vor jedem Aufruf die Sitzung und die Sperre ihres Geräts.
+// Er ist eine "Vorschaltstufe" für alle Dienste (wie eine Middleware in
+// ASP.NET).
 //
 // KRITISCH: Alles braucht eine gültige Sitzung, AUSSER den ausdrücklich als
 // offen genannten Prozeduren (Anmelden, SitzungErneuern). Ein neuer Aufruf ist
@@ -87,6 +90,22 @@ func (i *Interceptor) pruefe(ctx context.Context, prozedur string, kopf http.Hea
 	// prüfen wir die Ablaufzeit selbst.
 	if !i.jetzt().Before(s.LaeuftAb) {
 		return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("Sitzung abgelaufen"))
+	}
+	// KRITISCH: Das Gerät bei jeder Anfrage lesen. GeraetSperren löscht die
+	// Sitzungen erst nach dem Sperren (in Stapeln); bis dahin – oder wenn das
+	// Löschen scheitert – hält diese Prüfung das gesperrte Gerät draußen.
+	g, err := i.sitzungen.Geraet(ctx, s.GeraetID)
+	if errors.Is(err, speicher.ErrNichtGefunden) {
+		slog.ErrorContext(ctx, "Sitzung zu einem unbekannten Gerät", "geraet", s.GeraetID)
+		return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("Sitzung ungültig"))
+	}
+	if err != nil {
+		slog.ErrorContext(ctx, "Gerät lesen fehlgeschlagen", "fehler", err.Error())
+		return nil, connect.NewError(connect.CodeUnavailable, errors.New("Sitzung konnte nicht geprüft werden"))
+	}
+	if g.Gesperrt || g.KontoID != s.KontoID {
+		slog.WarnContext(ctx, "Sitzung eines gesperrten Geräts abgelehnt", "geraet", s.GeraetID)
+		return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("Sitzung ungültig"))
 	}
 	return context.WithValue(ctx, kontextSchluessel{}, Identitaet{KontoID: s.KontoID, GeraetID: s.GeraetID}), nil
 }

@@ -7,7 +7,10 @@ class GeholteSicherung(val chiffrat: ByteArray, val version: Long)
 
 /** Die Datensicherung auf dem Server (im Test ersetzt; im Test-Client per Connect). */
 interface SicherungsAblage {
-    /** Die neueste Sicherung des Kontos, oder null, wenn es keine gibt. */
+    /**
+     * Die neueste Sicherung des Kontos, oder null, wenn es keine gibt; wirft
+     * [SicherungTageslimit], wenn für heute genug geholt wurde.
+     */
     suspend fun holen(): GeholteSicherung?
 
     /**
@@ -17,7 +20,10 @@ interface SicherungsAblage {
      */
     suspend fun speichern(chiffrat: ByteArray, erwartet: Long): Long
 
-    /** Löscht die Sicherung mit allen älteren Fassungen. */
+    /**
+     * Löscht die Sicherung mit allen älteren Fassungen; wirft [SicherungTageslimit],
+     * wenn für heute genug gelöscht wurde.
+     */
     suspend fun loeschen()
 }
 
@@ -56,11 +62,14 @@ class SicherungZuGross(groesse: Int?) :
     Exception("Sicherung zu groß" + (groesse?.let { ": $it Bytes" } ?: "") + " - nichts hochgeladen")
 
 /**
- * Für heute hat das Konto genug gesichert (höchstens 48 am Tag, UTC;
- * datensicherung.proto). Die Sicherung auf dem Server bleibt, wie sie ist; die App
- * versucht es am nächsten Tag wieder, statt in einer Schleife zu wiederholen.
+ * Für heute hat das Konto genug gesichert, geholt oder gelöscht (je Tag, UTC,
+ * höchstens 48 Sicherungen, 50 Abrufe, 20 Löschungen; datensicherung.proto).
+ * Die Sicherung auf dem Server bleibt, wie sie ist; die App versucht es am
+ * nächsten Tag wieder, statt in einer Schleife zu wiederholen. [vorgang] nennt,
+ * welches Limit erreicht ist.
  */
-class SicherungTageslimit : Exception("Tageslimit für Sicherungen erreicht - morgen wieder, nichts hochgeladen")
+class SicherungTageslimit(vorgang: String = "Sicherungen") :
+    Exception("Tageslimit für $vorgang erreicht - morgen wieder, nichts geändert")
 
 /** Ergebnis von [Sicherungsablauf.sichern]. */
 sealed interface Gesichert {

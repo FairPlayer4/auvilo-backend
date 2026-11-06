@@ -1,5 +1,5 @@
 # Review-Gedächtnis
-Letzter Lauf: 2026-11-04 @ ddf0a02 (Fixes auf review/2026-11-04, nach develop gemergt)   Laufzähler: 7
+Letzter Lauf: 2026-11-05 @ a9abda7 (Fixes auf review/2026-11-05, nach develop gemergt)   Laufzähler: 8
 
 ## Beabsichtigte Architektur
 Vom Entwickler bestätigt am 2026-11-01.
@@ -31,19 +31,20 @@ Vom Entwickler bestätigt am 2026-11-01.
 ## Bereiche
 | Bereich | Pfade | Anforderungen/Doku | Tests | Zuletzt reviewt | Zustand |
 |---|---|---|---|---|---|
-| Kill-Switch | `infra/killswitch/` | anforderungen.md KO3, stand.md | `*_test.go` | 2026-11-04 (Lauf 7, WARN-Änderung) | gut; WARN ab 100 % ohne Dienst |
-| Infrastruktur | `infra/*.tf`, `infra/*.sh` | anforderungen.md 4.3, 5, 6; gcp-einrichtung.md; stand.md | `infra/tests/` (tofu test), `pruefe-regionen.sh` | 2026-11-04 (Lauf 7, Diagnose, 200 Fassungen, Pfeffer) | gut nach Fixes; `prevent_destroy` und Diagnose-IAM ungetestet (E1, E2), Upload-Limit offen |
-| Server: Anmeldung/Sitzung | `server/internal/{geraeteschluessel,anmeldung,sitzung,dienst/dienst.go}`, `proto/` | b1-entwurf.md, proto-Kommentare, anforderungen.md Kap. 11 | `*_test.go` | 2026-11-03 (Lauf 5, vollständig) | gut; Neuanmeldung nach Sperren (Frage), Streaming ungetestet |
-| Server: Speicher/Start | `server/internal/speicher`, `server/cmd/server` | b1-entwurf.md (Daten, Betrieb) | `vertrag_test.go` (auch Emulator), `main_test.go` | 2026-11-03 (Lauf 5) | gut |
-| Server: Datensicherung | `server/internal/datensicherung`, `dienst/datensicherung.go`, `datensicherung.proto` | b2b-entwurf.md, proto-Kommentare | `vertrag_test.go` (Arbeitsspeicher, fake-gcs), `datensicherung_test.go` | 2026-11-03 (Lauf 5, neu) | gut; begrenze vor Sitzungsprüfung (Frage) |
+| Kill-Switch | `infra/killswitch/` | anforderungen.md KO3, stand.md | `*_test.go` | 2026-11-05 (Lauf 8, IAM-Sperrweg) | gut nach Fixes; IAM-Sperrweg nicht in der Cloud getestet (E1) |
+| Infrastruktur | `infra/*.tf`, `infra/*.sh` | anforderungen.md 4.3, 5, 6; gcp-einrichtung.md; stand.md | `infra/tests/` (tofu test), `pruefe-regionen.sh` | 2026-11-05 (Lauf 8, Modul `oeffentlich`, Löschschutz) | gut nach Fixes; Deploy ohne CI-Gate, Textprüfung der Öffnung (E3, E4) |
+| Server: Anmeldung/Sitzung | `server/internal/{geraeteschluessel,anmeldung,sitzung,dienst/dienst.go}`, `proto/` | b1-entwurf.md, proto-Kommentare, anforderungen.md Kap. 11 | `*_test.go` | 2026-11-05 (Lauf 8) | gut; Sperren bei vielen Sitzungen (Frage 4), Schlüsselausfall = abgelehnt (E14) |
+| Server: Speicher/Start | `server/internal/speicher`, `server/cmd/server` | b1-entwurf.md (Daten, Betrieb) | `vertrag_test.go` (auch Emulator), `main_test.go` | 2026-11-05 (Lauf 8) | gut; `Speicher` 10 Methoden (E10), Geräte je Konto unbegrenzt (Frage 5) |
+| Server: Datensicherung | `server/internal/datensicherung`, `dienst/datensicherung.go`, `datensicherung.proto` | b2b-entwurf.md, proto-Kommentare | `vertrag_test.go` (Arbeitsspeicher, fake-gcs), `datensicherung_test.go` | 2026-11-05 (Lauf 8, Upload-Limit) | gut nach Fixes (unkomprimiert, Tageslimit-Tests); Holen unbegrenzt (Frage 3) |
 | CI, Deploy und Container | `.github/`, `server/Dockerfile`, `.golangci.yml`, `proto/buf*.yaml` | anforderungen.md Q4, go-review.md, stand.md | CI-Job `container` | 2026-11-03 (Lauf 6, CI-Fix) | gut; Emulator ohne feste Version (Nit) |
 | Doku | `docs/`, `CLAUDE.md`, `README.md` | – | – | 2026-11-03 (Lauf 6, vollständig) | gut nach Fixes; CLAUDE.md-Verweise (E6), Nits |
 | Kotlin `protokoll` | `client/protokoll`, `proto/avlreminder/inhalt`, `proto/testvektoren` | b2-entwurf.md, b2b-entwurf.md, backup.proto | `*Test.kt`; Go prüft nur `geraetenachrichten.json` | 2026-11-03 (Lauf 6) | gut nach Fix; Regel „offenes Backup“ im Test-Client (E1) |
-| Kotlin `verbindung` | `client/verbindung` | b2b-entwurf.md, proto-Kommentare | `AdapterTest` (Connect-Nachbau) | 2026-11-03 (Lauf 5, neu) | gut; Sitzung noch im Test-Client |
-| Backup und Test-Client | `server/internal/dienst/schluessel.go`, Backup in `speicher`, `client/testclient`, `schluessel.proto` | b2-entwurf.md, proto-Kommentare | `schluessel_test.go`, `vertrag_test.go`, `EinrichtungTest`, `GoogleTest` | 2026-11-03 (Lauf 6, Teil) | gut; `Ablage` ohne Tests, Löschen braucht Tresor (E2) |
-| Server: Diagnose | `server/internal/{diagnose,kontingent}`, `dienst/diagnose.go`, `diagnose.proto` | diagnose-entwurf.md, formate.md, proto | `vertrag_test.go` (Arbeitsspeicher, Emulatoren), `diagnose_test.go` | 2026-11-04 (Lauf 7, neu) | gut nach Fixes (Freischaltung vor dem Lesen) |
+| Kotlin `verbindung` | `client/verbindung` | b2b-entwurf.md, proto-Kommentare | `AdapterTest` (Connect-Nachbau) | 2026-11-05 (Lauf 8) | gut nach Fix (403 ohne Connect-Fehler); Sitzung noch im Test-Client (E5), Fehlerarten (E8, E9) |
+| Backup und Test-Client | `server/internal/dienst/schluessel.go`, Backup in `speicher`, `client/testclient`, `schluessel.proto` | b2-entwurf.md, proto-Kommentare | `schluessel_test.go`, `vertrag_test.go`, `EinrichtungTest`, `GoogleTest`, `AblageTest` | 2026-11-05 (Lauf 8) | gut nach Fix (kaputte Dateien ohne Inhalt); Löschen braucht Tresor (E2 Lauf 6) |
+| Server: Diagnose | `server/internal/{diagnose,kontingent}`, `dienst/diagnose.go`, `diagnose.proto` | diagnose-entwurf.md, formate.md, proto | `vertrag_test.go` (Arbeitsspeicher, Emulatoren), `diagnose_test.go` | 2026-11-05 (Lauf 8, mit Datensicherung) | gut; Diagnose von nicht freigeschalteten Geräten (Frage 1) |
 | Diagnose: Skript und Kotlin | `werkzeuge/diagnose-holen.sh`, `client/*/Diagnose*`, `ServerDiagnoseAblage`, `diagnose-senden` | diagnose-entwurf.md E-D-6 | `DiagnoseTest`, `AdapterTest`, `TestDiagnoseTest`; Skript nur von Hand | 2026-11-04 (Lauf 7, neu) | gut nach Fixes; Grenzwert `MAX_NUTZLAST` ungetestet (E3), Skript noch nie gegen echte Sendungen |
-| Kotlin-Build | `client/*.gradle.kts`, `client/gradle/`, CI-Job `kotlin` | b2-entwurf.md (CI) | CI | 2026-11-03 (Lauf 5) | gut; Prüfsummen aller Abhängigkeiten |
+| Kotlin-Build | `client/*.gradle.kts`, `client/gradle/`, CI-Job `kotlin` | b2-entwurf.md (CI) | CI | 2026-11-05 (Lauf 8) | gut; Prüfsummen aller Abhängigkeiten |
+| Freischaltung (E-B2b-13) | `server/internal/{freischaltung,dienst/freischaltung.go}`, Freischaltung in `speicher`, `geraete.proto`, Kotlin `Einrichtung` | b2b-entwurf.md, geraete.proto | `freischaltung_test.go`, `vertrag_test.go`, `EinrichtungTest` | 2026-11-05 (Lauf 8, neu) | gut nach Fixes; Prüfung opt-in je Handler (E2), erstes Backup schaltet frei (Frage 2) |
 
 ## Bekannte Schulden und beobachtete Drift
 - 2026-11-01 (Lauf 1): E7 (Herkunft der Budget-Meldung prüfen) offen, optional.
@@ -102,9 +103,26 @@ Vom Entwickler bestätigt am 2026-11-01.
     IAM-Bindung) wird nur positiv geprüft, nicht gegen „zusätzlich zu weit“.
   - Pfeffer-Wiederherstellung ungetestet (Frage 3).
 
+- 2026-11-05 (Lauf 8), offen (Details, Fragen 1–7 und Empfehlungen E1–E18 in
+  runs/2026-11-05.md):
+  - **Trend (Lauf 7 und 8): Ein Schutz wird nur positiv geprüft.** Lauf 8: Erlaubnisfälle
+    der Freischaltung prüften nur `err == nil`, nicht die Wirkung (Mutant „Löschen ohne
+    Wirkung“ blieb grün; gefixt 31cf529, 9f747db). Bei Erlaubnis-Tests immer die Wirkung
+    prüfen, bei Schutz-Tests auch „zusätzlich zu weit“.
+  - **Trend (Lauf 5 und 8): Sitzung/Anmelden noch im Test-Client, Callbacks in
+    `protokoll` synchron mit festen Texten** (E5, E6) – vor der App-Einbindung.
+  - **Drift wächst (Lauf 4 → 8): `speicher.Speicher` von 6 auf 10 Methoden**, `dienst`
+    wird Sammelbecken; Freischaltprüfung ist opt-in je Handler (E2, E10). Vor B3 handeln.
+  - **Trend (Lauf 6 und 8): stand.md wird zum Tagebuch** (E17).
+  - Vor echten Daten: Kill-Switch-IAM-Sperrweg und echte 403-Antwort in der Cloud testen
+    (E1); Deploy ohne CI-Gate (E3).
+
 ## Offene Fragen an den Entwickler
+Aus Lauf 8 (runs/2026-11-05.md, je mit Vorschlag): 6 abgelehnte Übernahme lokal
+merken; 7 zwei Instanzen = 8 gleichzeitige Sicherungen. (1–5 am 2026-11-06 entschieden.)
 Aus Lauf 7 (runs/2026-11-04.md, je mit Vorschlag): 1 gescheitertes Ablegen zählt zum
-Tageslimit; 3 Pfeffer-Wiederherstellung einmal durchspielen.
+Tageslimit (seit Lauf 8 durch `TestGescheitertesAblegenZaehltTrotzdem` festgehalten);
+3 Pfeffer-Wiederherstellung einmal durchspielen.
 Erledigt am 2026-11-05: Frage 2 (Adapter unterscheiden „zu groß“ und „Tageslimit“ an
 der gesendeten Größe, Diagnose und Datensicherung), Empfehlung E3 (Grenzwerttest
 `MAX_NUTZLAST`), Upload-Limit (48 je Tag, E-B2b-12).
@@ -151,3 +169,9 @@ Erledigt am 2026-11-05: Sperren ohne actAs (Kill-Switch entfernt `allUsers`, Mod
   Sync-Operationen ab B3; SE3 ohne eigenen Scanner. Nicht erneut als Fund melden.
 - 2026-11-03: Bucket ohne Soft Delete; `GOMEMLIMIT=192MiB`, Parallelität 80;
   Absenz-Alarm 23,5 h.
+- 2026-11-06 (nach Lauf 8, Fragen 1–5 wie vorgeschlagen, umgesetzt): Diagnosen nur
+  von freigeschalteten Geräten; erstes Backup eines nicht freigeschalteten Geräts nur,
+  wenn das Konto kein freigeschaltetes, ungesperrtes Gerät hat; Holen 50, Löschen 20,
+  Sitzungen 200 je Gerät und Tag; Interceptor prüft „gesperrt“, Sperren löscht in
+  Stapeln; höchstens 10 offene Geräte je Konto. Egress-Alarm (1 GiB in 23 h) nach
+  Kevins Go in `infra/alarm.tf`. Nicht erneut als Frage stellen.

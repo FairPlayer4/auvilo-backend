@@ -30,20 +30,31 @@ func errNichtFreigeschaltet() error {
 // KRITISCH: Das Merkmal kommt aus dem Speicher, nicht aus der Sitzung. So
 // wirkt ein Freischalten sofort, ohne neue Sitzung.
 func (d *dienste) nurFreigeschaltetesGeraet(ctx context.Context, id sitzung.Identitaet) error {
-	g, err := d.k.Speicher.Geraet(ctx, id.GeraetID)
-	if errors.Is(err, speicher.ErrNichtGefunden) {
-		slog.ErrorContext(ctx, "Sitzung zu einem unbekannten Gerät", "geraet", id.GeraetID)
-		return errNichtFreigeschaltet()
-	}
+	frei, err := d.istFreigeschaltet(ctx, id)
 	if err != nil {
-		return speicherFehler(ctx, err)
+		return err
 	}
-	// Ein gesperrtes Gerät hat keine Sitzung mehr; die Prüfung schadet nicht.
-	if !g.Freigeschaltet || g.Gesperrt || g.KontoID != id.KontoID {
+	if !frei {
 		slog.WarnContext(ctx, "Aufruf eines nicht freigeschalteten Geräts abgelehnt", "geraet", id.GeraetID)
 		return errNichtFreigeschaltet()
 	}
 	return nil
+}
+
+// istFreigeschaltet liest, ob das anfragende Gerät freigeschaltet ist. Ein
+// fehlendes Gerät ist es nicht; nur ein Speicherfehler ist ein Fehler.
+func (d *dienste) istFreigeschaltet(ctx context.Context, id sitzung.Identitaet) (bool, error) {
+	g, err := d.k.Speicher.Geraet(ctx, id.GeraetID)
+	if errors.Is(err, speicher.ErrNichtGefunden) {
+		slog.ErrorContext(ctx, "Sitzung zu einem unbekannten Gerät", "geraet", id.GeraetID)
+		return false, nil
+	}
+	if err != nil {
+		return false, speicherFehler(ctx, err)
+	}
+	// Ein gesperrtes Gerät lässt schon der Interceptor nicht durch; die
+	// Prüfung schadet nicht.
+	return g.Freigeschaltet && !g.Gesperrt && g.KontoID == id.KontoID, nil
 }
 
 // GeraetFreischalten: Ein freigeschaltetes Gerät schaltet ein anderes Gerät
