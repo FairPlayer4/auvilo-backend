@@ -245,7 +245,15 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
    **Eigenbetrieb** seit 2026-11-07: Die App darf mit Kevins echten Daten gegen die
    Cloud sichern, Claude darf die Schlüssel dafür kennen; zurückgesetzt wird vor dem
    ersten weiteren Nutzer (b2b-entwurf.md, Checkliste; `CLAUDE.md`).
-   **Weiter mit:** Schritt 7 (App-Einbindung, eigener Entwurf im App-Repo); Pfeffer
+   **Schritt 7 (App-Einbindung):** Entwurf im App-Repo bestätigt am 2026-11-07
+   (`../avlreminder/docs/backup-entwurf.md`, fünf Schritte); App und `core` bauen dafür
+   jetzt für Java 21. Vorab legt Kevin die OAuth-Clients (Web und Android) an; die
+   Web-Client-ID kommt in `google_client_ids` (`tofu apply`, nur Umgebungsvariable).
+   Teil 1 im Backend am 2026-11-07: Anmelden, Erneuern und „gültige Sitzung“
+   (`Anmeldung`, Geräteschlüssel und Sitzungsablage als Schnittstellen) liegen in
+   `verbindung`, getestet gegen den Connect-Nachbau; der Test-Client nutzt sie.
+   Module haben die Gruppe `com.avlreminder.client` für den Composite Build.
+   **Weiter mit:** Schritt 7, Teil 1 in der App (Composite Build, CI); Pfeffer
    offline sichern, sobald die App echte Daten sichert. Offen aus
    Lauf 5: Empfehlungen E5–E7; aus Lauf 6: E1–E6.
 5. Für den B3-Entwurf aus Lauf 4: A2 (Mitgliedschaft: Server-Liste oder signiertes

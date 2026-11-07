@@ -19,7 +19,6 @@ import com.avlreminder.protokoll.Einrichtung
 import com.avlreminder.protokoll.EinrichtungAbgebrochen
 import com.avlreminder.protokoll.EntschluesselnFehlgeschlagen
 import com.avlreminder.protokoll.GeraetNichtFreigeschaltet
-import com.avlreminder.protokoll.Geraetenachrichten
 import com.avlreminder.protokoll.Gesichert
 import com.avlreminder.protokoll.NeueresSchema
 import com.avlreminder.protokoll.SicherungTageslimit
@@ -28,11 +27,12 @@ import com.avlreminder.protokoll.Sicherungsablauf
 import com.avlreminder.protokoll.Sicherungskopf
 import com.avlreminder.protokoll.VersionVeraltet
 import com.avlreminder.protokoll.Wiederhergestellt
-import com.avlreminder.schnittstelle.v1.AnmeldenRequest
 import com.avlreminder.schnittstelle.v1.GeraetSperrenRequest
 import com.avlreminder.schnittstelle.v1.GeraeteAuflistenRequest
-import com.avlreminder.schnittstelle.v1.Sitzung
-import com.avlreminder.schnittstelle.v1.SitzungErneuernRequest
+import com.avlreminder.verbindung.Anmeldung
+import com.avlreminder.verbindung.AnmeldungAbgelehnt
+import com.avlreminder.verbindung.GeraetGesperrt
+import com.avlreminder.verbindung.NichtAngemeldet
 import com.avlreminder.verbindung.ServerBackupAblage
 import com.avlreminder.verbindung.ServerDiagnoseAblage
 import com.avlreminder.verbindung.ServerGeraete
@@ -42,7 +42,6 @@ import com.avlreminder.verbindung.Verbindung
 import com.avlreminder.verbindung.ergebnis
 import com.avlreminder.verbindung.mitSitzung
 import com.google.protobuf.ByteString
-import com.google.protobuf.Timestamp
 import kotlinx.coroutines.runBlocking
 import java.io.File
 import java.net.URI
@@ -99,7 +98,8 @@ fun main(args: Array<String>) {
     } catch (e: Exception) {
         // Erwartete Meldungen des Sicherungsablaufs (protokoll) ohne Stacktrace.
         if (e is VersionVeraltet || e is AeltereSicherung || e is NeueresSchema || e is SicherungZuGross || e is SicherungTageslimit ||
-            e is EntschluesselnFehlgeschlagen || e is DiagnoseTageslimit || e is DiagnoseZuGross
+            e is EntschluesselnFehlgeschlagen || e is DiagnoseTageslimit || e is DiagnoseZuGross ||
+            e is NichtAngemeldet || e is AnmeldungAbgelehnt || e is GeraetGesperrt
         ) {
             System.err.println("Fehler: ${e.message}")
             exitProcess(1)
@@ -169,26 +169,21 @@ private class Werkzeug(
     private val googleOrdner: File,
     private val name: String,
 ) {
+    private fun anmeldung() = Anmeldung(verbindung, ablage.geraet(name), ablage.sitzungsAblage(name))
+
     suspend fun anmelden() {
-        val geraet = ablage.geraet(name)
-        val idToken = googleIdToken(GoogleClient.aus(googleOrdner), Geraetenachrichten.nonce(geraet.der), verbindung.http)
-        val antwort = verbindung.anmelde.anmelden(
-            AnmeldenRequest.newBuilder()
-                .setGoogleIdToken(idToken)
-                .setGeraeteschluessel(ByteString.copyFrom(geraet.der))
-                .setSignatur(ByteString.copyFrom(geraet.signiere(Geraetenachrichten.anmelden(idToken))))
-                .build(),
-        ).ergebnis()
-        speichereSitzung(antwort.kontoId, antwort.geraetId, antwort.sitzung)
-        println("Angemeldet: Konto ${antwort.kontoId}, Gerät ${antwort.geraetId}" + if (antwort.neuesKonto) " (neues Konto)" else "")
-        if (!antwort.freigeschaltet) println("Dieses Gerät ist noch nicht freigeschaltet.")
+        val anmeldung = anmeldung()
+        val angemeldet = anmeldung.anmelden(googleIdToken(GoogleClient.aus(googleOrdner), anmeldung.nonce, verbindung.http))
+        val antwort = angemeldet.sitzung
+        println("Angemeldet: Konto ${antwort.kontoId}, Gerät ${antwort.geraetId}" + if (angemeldet.neuesKonto) " (neues Konto)" else "")
+        if (!angemeldet.freigeschaltet) println("Dieses Gerät ist noch nicht freigeschaltet.")
 
         val ergebnis = Einrichtung(
             antwort.kontoId,
             antwort.geraetId,
-            antwort.freigeschaltet,
-            ServerBackupAblage(verbindung, antwort.sitzung.token),
-            ServerGeraete(verbindung, antwort.sitzung.token),
+            angemeldet.freigeschaltet,
+            ServerBackupAblage(verbindung, antwort.token),
+            ServerGeraete(verbindung, antwort.token),
             ablage.lokal(name, antwort.kontoId),
             frageSchluessel = {
                 print("Wiederherstellungsschlüssel (leer = Abbruch): ")
@@ -215,18 +210,8 @@ private class Werkzeug(
     }
 
     suspend fun erneuern() {
-        val alt = ablage.sitzung(name)
-        val geraet = ablage.geraet(name)
-        val jetzt = Instant.now().epochSecond
-        val antwort = verbindung.anmelde.sitzungErneuern(
-            SitzungErneuernRequest.newBuilder()
-                .setGeraetId(geraet.id)
-                .setZeitpunkt(Timestamp.newBuilder().setSeconds(jetzt))
-                .setSignatur(ByteString.copyFrom(geraet.signiere(Geraetenachrichten.sitzung(geraet.id, jetzt))))
-                .build(),
-        ).ergebnis()
-        speichereSitzung(alt.kontoId, geraet.id, antwort.sitzung)
-        println("Sitzung erneuert, gültig bis ${Instant.ofEpochSecond(antwort.sitzung.laeuftAb.seconds)}")
+        val sitzung = anmeldung().erneuern()
+        println("Sitzung erneuert, gültig bis ${Instant.ofEpochSecond(sitzung.laeuftAbUnix)}")
     }
 
     suspend fun geraete() {
@@ -340,9 +325,6 @@ private class Werkzeug(
         print("$text \"ja\" eingeben: ")
         return readlnOrNull()?.trim()?.lowercase() == "ja"
     }
-
-    private fun speichereSitzung(kontoId: String, geraetId: String, sitzung: Sitzung) =
-        ablage.speichereSitzung(name, GespeicherteSitzung(kontoId, geraetId, sitzung.token, sitzung.laeuftAb.seconds))
 }
 
 /**
