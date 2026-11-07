@@ -23,10 +23,13 @@ interface Geraeteschluessel {
 /** Eine Sitzung beim Server, wie das Gerät sie sich merkt. */
 data class Sitzung(val kontoId: String, val geraetId: String, val token: String, val laeuftAbUnix: Long)
 
-/** Wo das Gerät seine Sitzung ablegt (Test-Client: Datei, App: DataStore). */
+/**
+ * Wo das Gerät seine Sitzung ablegt (Test-Client: Datei, App: DataStore).
+ * `suspend`, weil DataStore nur asynchron liest und schreibt.
+ */
 interface SitzungsAblage {
-    fun lesen(): Sitzung?
-    fun speichern(sitzung: Sitzung)
+    suspend fun lesen(): Sitzung?
+    suspend fun speichern(sitzung: Sitzung)
 }
 
 /** Ergebnis von [Anmeldung.anmelden]. */

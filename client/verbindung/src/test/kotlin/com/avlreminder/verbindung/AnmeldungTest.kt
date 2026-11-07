@@ -80,8 +80,8 @@ class AnmeldungTest {
     }
 
     private class Speicher(var sitzung: Sitzung? = null) : SitzungsAblage {
-        override fun lesen() = sitzung
-        override fun speichern(sitzung: Sitzung) {
+        override suspend fun lesen() = sitzung
+        override suspend fun speichern(sitzung: Sitzung) {
             this.sitzung = sitzung
         }
     }

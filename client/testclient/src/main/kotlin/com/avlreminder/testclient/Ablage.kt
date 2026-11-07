@@ -98,14 +98,14 @@ class Ablage(private val ordner: File) {
 
     /** Die Sitzung des Geräts für [com.avlreminder.verbindung.Anmeldung]. */
     fun sitzungsAblage(name: String): SitzungsAblage = object : SitzungsAblage {
-        override fun lesen(): Sitzung? {
+        override suspend fun lesen(): Sitzung? {
             val datei = datei("sitzung", name, "json")
             if (!datei.exists()) return null
             val s = lies<GespeicherteSitzung>(datei)
             return Sitzung(s.kontoId, s.geraetId, s.token, s.laeuftAbUnix)
         }
 
-        override fun speichern(sitzung: Sitzung) =
+        override suspend fun speichern(sitzung: Sitzung) =
             speichereSitzung(name, GespeicherteSitzung(sitzung.kontoId, sitzung.geraetId, sitzung.token, sitzung.laeuftAbUnix))
     }
 

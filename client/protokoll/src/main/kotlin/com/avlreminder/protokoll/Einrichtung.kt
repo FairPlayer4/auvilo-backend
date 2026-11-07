@@ -87,9 +87,10 @@ sealed interface Eingerichtet {
  * @param freigeschaltet ob der Server dieses Gerät schon als freigeschaltet
  *   meldet (Anmelden); dann ist keine Freischaltung nötig.
  * @param frageSchluessel fragt den Menschen nach dem Wiederherstellungsschlüssel;
- *   null heißt Abbruch.
+ *   null heißt Abbruch. `suspend`, damit die App auf die Eingabe in der
+ *   Oberfläche warten kann, ohne einen Thread zu blockieren.
  * @param zeigeWiederherstellung zeigt einen neuen Wiederherstellungsschlüssel;
- *   true heißt, der Mensch hat ihn aufgeschrieben.
+ *   true heißt, der Mensch hat ihn aufgeschrieben (ebenfalls `suspend`).
  * @param meldung Hinweise an den Menschen.
  */
 class Einrichtung(
@@ -99,8 +100,8 @@ class Einrichtung(
     private val server: BackupAblage,
     private val freischaltung: GeraeteFreischaltung,
     private val lokal: LokaleAblage,
-    private val frageSchluessel: () -> String?,
-    private val zeigeWiederherstellung: (Wiederherstellungsschluessel) -> Boolean,
+    private val frageSchluessel: suspend () -> String?,
+    private val zeigeWiederherstellung: suspend (Wiederherstellungsschluessel) -> Boolean,
     private val meldung: (String) -> Unit,
 ) {
     /**

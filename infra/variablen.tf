@@ -91,13 +91,19 @@ variable "github_repo_id" {
   default     = "1441701583"
 }
 
-# Client-IDs sind nicht geheim (sie stehen in jeder App). Heute nur der
-# Desktop-Client für den Kotlin-Test-Client; der Android-Client kommt mit
-# der App-Anbindung, der Desktop-Client fliegt dann raus (Review Lauf 2).
+# Client-IDs sind nicht geheim (sie stehen in jeder App). Der Desktop-Client
+# gehört zum Kotlin-Test-Client, der Web-Client zur App: Bei „Mit Google
+# anmelden“ auf Android ist `aud` des ID-Tokens der Web-Client (serverClientId),
+# nicht der Android-Client; deshalb steht der Android-Client hier nicht. Der
+# Desktop-Client fliegt raus, sobald der Test-Client nicht mehr gebraucht wird
+# (Review Lauf 2).
 variable "google_client_ids" {
   description = "OAuth-Client-IDs, deren Google-ID-Tokens der Server annimmt"
   type        = list(string)
-  default     = ["82416816442-vka4ve2no02681umqkn8b0rk37ri37qd.apps.googleusercontent.com"]
+  default = [
+    "82416816442-vka4ve2no02681umqkn8b0rk37ri37qd.apps.googleusercontent.com", # Desktop (Test-Client)
+    "82416816442-suvsga1qcl9aaj1u9rtdhbt91ekadh92.apps.googleusercontent.com", # Web (App, serverClientId)
+  ]
 
   validation {
     condition     = length(var.google_client_ids) > 0 && alltrue([for id in var.google_client_ids : endswith(id, ".apps.googleusercontent.com")])

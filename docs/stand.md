@@ -253,7 +253,13 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
    (`Anmeldung`, Geräteschlüssel und Sitzungsablage als Schnittstellen) liegen in
    `verbindung`, getestet gegen den Connect-Nachbau; der Test-Client nutzt sie.
    Module haben die Gruppe `com.avlreminder.client` für den Composite Build.
-   **Weiter mit:** Schritt 7, Teil 1 in der App (Composite Build, CI); Pfeffer
+   Teil 1 in der App am 2026-11-07 (Composite Build, CI mit Deploy-Key, grün). Teil 2
+   (Anmelden und Einrichten in der App) gebaut; dafür im Backend `SitzungsAblage` und die
+   Rückfragen der `Einrichtung` auf `suspend` umgestellt. Die Web-Client-ID der App steht
+   in `google_client_ids`, **noch nicht angewendet** (Plan: nur die Umgebungsvariable
+   `GOOGLE_CLIENT_IDS` des Dienstes `server`, neue Revision mit gleichem Image).
+   **Weiter mit:** `tofu apply` für die Client-ID (Kevins Go), Test-Schlüssel von Kevins
+   Konto räumen, Gerätetest von Schritt 2 in der App; Pfeffer
    offline sichern, sobald die App echte Daten sichert. Offen aus
    Lauf 5: Empfehlungen E5–E7; aus Lauf 6: E1–E6.
 5. Für den B3-Entwurf aus Lauf 4: A2 (Mitgliedschaft: Server-Liste oder signiertes
