@@ -131,7 +131,9 @@ Hinweise:
 ### Vor echten Daten: Pfeffer offline sichern [Kevin, allein]
 Mit dem Pfeffer bildet der Server aus der Google-Konto-ID die Konto-ID. Ohne ihn
 findet kein Gerät sein Konto, sein Schlüssel-Backup und seine Datensicherung wieder.
-OpenTofu schützt ihn vor `tofu destroy`; eine zerstörte Version bleibt 30 Tage
+OpenTofu verwaltet nur das Secret (geschützt vor `tofu destroy`), nicht den Wert:
+Version 1 legt man per gcloud an (siehe „Neu aufbauen“), damit der Pfeffer nie in den
+Zustand gerät (Probe am 2026-11-07). Eine zerstörte Version bleibt 30 Tage
 wiederherstellbar. **Nicht** geschützt ist das Löschen des ganzen Secrets (Konsole,
 gcloud): Das geht sofort und endgültig. Dagegen hilft nur diese Kopie.
 
@@ -162,24 +164,42 @@ Danach die Zwischenablage wieder leeren.
 gcloud secrets versions enable 1 --secret=pfeffer --project=avlreminder-exp-1ef2
 ```
 
-**Secret gelöscht** – Achtung: vorher **kein** `tofu apply`, das legte einen neuen,
-zufälligen Pfeffer an.
+**Secret gelöscht** (eigenes Terminal; vorher kein `tofu apply`, es legte ein leeres
+Secret ohne Wert an):
 1. Secret neu anlegen und den Wert aus der Zwischenablage hochladen (Git Bash,
-   Wert vorher aus dem Passwortmanager kopieren):
+   Wert vorher aus dem Passwortmanager kopieren). Die erste Version eines neuen
+   Secrets ist Version 1, die der Server liest:
    ```bash
    gcloud secrets create pfeffer --project=avlreminder-exp-1ef2 --replication-policy=user-managed --locations=europe-west1 --version-destroy-ttl=2592000s
    powershell -NoProfile -Command Get-Clipboard | tr -d '\r\n' | gcloud secrets versions add pfeffer --project=avlreminder-exp-1ef2 --data-file=-
    ```
-2. OpenTofu den neuen Stand übernehmen lassen (im Ordner `infra/`):
+   Danach die Zwischenablage leeren.
+2. OpenTofu das neue Secret übernehmen lassen (im Ordner `infra/`). **Nur das
+   Secret** importieren, nie die Version: Beim Import der Version liest der Provider
+   den Wert in den Zustand, und der Plan will sie ersetzen (Probe am 2026-11-07).
    ```bash
-   tofu state rm google_secret_manager_secret_version.pfeffer google_secret_manager_secret.pfeffer
+   tofu state rm google_secret_manager_secret.pfeffer
    tofu import google_secret_manager_secret.pfeffer projects/avlreminder-exp-1ef2/secrets/pfeffer
-   tofu import google_secret_manager_secret_version.pfeffer projects/avlreminder-exp-1ef2/secrets/pfeffer/versions/1
+   tofu plan
    ```
-   Danach darf `tofu plan` keine neue Version des Pfeffers zeigen; die
-   Zugriffsrechte des Servers legt `tofu apply` wieder an.
-3. Prüfen: Ein vorhandenes Gerät meldet sich an und findet seine Datensicherung.
-   Findet es keine, ist der Wert falsch (z. B. mit Zeilenumbruch hochgeladen).
+   Der Plan darf nur das Label `goog-terraform-provisioned` am Secret ergänzen und
+   das Leserecht des Servers (`server_pfeffer`) neu anlegen; mit dem Secret ist es
+   weg. Dann `tofu apply`.
+3. Prüfen: Ein vorhandenes Gerät meldet sich an (`anmelden`, nicht nur
+   `erneuern`: nur die Anmeldung braucht den Pfeffer) und findet seine
+   Datensicherung. Laufende Instanzen haben den alten Wert noch im Speicher; neue
+   lesen Version 1. Findet das Gerät nichts, ist der Wert falsch (z. B. mit
+   Zeilenumbruch hochgeladen).
+
+**Neu aufbauen** (leeres Projekt): Der Server startet erst, wenn Version 1 da ist.
+Darum zuerst nur das Secret anlegen, dann den Wert (eigenes Terminal), dann den Rest:
+```bash
+tofu apply -target=google_secret_manager_secret.pfeffer
+openssl rand -base64 96 | tr -dc 'A-Za-z0-9' | head -c 64 | gcloud secrets versions add pfeffer --project=avlreminder-exp-1ef2 --data-file=-
+tofu apply
+```
+64 Buchstaben und Ziffern (≈ 380 Bit), wie bisher. Danach den Pfeffer wie oben
+offline sichern.
 
 ### B4: Firebase für Push [Kevin, mit Anleitung]
 - console.firebase.google.com → *Projekt hinzufügen* → **bestehendes GCP-Projekt**

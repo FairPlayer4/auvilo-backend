@@ -27,6 +27,9 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
   öffentlich aufrufbar, eigenes Dienstkonto `server` (Firestore, nur Secret `pfeffer`).
   Adresse: `tofu output server_url`.
 - Secret `pfeffer` (nur europe-west1, feste Version 1, Wert nicht im Zustand).
+  Seit 2026-11-07 verwaltet OpenTofu nur das Secret, nicht die Version mit dem
+  Wert (Pfeffer-Probe: ein Import läse ihn in den Zustand; Ablauf in
+  [gcp-einrichtung.md](gcp-einrichtung.md)). Angewendet: 1 vergessen, sonst nichts.
   Schutz auch außerhalb von OpenTofu: Zerstörte Versionen bleiben 30 Tage
   wiederherstellbar (`version_destroy_ttl`, angewendet 2026-11-01). Das gilt für
   einzelne Versionen; gegen das Löschen des ganzen Secrets (Console, `gcloud

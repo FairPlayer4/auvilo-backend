@@ -20,11 +20,6 @@ terraform {
       source  = "hashicorp/archive"
       version = ">= 2.4"
     }
-    random = {
-      source = "hashicorp/random"
-      # 3.7: random_password auch als ephemeral-Ressource
-      version = "~> 3.7"
-    }
   }
 
   backend "gcs" {

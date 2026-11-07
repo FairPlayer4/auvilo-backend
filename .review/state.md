@@ -118,8 +118,8 @@ Vom Entwickler bestätigt am 2026-11-01.
     (E1); Deploy ohne CI-Gate (E3).
 
 ## Offene Fragen an den Entwickler
-Aus Lauf 7, Frage 3: Pfeffer-Wiederherstellung durchspielen – entschieden (ja, vor
-der Sicherheitsphase), Durchlauf steht noch aus.
+Keine offenen Fragen. Lauf 7, Frage 3 (Pfeffer) am 2026-11-07 erledigt: Probe zeigte
+Pfeffer im Zustand und Ersatz beim Import; Version aus OpenTofu genommen, Anleitung neu.
 Erledigt am 2026-11-07: Lauf 8, Fragen 6 (Ablehnung gemerkt, automatische Sicherung
 ruht) und 7 (2 Instanzen bleiben); Lauf 7, Frage 1 bestätigt. Lauf 8, Fragen 1–5
 am 2026-11-06.
