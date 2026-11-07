@@ -223,7 +223,17 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
    Tageslimits für Holen (50) und Löschen (20) der Sicherung und für Sitzungen
    (200 je Gerät); Interceptor prüft „gesperrt“, Sperren löscht Sitzungen in
    Stapeln; höchstens 10 offene Geräte je Konto. Server, Schnittstelle (nur
-   Kommentare), Adapter und Test-Client. Deploy über PR nach `main`.
+   Kommentare), Adapter und Test-Client. Deploy über PR #12 am 2026-11-06.
+   **In der Cloud getestet** am 2026-11-07 (Geräte `r-pc`, `r-handy`): `r-pc`
+   wird freigeschaltet, weil das Konto kein freigeschaltetes Gerät hatte, löscht
+   das alte Schlüssel-Backup, sperrt die alten `cloud-*`-Geräte und sendet eine
+   Diagnose. `r-handy` ist nicht freigeschaltet: Sein erstes Backup lehnt der
+   Server ab, ebenso seine Diagnose; Geräte auflisten geht. Nachdem `r-pc` es
+   gesperrt hat, lehnt der Server seine noch laufende Sitzung beim nächsten
+   Aufruf ab (3 s später, `unauthenticated`). Log nur mit Geräte-IDs.
+   Nicht in der Cloud getestet (nur Tests): Gerätelimit und Tageslimits.
+   Die alte Testsicherung liegt noch im Bucket (`sicherung-loeschen` braucht
+   lokale Schlüssel; geht mit „Vor echten Daten“, Punkt 1, weg).
    Egress-Alarm (`infra/alarm.tf`: Mail, wenn der Server in 23 Stunden mehr als
    1 GiB sendet, ca. 0,40 $/Monat) am 2026-11-06 angewendet (2 neu, 1 geändert,
    1 entfernt); dabei wurde auch der Kill-Switch mit den Fixes aus Lauf 8 neu gebaut.
