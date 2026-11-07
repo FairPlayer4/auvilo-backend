@@ -128,7 +128,7 @@ Hinweise:
 - Für die Android-App kommen später ein Web- und ein Android-Client dazu (Etappe
   mit App-Anbindung); der Server akzeptiert dann mehrere Client-IDs.
 
-### Vor echten Daten: Pfeffer offline sichern [Kevin, allein]
+### Pfeffer offline sichern [Kevin]
 Mit dem Pfeffer bildet der Server aus der Google-Konto-ID die Konto-ID. Ohne ihn
 findet kein Gerät sein Konto, sein Schlüssel-Backup und seine Datensicherung wieder.
 OpenTofu verwaltet nur das Secret (geschützt vor `tofu destroy`), nicht den Wert:
@@ -137,10 +137,12 @@ Zustand gerät (Probe am 2026-11-07). Eine zerstörte Version bleibt 30 Tage
 wiederherstellbar. **Nicht** geschützt ist das Löschen des ganzen Secrets (Konsole,
 gcloud): Das geht sofort und endgültig. Dagegen hilft nur diese Kopie.
 
-Claude sieht den Pfeffer nie. Darum in einem **eigenen** Terminal ausführen, nicht im
-Terminal-Bereich der Claude-App, und den Wert nicht anzeigen lassen.
+Im Eigenbetrieb darf Claude den Pfeffer kennen (`CLAUDE.md`); ab der
+Sicherheitsphase nicht mehr. Dann in einem **eigenen** Terminal ausführen, nicht im
+Terminal-Bereich der Claude-App, und den Wert nicht anzeigen lassen. Die Schritte
+sind schon jetzt so geschrieben.
 
-**Sichern** (einmal, zu Beginn der Sicherheitsphase; Git Bash):
+**Sichern** (sobald die App echte Daten sichert, und erneut nach dem neuen Pfeffer zu Beginn der Sicherheitsphase; Git Bash):
 ```bash
 gcloud secrets versions access 1 --secret=pfeffer --project=avlreminder-exp-1ef2 | clip
 ```

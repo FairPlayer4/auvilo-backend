@@ -238,12 +238,15 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
    Aufruf ab (3 s später, `unauthenticated`). Log nur mit Geräte-IDs.
    Nicht in der Cloud getestet (nur Tests): Gerätelimit und Tageslimits.
    Die alte Testsicherung liegt noch im Bucket (`sicherung-loeschen` braucht
-   lokale Schlüssel; geht mit „Vor echten Daten“, Punkt 1, weg).
+   lokale Schlüssel; geht beim Zurücksetzen vor dem ersten weiteren Nutzer weg).
    Egress-Alarm (`infra/alarm.tf`: Mail, wenn der Server in 23 Stunden mehr als
    1 GiB sendet, ca. 0,40 $/Monat) am 2026-11-06 angewendet (2 neu, 1 geändert,
    1 entfernt); dabei wurde auch der Kill-Switch mit den Fixes aus Lauf 8 neu gebaut.
-   **Weiter mit:** die Schritte, die nur Kevin macht
-   (b2b-entwurf.md, „Vor echten Daten“, Punkte 1–3 und 6); Schritt 7 (App-Einbindung, eigener Entwurf im App-Repo). Offen aus
+   **Eigenbetrieb** seit 2026-11-07: Die App darf mit Kevins echten Daten gegen die
+   Cloud sichern, Claude darf die Schlüssel dafür kennen; zurückgesetzt wird vor dem
+   ersten weiteren Nutzer (b2b-entwurf.md, Checkliste; `CLAUDE.md`).
+   **Weiter mit:** Schritt 7 (App-Einbindung, eigener Entwurf im App-Repo); Pfeffer
+   offline sichern, sobald die App echte Daten sichert. Offen aus
    Lauf 5: Empfehlungen E5–E7; aus Lauf 6: E1–E6.
 5. Für den B3-Entwurf aus Lauf 4: A2 (Mitgliedschaft: Server-Liste oder signiertes
    Log), A4 (Umschläge an Kontext binden, Keyset-Typen prüfen), A5 (Speicher und

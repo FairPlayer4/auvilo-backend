@@ -142,36 +142,60 @@ falschem Tresorschlüssel, kleinerer Zähler, verändertes Chiffrat, zu groß.
    mit Keystore-Schlüssel verschlüsselt, Anmeldung über den Credential Manager,
    WorkManager, Anzeige „letzte Sicherung“, eigene App-Variante).
 
-## Vor echten Daten (Beginn der Sicherheitsphase)
-Bis hierher sind alle Schlüssel Testschlüssel: Sie lagen im Klartext in `%APPDATA%`,
-und ihre Wiederherstellungsschlüssel standen zum Teil in Terminal-Ausgaben, die Claude
-gelesen hat. Bevor die App-Variante echte Daten sichert:
-1. Schlüssel-Backup und Datensicherung des Testkontos auf dem Server löschen. Dafür
-   bekommt `SchluesselDienst` in B2b einen Aufruf `BackupLoeschen` und der Test-Client
-   den Befehl `schluessel-loeschen`.
-2. Die Dateien in `%APPDATA%\avlreminder\testclient` löschen.
-3. Die App erzeugt auf dem Gerät **neue** Schlüssel und einen neuen
-   Wiederherstellungsschlüssel. Den sieht nur Kevin, auf Papier; kein Terminal, kein
-   Screenshot, kein Gespräch mit Claude.
-4. **Löschschutz an:** Firestore `deletion_policy = "ABANDON"` und
+## Vor dem ersten weiteren Nutzer (Beginn der Sicherheitsphase)
+Entschieden 2026-11-07: Bis dahin gilt **Eigenbetrieb**. Echte Daten gibt es nur von
+Kevin; die App darf schon gegen die Cloud sichern, mit Schlüsseln, die Claude kennen
+darf (`CLAUDE.md`, „Geheimnisse und Sicherheitsphase“). Alle Schlüssel und der
+Pfeffer gelten daher als bekannt: Sie lagen im Klartext in `%APPDATA%`, und Werte
+standen in Ausgaben, die Claude gelesen hat. Die Sicherheitsphase beginnt **vor**
+dem ersten dieser Schritte: Teilen mit einer anderen Person (B3, auch Familie),
+erster Tester, Veröffentlichung im Play Store.
+
+Zurückgesetzt wird so, dass nichts mit einem alten Schlüssel Verschlüsseltes übrig
+bleibt; dann sind die alten Werte in Gesprächsverläufen wertlos. Kevins Daten liegen
+dabei nur noch auf dem Handy: nur mit einem funktionierenden Handy beginnen und
+gleich danach neu sichern. Checkliste:
+1. **Daten auf dem Server löschen:** für jedes Konto die Datensicherung mit allen
+   Fassungen (`sicherung-loeschen`) und das Schlüssel-Backup (`schluessel-loeschen`),
+   dazu alle Diagnosen im Bucket `…-diagnose`. Danach prüfen, dass die Buckets leer
+   sind (auch ältere Fassungen: `gcloud storage ls --all-versions`).
+2. **Firestore leeren:** die Sammlungen `konten`, `google_kennungen`, `geraete`,
+   `sitzungen`, `backups` und `kontingente`. Mit dem neuen Pfeffer (Punkt 3)
+   entstehen ohnehin neue Konto-IDs; die alten Dokumente wären verwaist.
+3. **Neuer Pfeffer:** Kevin legt allein eine neue Version an, der Server liest fest
+   die neue Version (Änderung in `infra/server.tf`, tofu-Test anpassen), die alte
+   wird zerstört. Danach die Offline-Kopie im Passwortmanager ersetzen (Ablauf in
+   [gcp-einrichtung.md](gcp-einrichtung.md)).
+4. **Testclient-Dateien löschen:** `%APPDATA%\avlreminder\testclient`.
+5. **App neu einrichten:** Die App erzeugt auf dem Gerät **neue** Geräte- und
+   Personenschlüssel und einen neuen Wiederherstellungsschlüssel. Den sieht nur
+   Kevin, auf Papier; kein Terminal, kein Screenshot, kein Gespräch mit Claude.
+   Danach sofort sichern und einmal wiederherstellen (Probe).
+6. **Prüfen:** Ab jetzt meldet Claude, wenn eine Aufgabe einen der Werte bräuchte,
+   statt ihn zu lesen.
+
+Außerdem, damals unter „Vor echten Daten“ (erledigt bis auf die Offline-Kopie des
+Pfeffers, die mit den ersten echten Daten fällig wird):
+- **Löschschutz an:** Firestore `deletion_policy = "ABANDON"` und
    `delete_protection_state`, Cloud Run `deletion_protection = true`, Bucket mit
    `force_destroy = false`. (In OpenTofu erledigt 2026-11-05, per `tofu test`
    abgesichert; „vollständig löschbar“ bleibt über das Löschen des Projekts.)
-5. **Neue Geräte:** entscheiden und umsetzen, dass ein neu angemeldetes Gerät erst
+- **Neue Geräte:** entscheiden und umsetzen, dass ein neu angemeldetes Gerät erst
    nach Freischaltung (QR oder Wiederherstellungsschlüssel) andere Geräte sperren und
    Backup oder Datensicherung löschen darf, und dass vorhandene Geräte von jedem neuen
    Gerät erfahren (Grenze in [b1-entwurf.md](b1-entwurf.md), „Gerät sperren“).
    Erledigt 2026-11-05: E-B2b-13 (unten), Server, Schnittstelle, `protokoll`,
    Adapter und Test-Client. Der Hinweis „Neues Gerät angemeldet“ kommt mit der App.
-6. **Pfeffer offline sichern:** Die Konto-ID ist ein HMAC der Google-Konto-ID mit
-   dem Pfeffer. Geht er verloren, findet kein Gerät Schlüssel-Backup und
-   Datensicherung wieder. Kevin legt allein eine Kopie im Passwortmanager ab
-   (Ablauf und Wiederherstellen in [gcp-einrichtung.md](gcp-einrichtung.md)).
-7. **Kosten und Rechte:** Upload-Limit je Konto und Tag im Server (erledigt
+- **Pfeffer offline sichern:** Die Konto-ID ist ein HMAC der Google-Konto-ID mit
+  dem Pfeffer. Geht er verloren, findet kein Gerät Schlüssel-Backup und
+  Datensicherung wieder. Kevin legt eine Kopie im Passwortmanager ab, sobald die
+  App echte Daten sichert (im Eigenbetrieb darf Claude dabei helfen), und ersetzt
+  sie in Punkt 3. Ablauf und Wiederherstellen in [gcp-einrichtung.md](gcp-einrichtung.md).
+- **Kosten und Rechte:** Upload-Limit je Konto und Tag im Server (erledigt
    2026-11-05, E-B2b-12); der Kill-Switch sperrt ohne actAs, indem er `allUsers`
    entfernt (erledigt 2026-11-05, [stand.md](stand.md)).
 
-Claude kündigt diesen Schritt vorher ausdrücklich an (siehe `CLAUDE.md`,
+Claude kündigt die Sicherheitsphase vorher ausdrücklich an (siehe `CLAUDE.md`,
 „Geheimnisse und Sicherheitsphase“). Das Rotieren der Schlüssel selbst kommt erst in
 B4; bis dahin heißt „rotieren“ hier: zurücksetzen und neu erzeugen.
 
@@ -225,8 +249,8 @@ nutzt, was der Mensch für ein neues Gerät ohnehin eintippt.
 **Aufwand:** Server (Feld am Gerät, Prüfungen in den Diensten, zwei neue Aufrufe),
 Schnittstelle, `protokoll` (Ableitung und Signatur), Adapter, Test-Client-Befehle;
 etwa so groß wie das Diagnose-Log. Die Testgeräte in Firestore haben das Feld noch
-nicht; sie werden vor echten Daten ohnehin gelöscht (Punkt 1). Deshalb Punkt 1 vor
-dem Deploy dieses Schritts erledigen oder die Testgeräte einmal freischalten.
+nicht; sie werden beim Zurücksetzen vor dem ersten weiteren Nutzer ohnehin gelöscht
+(Punkt 2). Bis dahin mit neuem Gerätenamen anmelden (so am 2026-11-07, `r-pc`).
 
 ## Bekannte Grenzen (bewusst)
 - **Ein sicherndes Gerät.** Zwei Geräte mit verschiedenen Daten führt erst B3
@@ -263,8 +287,8 @@ dem Deploy dieses Schritts erledigen oder die Testgeräte einmal freischalten.
   Aus demselben Grund kann die Grenze von 10 nicht freigeschalteten Geräten bei
   gleichzeitigen Anmeldungen um wenige überschritten werden.
 - **Testgeräte von vor E-B2b-13** sind in Firestore nicht freigeschaltet (das Feld
-  fehlt). Mit einem neuen Gerätenamen anmelden oder sie werden vor echten Daten
-  ohnehin gelöscht (Punkt 1).
+  fehlt). Mit einem neuen Gerätenamen anmelden; gelöscht werden sie beim
+  Zurücksetzen vor dem ersten weiteren Nutzer (Punkt 2).
 - **Schlüssel-Backup nach dem Löschen.** Die Version beginnt wieder bei 1. Ein Gerät,
   das noch Version 1 erwartet, könnte so ein neues Backup überschreiben. Heute
   harmlos, weil Clients nur mit `erwartet = 0` speichern (Kommentar in
