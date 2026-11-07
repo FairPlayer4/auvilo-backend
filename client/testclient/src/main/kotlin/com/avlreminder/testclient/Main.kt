@@ -270,10 +270,12 @@ private class Werkzeug(
             throw Bedienfehler("Schlüssel-Backup noch nicht hochgeladen - zuerst erneut anmelden.")
         }
         val ergebnis = sicherungsablauf { kopf -> frage("Die Sicherung stammt von ${beschreibe(kopf)}. Überschreiben?") }
-            .sichern(datei.readBytes(), SCHEMA_VERSION)
+            .sichern(datei.readBytes(), SCHEMA_VERSION, automatisch = false) // von Hand: fragt bei fremder Sicherung
         when (ergebnis) {
             is Gesichert.Ja -> println("Gesichert: Zähler ${ergebnis.zaehler}, Version ${ergebnis.version}")
             is Gesichert.AnderesGeraet -> println("Nicht gesichert: Die Sicherung von ${beschreibe(ergebnis.kopf)} bleibt.")
+            // Kommt nur beim automatischen Sichern vor, also nie hier.
+            Gesichert.Ruht -> println("Nicht gesichert: automatisches Sichern ruht nach abgelehnter Übernahme.")
         }
     }
 

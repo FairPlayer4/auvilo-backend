@@ -58,7 +58,9 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
   begrenzt der Server auf 48 Sicherungen je Konto und Tag
   ([b2b-entwurf.md](b2b-entwurf.md), E-B2b-12); Holen auf 50 und Löschen auf 20
   je Konto und Tag (seit 2026-11-06), dazu höchstens 4 gleichzeitige Aufrufe und
-  der Egress-Alarm (1 GiB in 23 Stunden).
+  der Egress-Alarm (1 GiB in 23 Stunden). Die Grenze von 4 gilt je Instanz; mit
+  bis zu 2 Instanzen laufen also höchstens 8 Sicherungen gleichzeitig (entschieden
+  2026-11-07).
 - **Bekannte Grenze (Absenz-Alarm):** schlägt erst an, nachdem der Kill-Switch
   einmal aufgerufen wurde. Nach einem Neuaufbau einmal eine Meldung unter der
   Schwelle schicken (`gcloud pubsub topics publish budget-meldungen

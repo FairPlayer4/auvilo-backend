@@ -58,7 +58,7 @@ private data class GespeicherteSchluessel(
 
 /** Was ein Gerät sich über die Datensicherung seines Kontos merkt. */
 @Serializable
-private data class GespeicherterStand(val kontoId: String, val zaehler: Long, val version: Long, val gesehen: Long = 0)
+private data class GespeicherterStand(val kontoId: String, val zaehler: Long, val version: Long, val gesehen: Long = 0, val abgelehnt: Boolean = false)
 
 /**
  * Legt je Gerätename Dateien in [ordner] ab (standardmäßig
@@ -142,11 +142,11 @@ class Ablage(private val ordner: File) {
             if (s.kontoId != kontoId) {
                 throw Bedienfehler("Gerät \"$name\" hat den Sicherungsstand eines anderen Kontos - anderen Gerätenamen wählen oder $datei löschen.")
             }
-            return GemerkteSicherung(s.zaehler, s.version, s.gesehen)
+            return GemerkteSicherung(s.zaehler, s.version, s.gesehen, s.abgelehnt)
         }
 
         override fun speichern(stand: GemerkteSicherung) =
-            schreibe(datei("stand", name, "json"), json.encodeToString(GespeicherterStand(kontoId, stand.zaehler, stand.version, stand.gesehen)))
+            schreibe(datei("stand", name, "json"), json.encodeToString(GespeicherterStand(kontoId, stand.zaehler, stand.version, stand.gesehen, stand.abgelehnt)))
     }
 
     private fun datei(art: String, name: String, endung: String): File {

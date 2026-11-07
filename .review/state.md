@@ -118,11 +118,11 @@ Vom Entwickler bestätigt am 2026-11-01.
     (E1); Deploy ohne CI-Gate (E3).
 
 ## Offene Fragen an den Entwickler
-Aus Lauf 8 (runs/2026-11-05.md, je mit Vorschlag): 6 abgelehnte Übernahme lokal
-merken; 7 zwei Instanzen = 8 gleichzeitige Sicherungen. (1–5 am 2026-11-06 entschieden.)
-Aus Lauf 7 (runs/2026-11-04.md, je mit Vorschlag): 1 gescheitertes Ablegen zählt zum
-Tageslimit (seit Lauf 8 durch `TestGescheitertesAblegenZaehltTrotzdem` festgehalten);
-3 Pfeffer-Wiederherstellung einmal durchspielen.
+Aus Lauf 7, Frage 3: Pfeffer-Wiederherstellung durchspielen – entschieden (ja, vor
+der Sicherheitsphase), Durchlauf steht noch aus.
+Erledigt am 2026-11-07: Lauf 8, Fragen 6 (Ablehnung gemerkt, automatische Sicherung
+ruht) und 7 (2 Instanzen bleiben); Lauf 7, Frage 1 bestätigt. Lauf 8, Fragen 1–5
+am 2026-11-06.
 Erledigt am 2026-11-05: Frage 2 (Adapter unterscheiden „zu groß“ und „Tageslimit“ an
 der gesendeten Größe, Diagnose und Datensicherung), Empfehlung E3 (Grenzwerttest
 `MAX_NUTZLAST`), Upload-Limit (48 je Tag, E-B2b-12).

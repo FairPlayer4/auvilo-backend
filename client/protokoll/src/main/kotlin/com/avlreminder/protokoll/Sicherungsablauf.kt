@@ -36,8 +36,12 @@ interface SicherungsAblage {
  * @property gesehen der höchste Zähler einer Sicherung, die dieses Gerät gesehen, aber
  *   nicht übernommen hat (der Mensch hat abgelehnt). Sie ist echt, denn sie ließ sich
  *   entschlüsseln; ältere Fassungen gelten deshalb ebenfalls als veraltet.
+ * @property abgelehnt der Mensch wollte die Sicherung eines anderen Geräts nicht
+ *   übernehmen (E-B2b-6: „fragt einmal“). Solange das gilt, sichert dieses Gerät nicht
+ *   mehr automatisch, erst wieder, wenn der Mensch selbst sichert, wiederherstellt
+ *   oder löscht.
  */
-data class GemerkteSicherung(val zaehler: Long, val version: Long, val gesehen: Long = 0) {
+data class GemerkteSicherung(val zaehler: Long, val version: Long, val gesehen: Long = 0, val abgelehnt: Boolean = false) {
     /** Sicherungen mit kleinerem Zähler sind älter, als dieses Gerät kennt. */
     val untergrenze get() = maxOf(zaehler, gesehen)
 }
@@ -81,6 +85,13 @@ sealed interface Gesichert {
      * bleibt alles, wie es ist; das Gerät merkt sich nur den Zähler als gesehen.
      */
     data class AnderesGeraet(val kopf: Sicherungskopf) : Gesichert
+
+    /**
+     * Automatisches Sichern ruht, weil der Mensch die Übernahme schon abgelehnt hat
+     * ([GemerkteSicherung.abgelehnt]); der Server wurde nicht gefragt. Die App bietet
+     * an, von Hand zu sichern (dann fragt sie wieder).
+     */
+    data object Ruht : Gesichert
 }
 
 /** Ergebnis von [Sicherungsablauf.wiederherstellen]. */
@@ -119,9 +130,16 @@ class Sicherungsablauf(
      *    mit der Server-Version,
      *  - von einem anderen Gerät: nur nach Rückfrage,
      *  - Zähler kleiner als gemerkt: [AeltereSicherung], nichts hochladen.
+     *
+     * KRITISCH: [automatisch] (die stündliche Sicherung der App) fragt nach einer
+     * Ablehnung nicht erneut und ruft den Server gar nicht erst auf ([Gesichert.Ruht]).
+     * Sonst verbrauchte jeder Lauf einen Versuch vom Tageslimit (Review-Lauf 8, Frage 6),
+     * und der Mensch würde stündlich gefragt. Von Hand ([automatisch] = false) fragt es
+     * wieder.
      */
-    suspend fun sichern(nutzlast: ByteArray, schemaVersion: Int): Gesichert {
+    suspend fun sichern(nutzlast: ByteArray, schemaVersion: Int, automatisch: Boolean): Gesichert {
         val gemerkt = stand.laden()
+        if (automatisch && gemerkt?.abgelehnt == true) return Gesichert.Ruht
         var zaehler = (gemerkt?.untergrenze ?: 0) + 1
         var erwartet = gemerkt?.version ?: 0
         // Höchstens ein zweiter Versuch: nach dem Abgleich mit der Server-Fassung.
@@ -195,18 +213,23 @@ class Sicherungsablauf(
      *
      * KRITISCH: Der gemerkte Zähler bleibt, nur die Version wird 0. Die nächste
      * Sicherung zählt also weiter; finge sie bei 1 an, lehnten andere Geräte, die
-     * schon einen höheren Zähler kennen, sie als [AeltereSicherung] ab.
+     * schon einen höheren Zähler kennen, sie als [AeltereSicherung] ab. Eine
+     * Ablehnung gilt danach nicht mehr: Es gibt keine fremde Sicherung mehr zu schützen.
      */
     suspend fun loeschen() {
         server.loeschen()
         val gemerkt = stand.laden() ?: return
-        stand.speichern(gemerkt.copy(version = 0))
+        stand.speichern(gemerkt.copy(version = 0, abgelehnt = false))
     }
 
-    /** Merkt sich den Zähler einer abgelehnten Sicherung als Untergrenze (E-B2b-3). */
+    /**
+     * Merkt sich den Zähler einer abgelehnten Sicherung als Untergrenze (E-B2b-3) und
+     * dass der Mensch abgelehnt hat (E-B2b-6).
+     */
     private fun merkeGesehen(gemerkt: GemerkteSicherung?, zaehler: Long) {
         val bisher = gemerkt ?: GemerkteSicherung(0, 0)
-        if (zaehler > bisher.gesehen) stand.speichern(bisher.copy(gesehen = zaehler))
+        val neu = bisher.copy(gesehen = maxOf(bisher.gesehen, zaehler), abgelehnt = true)
+        if (neu != bisher) stand.speichern(neu)
     }
 }
 
