@@ -19,12 +19,17 @@ dependencies {
 }
 
 // Code aus den Formaten, die nur Clients lesen (proto/avlreminder/inhalt).
+// Das Protobuf-Plugin übernimmt einen include-Filter an srcDir nicht: Es erzeugte
+// sonst auch die Schnittstelle (v1, gehört nach :verbindung), und die App hätte jede Klasse doppelt
+// (D8 bricht ab). Darum kommen nur die ausgewählten Dateien in einen eigenen Ordner.
+val protoAuswahl = tasks.register<Sync>("protoAuswahl") {
+    from("../../proto") { include("avlreminder/inhalt/**") }
+    into(layout.buildDirectory.dir("proto-auswahl"))
+}
+
 sourceSets {
     main {
-        proto {
-            srcDir("../../proto")
-            include("avlreminder/inhalt/**")
-        }
+        proto { srcDir(protoAuswahl) }
     }
 }
 
