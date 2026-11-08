@@ -264,7 +264,8 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
    **Nonce mit Zufall (2026-11-08):** Erneutes Anmelden desselben Geräts innerhalb
    einer Stunde scheiterte („ID-Token zu alt“), weil Google bei fester Nonce das
    gecachte Token lieferte. Jetzt schickt jede Anmeldung 16 Zufallsbytes mit
-   (`nonce_zufall`, `Anmeldung.versuch()`); der Server verlangt sie. Den Go-Code aus
+   (`nonce_zufall`, `Anmeldung.versuch()`); der Server verlangt sie. Deployt per
+   PR #17 (Revision `server-00014-qdr`). Den Go-Code aus
    `proto/` erzeugt `buf generate` derzeit im Container (`golang:1.27`), weil die
    Windows-Anwendungssteuerung die lokalen Plugins blockiert.
    **Weiter mit:** Gerätetest von Schritt 2 in der App; Pfeffer
