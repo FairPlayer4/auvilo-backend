@@ -37,6 +37,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
+import java.io.IOException
 import java.net.InetSocketAddress
 import kotlin.reflect.KClass
 
@@ -141,6 +142,21 @@ class AdapterTest {
         val erwartet: KClass<out Throwable> = Serverfehler::class,
         val aufruf: suspend (Verbindung) -> Any?,
     ) {
+        override fun toString() = name
+    }
+
+    // KRITISCH: Ohne Netz (Flugmodus, Server nicht erreichbar) kommt kein Serverfehler,
+    // sondern eine IOException. Sonst meldete die App „Server gesperrt oder gestört“, und
+    // der Backend-Logger zählte einen Netzfehler als Serverfehler.
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("aufrufe")
+    fun `ohne Netz kommt eine IOException`(fall: Aufruf) {
+        server.stop(0) // der Port ist danach zu: Verbindung abgelehnt
+        val e = runCatching { runBlocking { fall.aufruf(verbindung()) } }.exceptionOrNull()
+        assertTrue(e is IOException, "erwartet IOException, bekommen $e")
+    }
+
+    data class Aufruf(val name: String, val aufruf: suspend (Verbindung) -> Any?) {
         override fun toString() = name
     }
 
@@ -250,6 +266,15 @@ class AdapterTest {
     }
 
     companion object {
+        @JvmStatic
+        fun aufrufe() = listOf(
+            Aufruf("Sicherung holen") { ServerSicherungsAblage(it, TOKEN).holen() },
+            Aufruf("Sicherung speichern") { ServerSicherungsAblage(it, TOKEN).speichern(CHIFFRAT, 1) },
+            Aufruf("Schlüssel-Backup holen") { ServerBackupAblage(it, TOKEN).holen() },
+            Aufruf("Gerät sperren") { ServerGeraete(it, TOKEN).sperren("geraet-1") },
+            Aufruf("Diagnose senden") { ServerDiagnoseAblage(it, TOKEN).senden(CHIFFRAT) },
+        )
+
         private const val TOKEN = "test-token"
         private val CHIFFRAT = byteArrayOf(1, 2, 3, 0, -1)
         private val SCHLUESSEL = ByteArray(32) { it.toByte() }
