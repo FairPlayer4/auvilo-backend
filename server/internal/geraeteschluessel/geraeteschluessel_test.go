@@ -127,11 +127,15 @@ func TestGeraetIDUndNonceSindStabilUndVerschieden(t *testing.T) {
 	_, a := neuerSchluessel(t)
 	_, b := neuerSchluessel(t)
 	kopie := append([]byte(nil), a...)
-	if GeraetID(a) != GeraetID(kopie) || Nonce(a) != Nonce(kopie) {
+	z1, z2 := []byte("0123456789abcdef"), []byte("fedcba9876543210")
+	if GeraetID(a) != GeraetID(kopie) || Nonce(a, z1) != Nonce(kopie, z1) {
 		t.Error("gleicher Schlüssel ergibt unterschiedliche Werte")
 	}
-	if GeraetID(a) == GeraetID(b) || Nonce(a) == Nonce(b) {
+	if GeraetID(a) == GeraetID(b) || Nonce(a, z1) == Nonce(b, z1) {
 		t.Error("verschiedene Schlüssel ergeben gleiche Werte")
+	}
+	if Nonce(a, z1) == Nonce(a, z2) {
+		t.Error("verschiedener Zufallsanteil ergibt dieselbe Nonce")
 	}
 	if len(GeraetID(a)) != 32 {
 		t.Errorf("Geräte-ID hat Länge %d, erwartet 32", len(GeraetID(a)))

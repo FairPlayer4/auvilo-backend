@@ -156,6 +156,7 @@ func (d *dienste) Anmelden(ctx context.Context, req *connect.Request[v1.Anmelden
 		IDToken:           req.Msg.GetGoogleIdToken(),
 		Geraeteschluessel: req.Msg.GetGeraeteschluessel(),
 		Signatur:          req.Msg.GetSignatur(),
+		NonceZufall:       req.Msg.GetNonceZufall(),
 	})
 	if err != nil {
 		slog.WarnContext(ctx, "Anmeldung abgelehnt", "grund", err.Error())

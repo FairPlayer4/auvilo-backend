@@ -29,6 +29,7 @@ var (
 	ErrZielgruppe = errors.New("ID-Token für eine fremde Client-ID")
 	ErrZuAlt      = errors.New("ID-Token zu alt")
 	ErrNonce      = errors.New("Nonce passt nicht zum Geräteschlüssel")
+	ErrZufall     = errors.New("Zufallsanteil der Nonce hat nicht 16 Bytes")
 	ErrSignatur   = errors.New("Signatur des Geräts ungültig")
 )
 
@@ -82,6 +83,7 @@ type Anfrage struct {
 	IDToken           string
 	Geraeteschluessel []byte // PKIX/DER
 	Signatur          []byte // ASN.1/DER
+	NonceZufall       []byte // geraeteschluessel.NonceZufallLaenge Bytes
 }
 
 // Ergebnis einer erfolgreichen Prüfung.
@@ -98,7 +100,8 @@ type Ergebnis struct {
 //  2. ID-Token von Google signiert, Aussteller Google, nicht abgelaufen
 //  3. Zielgruppe ist eine unserer Client-IDs
 //  4. höchstens MaxAlter alt und höchstens uhrAbweichung (1 Minute) in der Zukunft
-//  5. Nonce im Token = Nonce des Geräteschlüssels
+//  5. Nonce im Token = Nonce aus Geräteschlüssel und Zufallsanteil, der genau
+//     geraeteschluessel.NonceZufallLaenge Bytes hat
 //  6. Signatur über das Token mit dem Geräteschlüssel
 func (p *Pruefer) Pruefe(ctx context.Context, a Anfrage) (Ergebnis, error) {
 	schluessel, err := geraeteschluessel.Lese(a.Geraeteschluessel)
@@ -120,8 +123,13 @@ func (p *Pruefer) Pruefe(ctx context.Context, a Anfrage) (Ergebnis, error) {
 	if token.IssuedAt.Before(jetzt.Add(-MaxAlter)) || token.IssuedAt.After(jetzt.Add(uhrAbweichung)) {
 		return Ergebnis{}, fmt.Errorf("%w: ausgestellt %s", ErrZuAlt, token.IssuedAt.UTC().Format(time.RFC3339))
 	}
+	// Ohne Zufallsanteil gäbe es wieder eine feste Nonce je Gerät (siehe
+	// geraeteschluessel.Nonce); andere Längen machen die Verkettung mehrdeutig.
+	if len(a.NonceZufall) != geraeteschluessel.NonceZufallLaenge {
+		return Ergebnis{}, ErrZufall
+	}
 	// hmac.Equal vergleicht in konstanter Zeit (verrät nichts über Teiltreffer).
-	if !hmac.Equal([]byte(token.Nonce), []byte(geraeteschluessel.Nonce(a.Geraeteschluessel))) {
+	if !hmac.Equal([]byte(token.Nonce), []byte(geraeteschluessel.Nonce(a.Geraeteschluessel, a.NonceZufall))) {
 		return Ergebnis{}, ErrNonce
 	}
 	if !geraeteschluessel.PruefeSignatur(schluessel, geraeteschluessel.AnmeldeNachricht(a.IDToken), a.Signatur) {

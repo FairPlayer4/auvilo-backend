@@ -43,8 +43,8 @@ func (g *Google) Schluessel() oidc.KeySet {
 }
 
 // IDToken stellt ein gültiges ID-Token für das Google-Konto sub aus, gebunden
-// an das Gerät (nonce).
-func (g *Google) IDToken(t testing.TB, sub string, geraet *Geraet, jetzt time.Time) string {
+// an das Gerät und den Zufallsanteil (nonce).
+func (g *Google) IDToken(t testing.TB, sub string, geraet *Geraet, zufall []byte, jetzt time.Time) string {
 	t.Helper()
 	signer, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.RS256, Key: g.schluessel}, nil)
 	if err != nil {
@@ -56,12 +56,23 @@ func (g *Google) IDToken(t testing.TB, sub string, geraet *Geraet, jetzt time.Ti
 		"sub":   sub,
 		"iat":   jetzt.Unix(),
 		"exp":   jetzt.Add(time.Hour).Unix(),
-		"nonce": geraeteschluessel.Nonce(geraet.DER),
+		"nonce": geraeteschluessel.Nonce(geraet.DER, zufall),
 	}).Serialize()
 	if err != nil {
 		t.Fatal(err)
 	}
 	return token
+}
+
+// NonceZufall erzeugt einen Zufallsanteil für die Nonce, wie ein Gerät es je
+// Anmeldung tut.
+func NonceZufall(t testing.TB) []byte {
+	t.Helper()
+	z := make([]byte, geraeteschluessel.NonceZufallLaenge)
+	if _, err := rand.Read(z); err != nil {
+		t.Fatal(err)
+	}
+	return z
 }
 
 // Geraet simuliert ein Gerät mit Geräteschlüssel.

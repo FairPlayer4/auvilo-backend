@@ -42,9 +42,12 @@ Der Server prüft in Schritt 4 (`// KRITISCH:`, jede Regel mit Ablehnungstest):
 1. Signatur des ID-Tokens gegen die öffentlichen Schlüssel von Google
 2. Aussteller `https://accounts.google.com`, Zielgruppe ist eine **unserer
    Client-IDs**, nicht abgelaufen, höchstens **5 Minuten** alt
-3. `nonce` im Token = SHA-256 des mitgeschickten öffentlichen Schlüssels (DER),
+3. `nonce` im Token = SHA-256 des mitgeschickten öffentlichen Schlüssels (DER)
+   und dahinter 16 mitgeschickter Zufallsbytes (`nonce_zufall`, je Anmeldung neu),
    base64url ohne Auffüllung. So passt ein abgefangenes ID-Token nur zu genau
-   diesem Geräteschlüssel.
+   diesem Geräteschlüssel. Der Zufall kam am 2026-11-08 dazu: Bei gleicher Nonce
+   gibt Google bis zu einer Stunde lang dasselbe ID-Token zurück, und das ist nach
+   5 Minuten zu alt.
 4. Signatur über das ID-Token mit dem Geräteschlüssel. So beweist das Gerät, dass es
    den privaten Schlüssel hat.
 

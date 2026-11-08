@@ -38,14 +38,18 @@ service AnmeldeDienst {
 }
 
 message AnmeldenRequest {
-  // ID-Token von Google. Sein Feld "nonce" muss SHA-256 des Geräteschlüssels
-  // (base64url ohne Auffüllung) sein.
+  // ID-Token von Google. Sein Feld "nonce" muss SHA-256 über
+  // geraeteschluessel und dahinter nonce_zufall sein (base64url ohne Auffüllung).
   string google_id_token = 1;
   // Öffentlicher Geräteschlüssel: ECDSA P-256, PKIX/DER.
   bytes geraeteschluessel = 2;
   // ECDSA-Signatur (ASN.1/DER, SHA-256; Android: "SHA256withECDSA") über die
   // UTF-8-Bytes von "avlreminder/anmelden/v1\n" + google_id_token.
   bytes signatur = 3;
+  // Genau 16 zufällige Bytes, für jede Anmeldung neu. Ohne sie wäre die Nonce
+  // für ein Gerät immer gleich, und Google gäbe ein zwischengespeichertes,
+  // für den Server zu altes ID-Token zurück. Andere Längen: abgelehnt.
+  bytes nonce_zufall = 4;
 }
 
 message AnmeldenResponse {

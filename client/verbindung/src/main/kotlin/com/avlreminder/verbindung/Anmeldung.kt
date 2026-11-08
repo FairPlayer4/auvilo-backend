@@ -6,6 +6,7 @@ import com.avlreminder.schnittstelle.v1.SitzungErneuernRequest
 import com.connectrpc.Code
 import com.google.protobuf.ByteString
 import com.google.protobuf.Timestamp
+import java.security.SecureRandom
 import java.time.Instant
 
 /**
@@ -32,6 +33,15 @@ interface SitzungsAblage {
     suspend fun speichern(sitzung: Sitzung)
 }
 
+/**
+ * Eine Anmeldung mit Google: Mit [nonce] holt der Aufrufer das ID-Token, und
+ * [Anmeldung.anmelden] schickt [zufall] mit, damit der Server die Nonce
+ * nachrechnen kann. Für jede Anmeldung ein neuer Versuch (siehe [Anmeldung.versuch]).
+ */
+class Anmeldeversuch internal constructor(val zufall: ByteArray, oeffentlich: ByteArray) {
+    val nonce: String = Geraetenachrichten.nonce(oeffentlich, zufall)
+}
+
 /** Ergebnis von [Anmeldung.anmelden]. */
 data class Angemeldet(val sitzung: Sitzung, val neuesKonto: Boolean, val freigeschaltet: Boolean)
 
@@ -53,7 +63,8 @@ class GeraetGesperrt : Exception("Dieses Gerät ist gesperrt")
 /**
  * Anmelden mit Google und Erneuern der Sitzung mit dem Geräteschlüssel
  * (anmeldung.proto). Das ID-Token holt der Aufrufer selbst (Test-Client:
- * Browser, App: Credential Manager), und zwar mit [nonce].
+ * Browser, App: Credential Manager), und zwar mit der Nonce eines frischen
+ * [versuch].
  *
  * KRITISCH: Was signiert wird, kommt aus [Geraetenachrichten] (gemeinsame
  * Testvektoren mit dem Server). Und nur Fehler, die der Dienst selbst meldet,
@@ -66,19 +77,29 @@ class Anmeldung(
     private val ablage: SitzungsAblage,
     /** Jetzt in Unix-Sekunden; im Test fest. */
     private val uhr: () -> Long = { Instant.now().epochSecond },
+    /** Quelle für den Zufall der Nonce. */
+    private val zufall: SecureRandom = SecureRandom(),
 ) {
     /** Die Geräte-ID, wie der Server sie aus dem Schlüssel ableitet. */
     val geraetId: String get() = Geraetenachrichten.geraetId(schluessel.oeffentlich)
 
-    /** Die Nonce, mit der das ID-Token bei Google geholt werden muss. */
-    val nonce: String get() = Geraetenachrichten.nonce(schluessel.oeffentlich)
+    /**
+     * Ein neuer Anmeldeversuch mit frischem Zufall.
+     *
+     * KRITISCH: Jede Anmeldung braucht einen neuen Versuch. Mit derselben Nonce
+     * gibt Google bis zu einer Stunde lang dasselbe ID-Token zurück, und das
+     * lehnt der Server nach 5 Minuten als zu alt ab.
+     */
+    fun versuch(): Anmeldeversuch =
+        Anmeldeversuch(ByteArray(Geraetenachrichten.NONCE_ZUFALL_LAENGE).also(zufall::nextBytes), schluessel.oeffentlich)
 
-    /** Meldet das Gerät mit einem ID-Token an und merkt sich die Sitzung. */
-    suspend fun anmelden(idToken: String): Angemeldet {
+    /** Meldet das Gerät mit einem ID-Token an, das mit der Nonce von [versuch] geholt wurde, und merkt sich die Sitzung. */
+    suspend fun anmelden(versuch: Anmeldeversuch, idToken: String): Angemeldet {
         val anfrage = AnmeldenRequest.newBuilder()
             .setGoogleIdToken(idToken)
             .setGeraeteschluessel(ByteString.copyFrom(schluessel.oeffentlich))
             .setSignatur(ByteString.copyFrom(schluessel.signiere(Geraetenachrichten.anmelden(idToken))))
+            .setNonceZufall(ByteString.copyFrom(versuch.zufall))
             .build()
         val antwort = try {
             verbindung.anmelde.anmelden(anfrage).ergebnis()

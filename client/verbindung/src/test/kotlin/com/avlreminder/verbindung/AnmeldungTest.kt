@@ -120,9 +120,12 @@ class AnmeldungTest {
         )
         val speicher = Speicher()
 
-        val ergebnis = runBlocking { anmeldung(speicher).anmelden("id-token") }
+        val a = anmeldung(speicher)
+        val versuch = a.versuch()
+        val ergebnis = runBlocking { a.anmelden(versuch, "id-token") }
 
         val anfrage = AnmeldenRequest.parseFrom(anfragen.single().inhalt)
+        assertArrayEquals(versuch.zufall, anfrage.nonceZufall.toByteArray())
         assertEquals("/avlreminder.v1.AnmeldeDienst/Anmelden", anfragen.single().pfad)
         assertEquals("id-token", anfrage.googleIdToken)
         assertArrayEquals(schluessel.oeffentlich, anfrage.geraeteschluessel.toByteArray())
@@ -133,10 +136,19 @@ class AnmeldungTest {
     }
 
     @Test
-    fun `Die Nonce ist an den Geräteschlüssel gebunden`() {
+    fun `Die Nonce ist an den Geräteschlüssel und den Zufall des Versuchs gebunden`() {
+        val v = anmeldung(Speicher()).versuch()
+        assertEquals(Geraetenachrichten.nonce(schluessel.oeffentlich, v.zufall), v.nonce)
+        assertTrue(Geraetenachrichten.nonce(TestSchluessel().oeffentlich, v.zufall) != v.nonce, "anderer Schlüssel, gleiche Nonce")
+    }
+
+    // KRITISCH: Jeder Versuch hat eine eigene Nonce; sonst gibt Google ein
+    // zwischengespeichertes, für den Server zu altes ID-Token zurück.
+    @Test
+    fun `Jeder Versuch hat eine neue Nonce`() {
         val a = anmeldung(Speicher())
-        assertEquals(Geraetenachrichten.nonce(schluessel.oeffentlich), a.nonce)
-        assertTrue(Geraetenachrichten.nonce(TestSchluessel().oeffentlich) != a.nonce, "anderer Schlüssel, gleiche Nonce")
+        val nonces = List(20) { a.versuch().nonce }.toSet()
+        assertEquals(20, nonces.size)
     }
 
     // KRITISCH: Erneuern signiert Geräte-ID und die eigene Uhrzeit; der Server
@@ -204,7 +216,7 @@ class AnmeldungTest {
         val speicher = Speicher(vorher)
         val a = anmeldung(speicher)
 
-        val e = runCatching { runBlocking { if (fall.erneuern) a.erneuern() else a.anmelden("id-token") } }.exceptionOrNull()
+        val e = runCatching { runBlocking { if (fall.erneuern) a.erneuern() else a.anmelden(a.versuch(), "id-token") } }.exceptionOrNull()
 
         assertTrue(fall.erwartet.isInstance(e), "erwartet ${fall.erwartet.simpleName}, bekommen $e")
         assertEquals(vorher, speicher.sitzung)

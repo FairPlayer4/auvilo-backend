@@ -5,6 +5,7 @@ import kotlinx.serialization.json.Json
 import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.io.File
@@ -34,6 +35,7 @@ class GeraetenachrichtenTest {
         val beschreibung: String,
         val geraeteschluessel_der_base64: String,
         val geraet_id: String,
+        val nonce_zufall_hex: String,
         val nonce: String,
         val anmelden: Nachricht,
         val sitzung: Nachricht,
@@ -51,7 +53,14 @@ class GeraetenachrichtenTest {
 
     @Test
     fun `Nonce stimmt mit dem Server überein`() {
-        assertEquals(v.nonce, Geraetenachrichten.nonce(der))
+        assertEquals(v.nonce, Geraetenachrichten.nonce(der, hex(v.nonce_zufall_hex)))
+    }
+
+    @Test
+    fun `Nonce ohne 16 Bytes Zufall wird nicht gebaut`() {
+        for (laenge in listOf(0, 15, 17)) {
+            assertThrows(IllegalArgumentException::class.java) { Geraetenachrichten.nonce(der, ByteArray(laenge)) }
+        }
     }
 
     @Test
