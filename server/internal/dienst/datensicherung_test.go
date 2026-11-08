@@ -201,6 +201,15 @@ func TestSicherungSpeichernHatEinTageslimitJeKonto(t *testing.T) {
 		}
 		ts.erwarteSicherung(t, kevin, "letzte", version)
 	})
+	// Das Limit gilt je Konto, nicht je Gerät: Ein weiteres Gerät bekäme sonst ein neues.
+	t.Run("ein zweites Gerät desselben Kontos teilt das Limit", func(t *testing.T) {
+		laptop := testhilfe.NeuesGeraet(t)
+		laptopSitzung := ts.anmelden(t, "google-kevin", laptop).Sitzung.Token
+		ts.geraetFreischaltenOK(t, kevin, laptop.ID())
+		_, err := ts.sicherungSpeichern(laptopSitzung, []byte("vom laptop"), version)
+		erwarteCode(t, err, connect.CodeResourceExhausted)
+		ts.erwarteSicherung(t, kevin, "letzte", version)
+	})
 	t.Run("Holen bleibt möglich", func(t *testing.T) {
 		ts.erwarteSicherung(t, kevin, "letzte", version)
 	})
@@ -275,6 +284,13 @@ func TestSicherungHolenUndLoeschenHabenEinTageslimitJeKonto(t *testing.T) {
 				if !strings.Contains(err.Error(), "Tageslimit") {
 					t.Errorf("Meldung nennt das Tageslimit nicht: %v", err)
 				}
+			})
+			// Das Limit gilt je Konto, nicht je Gerät: Ein weiteres Gerät bekäme sonst ein neues.
+			t.Run("ein zweites Gerät desselben Kontos teilt das Limit", func(t *testing.T) {
+				laptop := testhilfe.NeuesGeraet(t)
+				laptopSitzung := ts.anmelden(t, "google-kevin", laptop).Sitzung.Token
+				ts.geraetFreischaltenOK(t, kevin, laptop.ID())
+				erwarteCode(t, fall.aufruf(ts, laptopSitzung), connect.CodeResourceExhausted)
 			})
 			t.Run("Speichern hat ein eigenes Tageslimit", func(t *testing.T) {
 				if _, err := ts.sicherungSpeichern(kevin, []byte("sicherung"), 0); err != nil {
