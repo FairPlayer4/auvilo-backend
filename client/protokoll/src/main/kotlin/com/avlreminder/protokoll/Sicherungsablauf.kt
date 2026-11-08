@@ -82,7 +82,8 @@ sealed interface Gesichert {
 
     /**
      * Ein anderes Gerät sichert; der Mensch wollte nicht übernehmen. Auf dem Server
-     * bleibt alles, wie es ist; das Gerät merkt sich nur den Zähler als gesehen.
+     * bleibt alles, wie es ist; das Gerät merkt sich den Zähler als gesehen und dass
+     * die automatische Sicherung ruht ([Ruht]).
      */
     data class AnderesGeraet(val kopf: Sicherungskopf) : Gesichert
 
@@ -100,7 +101,11 @@ sealed interface Wiederhergestellt {
 
     data object KeineSicherung : Wiederhergestellt
 
-    /** Der Mensch hat nach Anzeige des Kopfs abgelehnt. Nichts angewendet; das Gerät merkt sich nur den Zähler als gesehen. */
+    /**
+     * Der Mensch hat nach Anzeige des Kopfs abgelehnt. Nichts angewendet; das Gerät merkt
+     * sich den Zähler als gesehen. Stammt die Sicherung von einem anderen Gerät, gilt das
+     * als „nicht übernehmen“, und die automatische Sicherung ruht (E-B2b-6).
+     */
     data object Abgelehnt : Wiederhergestellt
 }
 
@@ -166,7 +171,7 @@ class Sicherungsablauf(
             val kopf = Datensicherung.entschluesseln(vorhanden.chiffrat, tresor, kontoId).kopf
             if (gemerkt != null && kopf.zaehler < gemerkt.untergrenze) throw AeltereSicherung(gemerkt.untergrenze, kopf.zaehler)
             if (kopf.geraetId != geraetId && !uebernehmen(kopf)) {
-                merkeGesehen(gemerkt, kopf.zaehler)
+                merkeGesehen(gemerkt, kopf.zaehler, abgelehnt = true)
                 return Gesichert.AnderesGeraet(kopf)
             }
             zaehler = maxOf(zaehler, kopf.zaehler + 1)
@@ -200,7 +205,9 @@ class Sicherungsablauf(
             throw NeueresSchema(sicherung.kopf.schemaVersion, hoechsteSchemaVersion)
         }
         if (!bestaetigen(sicherung.kopf)) {
-            merkeGesehen(gemerkt, sicherung.kopf.zaehler)
+            // KRITISCH: Nur die Fassung eines anderen Geräts ist eine abgelehnte Übernahme.
+            // Die eigene abzulehnen darf das automatische Sichern nicht stilllegen.
+            merkeGesehen(gemerkt, sicherung.kopf.zaehler, abgelehnt = sicherung.kopf.geraetId != geraetId)
             return Wiederhergestellt.Abgelehnt
         }
         anwenden(sicherung)
@@ -231,12 +238,13 @@ class Sicherungsablauf(
     }
 
     /**
-     * Merkt sich den Zähler einer abgelehnten Sicherung als Untergrenze (E-B2b-3) und
-     * dass der Mensch abgelehnt hat (E-B2b-6).
+     * Merkt sich den Zähler einer abgelehnten Sicherung als Untergrenze (E-B2b-3) und,
+     * mit [abgelehnt], dass der Mensch die Übernahme abgelehnt hat (E-B2b-6). Eine
+     * frühere Ablehnung bleibt bestehen.
      */
-    private fun merkeGesehen(gemerkt: GemerkteSicherung?, zaehler: Long) {
+    private fun merkeGesehen(gemerkt: GemerkteSicherung?, zaehler: Long, abgelehnt: Boolean) {
         val bisher = gemerkt ?: GemerkteSicherung(0, 0)
-        val neu = bisher.copy(gesehen = maxOf(bisher.gesehen, zaehler), abgelehnt = true)
+        val neu = bisher.copy(gesehen = maxOf(bisher.gesehen, zaehler), abgelehnt = bisher.abgelehnt || abgelehnt)
         if (neu != bisher) stand.speichern(neu)
     }
 }

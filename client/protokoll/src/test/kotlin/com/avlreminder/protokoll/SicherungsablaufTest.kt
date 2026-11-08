@@ -397,6 +397,21 @@ class SicherungsablaufTest {
         assertEquals(fall.danach, stand.stand)
     }
 
+    // KRITISCH: Das Ruhen gilt nur nach „nein“ auf die Übernahme einer fremden Sicherung
+    // (E-B2b-6). Bricht der Mensch das Wiederherstellen der eigenen ab, sichert das
+    // Gerät weiter automatisch; sonst stünde das Backup unbemerkt still.
+    @Test
+    fun `nach abgelehnter Wiederherstellung der eigenen Sicherung sichert das Gerät weiter automatisch`() {
+        val server = FalscheAblage()
+        val stand = FalscherStand()
+        val g = Geraet(server, stand, id = "neu")
+        g.sichern()
+        assertEquals(Wiederhergestellt.Abgelehnt, wiederherstellen(server, stand, bestaetigt = false))
+
+        assertInstanceOf(Gesichert.Ja::class.java, g.sichern())
+        assertNull(g.gefragt)
+    }
+
     // --- Löschen --------------------------------------------------------------
 
     // KRITISCH: Nach dem Löschen zählt das Gerät weiter, damit andere Geräte, die
@@ -479,6 +494,13 @@ class SicherungsablaufTest {
                 { FalscheAblage().apply { vonGeraet("tablet", 4) } },
                 bestaetigt = false,
                 danach = GemerkteSicherung(0, 0, gesehen = 4, abgelehnt = true),
+            ),
+            // Die eigene Fassung muss das Gerät nicht übernehmen: Ablehnen merkt nur den Zähler.
+            Ablehnung(
+                "nicht ohne Bestätigung, auch die eigene Sicherung",
+                { FalscheAblage().apply { vonGeraet("neu", 4) } },
+                bestaetigt = false,
+                danach = GemerkteSicherung(0, 0, gesehen = 4),
             ),
             Ablehnung(
                 "keine ältere Sicherung als gemerkt",
