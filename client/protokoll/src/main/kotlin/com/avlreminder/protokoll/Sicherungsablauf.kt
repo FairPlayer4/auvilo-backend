@@ -114,7 +114,7 @@ sealed interface Wiederhergestellt {
  * wieder ein (Etappe B2b). Liegt in `protokoll`, weil die App denselben Ablauf
  * braucht; die Nutzlast (bei der App die Datenbank) ist hier nur Bytes.
  *
- * @param uebernehmen fragt den Menschen, ob dieses Gerät die Sicherung von dem
+ * @param uebernehmen fragt den Menschen (`suspend`: die App wartet auf ihre Oberfläche), ob dieses Gerät die Sicherung von dem
  *   Gerät im gezeigten Kopf übernehmen soll (E-B2b-6).
  */
 class Sicherungsablauf(
@@ -123,7 +123,7 @@ class Sicherungsablauf(
     private val tresor: SymmetrischerSchluessel,
     private val server: SicherungsAblage,
     private val stand: SicherungsStand,
-    private val uebernehmen: (Sicherungskopf) -> Boolean,
+    private val uebernehmen: suspend (Sicherungskopf) -> Boolean,
     private val uhr: () -> Instant = Instant::now,
 ) {
     /**
@@ -192,7 +192,7 @@ class Sicherungsablauf(
      */
     suspend fun wiederherstellen(
         hoechsteSchemaVersion: Int,
-        bestaetigen: (Sicherungskopf) -> Boolean,
+        bestaetigen: suspend (Sicherungskopf) -> Boolean,
         anwenden: (Sicherung) -> Unit,
     ): Wiederhergestellt {
         val geholt = server.holen() ?: return Wiederhergestellt.KeineSicherung
