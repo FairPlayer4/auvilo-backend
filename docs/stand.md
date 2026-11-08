@@ -260,7 +260,7 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
    Umgebungsvariable `GOOGLE_CLIENT_IDS`, Revision `server-00013-fp2`, gleiches Image).
    Kevins Konto am 2026-11-08 geräumt (Test-Client, Gerät `r-pc`): Datensicherung und
    Schlüssel-Backup gelöscht, alle sechs Geräte gesperrt; `sicherung-loeschen` braucht
-   dafür keine lokalen Schlüssel mehr (`Sicherungsablauf.loeschen` ohne Tresor).
+   dafür keine lokalen Schlüssel mehr (`Sicherungsablauf.loeschen` ohne Tresor). `ServerGeraete.sperren` liegt jetzt in `verbindung` (die App setzt damit ihr Cloud-Konto zurück).
    **Weiter mit:** Gerätetest von Schritt 2 in der App; Pfeffer
    offline sichern, sobald die App echte Daten sichert. Offen aus
    Lauf 5: Empfehlungen E5–E7; aus Lauf 6: E1–E6.

@@ -27,7 +27,6 @@ import com.avlreminder.protokoll.Sicherungsablauf
 import com.avlreminder.protokoll.Sicherungskopf
 import com.avlreminder.protokoll.VersionVeraltet
 import com.avlreminder.protokoll.Wiederhergestellt
-import com.avlreminder.schnittstelle.v1.GeraetSperrenRequest
 import com.avlreminder.schnittstelle.v1.GeraeteAuflistenRequest
 import com.avlreminder.verbindung.Anmeldung
 import com.avlreminder.verbindung.AnmeldungAbgelehnt
@@ -229,7 +228,7 @@ private class Werkzeug(
 
     suspend fun sperren(geraetId: String) {
         val s = ablage.sitzung(name)
-        verbindung.geraete.geraetSperren(GeraetSperrenRequest.newBuilder().setGeraetId(geraetId).build(), mitSitzung(s.token)).ergebnis()
+        ServerGeraete(verbindung, s.token).sperren(geraetId)
         println(if (geraetId == s.geraetId) "Dieses Gerät ist gesperrt (abgemeldet)." else "Gerät $geraetId gesperrt.")
     }
 
