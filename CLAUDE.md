@@ -41,23 +41,30 @@ Kommunikation auf **Deutsch, mit ß**.
 ## Geheimnisse und Sicherheitsphase
 - Was Claude liest (Terminal, Dateien, Befehlsausgaben), geht in den Gesprächsverlauf
   (Anthropic und lokal `~/.claude/projects`). Claude liest, druckt und ruft daher
-  **nie** ab: Pfeffer, OAuth-Client-Secret, private Geräteschlüssel (`geraet-*.pem`),
-  Sitzungs-Token (`sitzung-*.json`), Google-ID-Tokens und Auth-Codes, Passwörter,
-  2FA-Codes, Dienstkonto-Schlüssel, echte App-Inhalte und Daten von Testern.
+  **nie** ab, in keiner Phase: Passwörter, 2FA-Codes, Dienstkonto-Schlüssel,
+  Google-ID-Tokens und Auth-Codes, OAuth-Client-Secret, echte App-Inhalte im
+  Klartext, Daten von Testern oder anderen Nutzern. Die Zugänge schützen mehr als die
+  App (Kosten, Google-Konto), und Zurücksetzen macht ihren Verlust nicht rückgängig.
   Unbedenklich: Fingerabdrücke, Geräte-IDs, Konto-Pseudonyme, Chiffrate, Client-IDs.
 - **Ausnahme Diagnose-Logs:** Sendungen freigeschalteter Konten
   ([diagnose-entwurf.md](docs/diagnose-entwurf.md), E-D-3/E-D-7) darf Claude lesen,
   weil sie per Konstruktion keine Inhalte enthalten – auch in der Sicherheitsphase.
   Fällt doch ein Inhalt auf: als Fehler im Logger melden und nicht weiterlesen.
-- **Testphase (jetzt):** Wiederherstellungsschlüssel und Keysets von Testkonten ohne
-  echte Daten darf Claude sehen. Vor echten Daten wird alles zurückgesetzt
-  ([b2b-entwurf.md](docs/b2b-entwurf.md), „Vor echten Daten“).
-- **Sicherheitsphase:** beginnt mit dem ersten Schritt, bei dem echte Daten oder
-  Schlüssel für echte Daten entstehen (erste Einrichtung der App-Variante gegen die
-  Cloud, Daten von Testern). Claude kündigt sie **vorher ausdrücklich** an (Nachricht
-  mit „Beginn der Sicherheitsphase“ und Eintrag in `docs/stand.md`). Ab dann sieht
-  Claude auch keine Wiederherstellungsschlüssel und Keysets mehr; Kevin führt solche
-  Schritte selbst in einem sicheren Kontext aus.
+- **Eigenbetrieb (jetzt, entschieden 2026-11-07):** Echte Daten gibt es nur von Kevin
+  selbst. Bis zur Sicherheitsphase darf Claude Pfeffer, Wiederherstellungsschlüssel,
+  Keysets, private Geräteschlüssel (`geraet-*.pem`) und Sitzungs-Token
+  (`sitzung-*.json`) sehen, auch die für Kevins echte Daten – aber nur, wenn eine
+  Aufgabe es braucht. Sie gelten als bekannt und werden zu Beginn der
+  Sicherheitsphase alle ersetzt ([b2b-entwurf.md](docs/b2b-entwurf.md), „Vor dem
+  ersten weiteren Nutzer“).
+- **Sicherheitsphase:** beginnt vor dem ersten Schritt, bei dem jemand außer Kevin
+  die App gegen die Cloud nutzt: Teilen mit einer anderen Person (B3, auch
+  Familie), erster Tester, Veröffentlichung im Play Store. Claude kündigt sie
+  **vorher ausdrücklich** an (Nachricht mit „Beginn der Sicherheitsphase“ und Eintrag
+  in `docs/stand.md`), dann wird nach der Checkliste in b2b-entwurf.md alles
+  zurückgesetzt und neu eingerichtet. Ab dann sieht Claude auch keine der oben unter
+  Eigenbetrieb genannten Werte mehr; Kevin führt solche Schritte selbst in einem
+  sicheren Kontext aus.
 
 ## GCP
 - Projekt `avlreminder-exp-1ef2`, Region `europe-west1`, Infrastruktur in `infra/` (OpenTofu).

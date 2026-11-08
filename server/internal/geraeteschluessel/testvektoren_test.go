@@ -24,6 +24,7 @@ type vektorNachricht struct {
 type vektoren struct {
 	SchluesselDERB64 string          `json:"geraeteschluessel_der_base64"`
 	GeraetID         string          `json:"geraet_id"`
+	NonceZufallHex   string          `json:"nonce_zufall_hex"`
 	Nonce            string          `json:"nonce"`
 	Anmelden         vektorNachricht `json:"anmelden"`
 	Sitzung          vektorNachricht `json:"sitzung"`
@@ -70,7 +71,7 @@ func TestTestvektoren(t *testing.T) {
 		}
 	})
 	t.Run("Nonce stimmt mit dem Client überein", func(t *testing.T) {
-		if got := Nonce(der); got != v.Nonce {
+		if got := Nonce(der, dekodiere(t, hex.DecodeString, v.NonceZufallHex)); got != v.Nonce {
 			t.Errorf("Nonce = %q, Vektor %q", got, v.Nonce)
 		}
 	})

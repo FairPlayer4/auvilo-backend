@@ -46,13 +46,13 @@ oder das Projekt vom Rechnungskonto trennen. Deshalb gilt für die App:
 | E-B2b-3 | Schutz gegen ältere Fassung vom Server | Das Gerät merkt sich den höchsten Zähler, den es gesichert oder gesehen hat. Liefert der Server einen kleineren, **warnt** die App und stellt nicht still wieder her. | Behebt für Daten die bekannte Grenze aus B2 („älteres Backup vom Server“): Ein bösartiger Server kann eine alte, gültige Fassung ausliefern; der Zähler im Chiffrat verrät das. Ein ganz neues Gerät kennt noch keinen Zähler; dort zeigt die App den Zeitpunkt der Sicherung zur Kontrolle. |
 | E-B2b-4 | Wo liegt die Sicherung? | **Cloud Storage**, ein Bucket in `var.region`, ein Objekt je Konto (`sicherung/<konto_id>`). Objekt-Versionierung an, Lebenszyklus: ältere Fassungen **7 Tage** aufbewahren, höchstens 200 (geändert am 2026-11-03, vorher 3 Fassungen und 30 Tage; am 2026-11-04 von 100 auf 200). Nicht öffentlich (`public_access_prevention`), einheitlicher Zugriff; von den Diensten hat nur das Dienstkonto des Servers Zugriff (Projekt-Owner über ihre Projektrollen). | Firestore erlaubt höchstens 1 MiB je Dokument, eine Datenbank kann größer werden. Speicher kostet ca. 2 Cent je GB und Monat. Die älteren Fassungen schützen vor dem wichtigsten Fehler: Eine fehlerhafte App lädt kaputte Daten hoch und überschreibt damit das einzige Backup. Nach Alter statt Anzahl, weil ein Fehler oft erst nach Tagen auffällt. Die App sichert höchstens stündlich (7 × 24 = 168 Fassungen) plus manuell; die Höchstzahl 200 begrenzt nur den Fall, dass mehr gesichert wird als vorgesehen. 200 × 8 MiB im schlimmsten Fall kosten etwa 3 Cent im Monat je Konto. |
 | E-B2b-5 | Nie ein neueres Backup überschreiben | Wie in B2: Hochladen nur mit der **erwarteten Version** (0 = noch keins). Der Server setzt das mit der Vorbedingung `ifGenerationMatch` von Cloud Storage um. Die Generation reicht er als Version durch. | Cloud Storage prüft das selbst, ohne Transaktion in Firestore. Gleiches Verhalten wie beim Schlüssel-Backup: `failed_precondition`, neu holen, nicht überschreiben. |
-| E-B2b-6 | Zwei eigene Geräte sichern | Ohne Synchronisation gibt es **ein sicherndes Gerät**. Die App sichert automatisch nur, wenn die letzte Fassung von ihr selbst stammt (Geräte-ID im Kopf) oder es noch keine gibt. Sonst fragt sie einmal: „Dieses Gerät übernimmt die Sicherung?“ | Sonst würden sich zwei Geräte mit verschiedenen Daten gegenseitig überschreiben, und jedes Mal ginge der Stand des anderen verloren. Das Zusammenführen ist Aufgabe von B3. |
+| E-B2b-6 | Zwei eigene Geräte sichern | Ohne Synchronisation gibt es **ein sicherndes Gerät**. Die App sichert automatisch nur, wenn die letzte Fassung von ihr selbst stammt (Geräte-ID im Kopf) oder es noch keine gibt. Sonst fragt sie einmal: „Dieses Gerät übernimmt die Sicherung?“ Bei „nein“ ruht die automatische Sicherung, ohne den Server zu fragen, bis der Mensch von Hand sichert, wiederherstellt oder löscht (2026-11-07). | Sonst würden sich zwei Geräte mit verschiedenen Daten gegenseitig überschreiben, und jedes Mal ginge der Stand des anderen verloren. Das Zusammenführen ist Aufgabe von B3. |
 | E-B2b-7 | Größe und Übertragung | Höchstens **8 MiB** Chiffrat je Sicherung, in **einer Anfrage** über den Server (Connect, eigenes Limit nur für diesen Dienst). Keine signierten URLs. | Der Server prüft Sitzung und Größe an einer Stelle. 8 MiB reichen für eine Datenbank ohne Fotos lange. Signierte URLs sparen nur Rechenzeit, die bei unserer Menge nichts kostet, machen aber Größenprüfung und Vorbedingung schwieriger. |
 | E-B2b-8 | Schnittstelle | Neuer Dienst `DatensicherungDienst` mit `Speichern(chiffrat, erwartete_version)`, `Holen()`, `Loeschen()`. `Holen` liefert die neueste Fassung; ältere Fassungen holt **nur ein späterer Aufruf**, wenn er gebraucht wird. | Löschen gehört von Anfang an dazu (DSGVO, Art. 17), auch vor „Konto löschen“ in B4. Eigener Dienst und eigene Speicher-Schnittstelle statt einer Erweiterung von `SchluesselDienst`: Das ist der erste Schritt von A5. |
 | E-B2b-9 | Formate festschreiben (A3, aus B3 vorgezogen) | `docs/formate.md` beschreibt **maßgeblich** Schlüssel-Backup und Datensicherung: Felder, Verfahren, zugehörige Daten, Formatversion. Dazu **feste Testvektoren**: einmal erzeugte Chiffrate mit Wegwerf-Schlüsseln; Tests prüfen, dass sie sich weiter entschlüsseln lassen. | Sobald echte Daten im Format v1 liegen, muss jede künftige App-Version sie lesen können. Ein Test, der nur verschlüsselt und gleich wieder entschlüsselt, merkt eine Formatänderung nicht; ein festes Chiffrat schon. |
 | E-B2b-10 | Vorbereitung für die App | (a) **Gradle-Prüfsummen** (`verification-metadata.xml`) in `client/`. (b) Neues Modul **`verbindung`**: Connect-Clients, Sitzung, Adapter für `BackupAblage` und die Datensicherung, ohne CLI und ohne Dateiablage. `testclient` nutzt es. (c) Einbindung später per **Gradle Composite Build** (`includeBuild`) aus dem App-Repo. | (a) war für „vor der App“ entschieden. (b) Die App braucht dieselbe Anbindung; OkHttp und connect-kotlin laufen auf Android. (c) Beide Repos liegen nebeneinander; so braucht es keine veröffentlichten Pakete und keine Versionspflege. |
 | E-B2b-12 | Upload-Limit (2026-11-05) | Höchstens **48 Sicherungen je Konto und Tag** (UTC); danach `resource_exhausted` bis Mitternacht UTC. Gezählt wird nach den Prüfungen (leer, zu groß) und vor dem Speichern, also auch ein Konflikt. Holen höchstens 50-mal, Löschen höchstens 20-mal am Tag (2026-11-06, nach Review-Lauf 8; eigene Arten `sicherung_holen`, `sicherung_loeschen`). Derselbe Tageszähler wie beim Diagnose-Log (`kontingent`, Firestore mit TTL), eigene Art `sicherung`. Die App meldet „Tageslimit“, nicht „zu groß“ (`SicherungTageslimit`; unterschieden an der gesendeten Größe). | Stündlich und nur bei Änderung sind höchstens 24; die andere Hälfte deckt Sicherungen von Hand und zweite Versuche nach Konflikten. Eine App, die in einer Schleife sichert, lädt so höchstens 48 × 8 MiB am Tag hoch (Eingang kostenlos, Schreibvorgänge Bruchteile eines Cents) und verdrängt von den 200 älteren Fassungen höchstens 48: Die Rückfallebene der letzten Tage bleibt. Mehr Schutz (z. B. je Stunde) braucht es erst, wenn das nicht reicht. |
-| E-B2b-11 | Wer darf das testen? | Nur Kevin und wenige Bekannte über den **internen Test-Track**, in einer eigenen App-Variante. Eine kurze Testerinformation reicht vorerst; die Datenschutzerklärung bleibt in B6. | Die Daten sind Ende-zu-Ende verschlüsselt; der Server sieht nur Chiffrat, Größe und Zeitpunkt. Konten kann zwar jedes Google-Konto anlegen, aber ohne die App-Variante nutzt das niemand. Größenlimit, ältere Fassungen begrenzt und Kill-Switch halten die Kosten bei Missbrauch klein; Play Integrity kommt in B6. |
+| E-B2b-11 | Wer darf das testen? | Nur Kevin und wenige Bekannte über den **internen Test-Track**, in einer eigenen App-Variante. Eine kurze Testerinformation reicht vorerst; die Datenschutzerklärung bleibt in B6. | Die Daten sind Ende-zu-Ende verschlüsselt; der Server sieht nur Chiffrat, Größe und Zeitpunkt. Konten kann zwar jedes Google-Konto anlegen, aber ohne die App-Variante nutzt das niemand. Größenlimit, ältere Fassungen begrenzt und Kill-Switch halten die Kosten bei Missbrauch klein; Play Integrity kommt in B6. **Präzisiert 2026-11-07:** Im Eigenbetrieb (nur Kevin) keine eigene Variante; das Backup kommt in den normalen Build hinter den Schalter, damit Kevins echte Daten gesichert werden. Variante und Test-Track kommen mit dem ersten Tester (App-Repo `docs/backup-entwurf.md`, A-1). |
 
 ## Abläufe
 
@@ -142,36 +142,60 @@ falschem Tresorschlüssel, kleinerer Zähler, verändertes Chiffrat, zu groß.
    mit Keystore-Schlüssel verschlüsselt, Anmeldung über den Credential Manager,
    WorkManager, Anzeige „letzte Sicherung“, eigene App-Variante).
 
-## Vor echten Daten (Beginn der Sicherheitsphase)
-Bis hierher sind alle Schlüssel Testschlüssel: Sie lagen im Klartext in `%APPDATA%`,
-und ihre Wiederherstellungsschlüssel standen zum Teil in Terminal-Ausgaben, die Claude
-gelesen hat. Bevor die App-Variante echte Daten sichert:
-1. Schlüssel-Backup und Datensicherung des Testkontos auf dem Server löschen. Dafür
-   bekommt `SchluesselDienst` in B2b einen Aufruf `BackupLoeschen` und der Test-Client
-   den Befehl `schluessel-loeschen`.
-2. Die Dateien in `%APPDATA%\avlreminder\testclient` löschen.
-3. Die App erzeugt auf dem Gerät **neue** Schlüssel und einen neuen
-   Wiederherstellungsschlüssel. Den sieht nur Kevin, auf Papier; kein Terminal, kein
-   Screenshot, kein Gespräch mit Claude.
-4. **Löschschutz an:** Firestore `deletion_policy = "ABANDON"` und
+## Vor dem ersten weiteren Nutzer (Beginn der Sicherheitsphase)
+Entschieden 2026-11-07: Bis dahin gilt **Eigenbetrieb**. Echte Daten gibt es nur von
+Kevin; die App darf schon gegen die Cloud sichern, mit Schlüsseln, die Claude kennen
+darf (`CLAUDE.md`, „Geheimnisse und Sicherheitsphase“). Alle Schlüssel und der
+Pfeffer gelten daher als bekannt: Sie lagen im Klartext in `%APPDATA%`, und Werte
+standen in Ausgaben, die Claude gelesen hat. Die Sicherheitsphase beginnt **vor**
+dem ersten dieser Schritte: Teilen mit einer anderen Person (B3, auch Familie),
+erster Tester, Veröffentlichung im Play Store.
+
+Zurückgesetzt wird so, dass nichts mit einem alten Schlüssel Verschlüsseltes übrig
+bleibt; dann sind die alten Werte in Gesprächsverläufen wertlos. Kevins Daten liegen
+dabei nur noch auf dem Handy: nur mit einem funktionierenden Handy beginnen und
+gleich danach neu sichern. Checkliste:
+1. **Daten auf dem Server löschen:** für jedes Konto die Datensicherung mit allen
+   Fassungen (`sicherung-loeschen`) und das Schlüssel-Backup (`schluessel-loeschen`),
+   dazu alle Diagnosen im Bucket `…-diagnose`. Danach prüfen, dass die Buckets leer
+   sind (auch ältere Fassungen: `gcloud storage ls --all-versions`).
+2. **Firestore leeren:** die Sammlungen `konten`, `google_kennungen`, `geraete`,
+   `sitzungen`, `backups` und `kontingente`. Mit dem neuen Pfeffer (Punkt 3)
+   entstehen ohnehin neue Konto-IDs; die alten Dokumente wären verwaist.
+3. **Neuer Pfeffer:** Kevin legt allein eine neue Version an, der Server liest fest
+   die neue Version (Änderung in `infra/server.tf`, tofu-Test anpassen), die alte
+   wird zerstört. Danach die Offline-Kopie im Passwortmanager ersetzen (Ablauf in
+   [gcp-einrichtung.md](gcp-einrichtung.md)).
+4. **Testclient-Dateien löschen:** `%APPDATA%\avlreminder\testclient`.
+5. **App neu einrichten:** Die App erzeugt auf dem Gerät **neue** Geräte- und
+   Personenschlüssel und einen neuen Wiederherstellungsschlüssel. Den sieht nur
+   Kevin, auf Papier; kein Terminal, kein Screenshot, kein Gespräch mit Claude.
+   Danach sofort sichern und einmal wiederherstellen (Probe).
+6. **Prüfen:** Ab jetzt meldet Claude, wenn eine Aufgabe einen der Werte bräuchte,
+   statt ihn zu lesen.
+
+Außerdem, damals unter „Vor echten Daten“ (erledigt bis auf die Offline-Kopie des
+Pfeffers, die mit den ersten echten Daten fällig wird):
+- **Löschschutz an:** Firestore `deletion_policy = "ABANDON"` und
    `delete_protection_state`, Cloud Run `deletion_protection = true`, Bucket mit
    `force_destroy = false`. (In OpenTofu erledigt 2026-11-05, per `tofu test`
    abgesichert; „vollständig löschbar“ bleibt über das Löschen des Projekts.)
-5. **Neue Geräte:** entscheiden und umsetzen, dass ein neu angemeldetes Gerät erst
+- **Neue Geräte:** entscheiden und umsetzen, dass ein neu angemeldetes Gerät erst
    nach Freischaltung (QR oder Wiederherstellungsschlüssel) andere Geräte sperren und
    Backup oder Datensicherung löschen darf, und dass vorhandene Geräte von jedem neuen
    Gerät erfahren (Grenze in [b1-entwurf.md](b1-entwurf.md), „Gerät sperren“).
    Erledigt 2026-11-05: E-B2b-13 (unten), Server, Schnittstelle, `protokoll`,
    Adapter und Test-Client. Der Hinweis „Neues Gerät angemeldet“ kommt mit der App.
-6. **Pfeffer offline sichern:** Die Konto-ID ist ein HMAC der Google-Konto-ID mit
-   dem Pfeffer. Geht er verloren, findet kein Gerät Schlüssel-Backup und
-   Datensicherung wieder. Kevin legt allein eine Kopie im Passwortmanager ab
-   (Ablauf und Wiederherstellen in [gcp-einrichtung.md](gcp-einrichtung.md)).
-7. **Kosten und Rechte:** Upload-Limit je Konto und Tag im Server (erledigt
+- **Pfeffer offline sichern:** Die Konto-ID ist ein HMAC der Google-Konto-ID mit
+  dem Pfeffer. Geht er verloren, findet kein Gerät Schlüssel-Backup und
+  Datensicherung wieder. Kevin legt eine Kopie im Passwortmanager ab, sobald die
+  App echte Daten sichert (im Eigenbetrieb darf Claude dabei helfen), und ersetzt
+  sie in Punkt 3. Ablauf und Wiederherstellen in [gcp-einrichtung.md](gcp-einrichtung.md).
+- **Kosten und Rechte:** Upload-Limit je Konto und Tag im Server (erledigt
    2026-11-05, E-B2b-12); der Kill-Switch sperrt ohne actAs, indem er `allUsers`
    entfernt (erledigt 2026-11-05, [stand.md](stand.md)).
 
-Claude kündigt diesen Schritt vorher ausdrücklich an (siehe `CLAUDE.md`,
+Claude kündigt die Sicherheitsphase vorher ausdrücklich an (siehe `CLAUDE.md`,
 „Geheimnisse und Sicherheitsphase“). Das Rotieren der Schlüssel selbst kommt erst in
 B4; bis dahin heißt „rotieren“ hier: zurücksetzen und neu erzeugen.
 
@@ -225,8 +249,8 @@ nutzt, was der Mensch für ein neues Gerät ohnehin eintippt.
 **Aufwand:** Server (Feld am Gerät, Prüfungen in den Diensten, zwei neue Aufrufe),
 Schnittstelle, `protokoll` (Ableitung und Signatur), Adapter, Test-Client-Befehle;
 etwa so groß wie das Diagnose-Log. Die Testgeräte in Firestore haben das Feld noch
-nicht; sie werden vor echten Daten ohnehin gelöscht (Punkt 1). Deshalb Punkt 1 vor
-dem Deploy dieses Schritts erledigen oder die Testgeräte einmal freischalten.
+nicht; sie werden beim Zurücksetzen vor dem ersten weiteren Nutzer ohnehin gelöscht
+(Punkt 2). Bis dahin mit neuem Gerätenamen anmelden (so am 2026-11-07, `r-pc`).
 
 ## Bekannte Grenzen (bewusst)
 - **Ein sicherndes Gerät.** Zwei Geräte mit verschiedenen Daten führt erst B3
@@ -263,8 +287,8 @@ dem Deploy dieses Schritts erledigen oder die Testgeräte einmal freischalten.
   Aus demselben Grund kann die Grenze von 10 nicht freigeschalteten Geräten bei
   gleichzeitigen Anmeldungen um wenige überschritten werden.
 - **Testgeräte von vor E-B2b-13** sind in Firestore nicht freigeschaltet (das Feld
-  fehlt). Mit einem neuen Gerätenamen anmelden oder sie werden vor echten Daten
-  ohnehin gelöscht (Punkt 1).
+  fehlt). Mit einem neuen Gerätenamen anmelden; gelöscht werden sie beim
+  Zurücksetzen vor dem ersten weiteren Nutzer (Punkt 2).
 - **Schlüssel-Backup nach dem Löschen.** Die Version beginnt wieder bei 1. Ein Gerät,
   das noch Version 1 erwartet, könnte so ein neues Backup überschreiben. Heute
   harmlos, weil Clients nur mit `erwartet = 0` speichern (Kommentar in

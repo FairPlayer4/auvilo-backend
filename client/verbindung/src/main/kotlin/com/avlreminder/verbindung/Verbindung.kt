@@ -23,6 +23,7 @@ import com.avlreminder.schnittstelle.v1.DatensicherungDienstClient
 import com.avlreminder.schnittstelle.v1.DiagnoseDienstClient
 import com.avlreminder.schnittstelle.v1.DiagnoseSendenRequest
 import com.avlreminder.schnittstelle.v1.GeraetFreischaltenRequest
+import com.avlreminder.schnittstelle.v1.GeraetSperrenRequest
 import com.avlreminder.schnittstelle.v1.GeraeteDienstClient
 import com.avlreminder.schnittstelle.v1.MitWiederherstellungFreischaltenRequest
 import com.avlreminder.schnittstelle.v1.SchluesselDienstClient
@@ -146,6 +147,20 @@ class ServerGeraete(private val verbindung: Verbindung, private val token: Strin
         try {
             val anfrage = MitWiederherstellungFreischaltenRequest.newBuilder().setSignatur(ByteString.copyFrom(signatur)).build()
             verbindung.geraete.mitWiederherstellungFreischalten(anfrage, mitSitzung(token)).ergebnis()
+        } catch (e: Serverfehler) {
+            throw e.nichtFreigeschaltetOder()
+        }
+    }
+
+    /**
+     * Sperrt ein Gerät des Kontos, endgültig. Das eigene Gerät darf sich immer sperren (=
+     * abmelden); danach braucht es einen neuen Geräteschlüssel. Ein anderes nur, wenn dieses
+     * Gerät freigeschaltet ist.
+     */
+    suspend fun sperren(geraetId: String) {
+        try {
+            val anfrage = GeraetSperrenRequest.newBuilder().setGeraetId(geraetId).build()
+            verbindung.geraete.geraetSperren(anfrage, mitSitzung(token)).ergebnis()
         } catch (e: Serverfehler) {
             throw e.nichtFreigeschaltetOder()
         }

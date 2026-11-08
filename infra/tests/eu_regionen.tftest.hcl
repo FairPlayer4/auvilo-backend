@@ -74,8 +74,6 @@ override_resource {
   }
 }
 
-mock_provider "random" {}
-
 mock_provider "archive" {
   mock_data "archive_file" {
     defaults = {
@@ -366,8 +364,12 @@ run "pfeffer_bleibt_wiederherstellbar" {
     error_message = "Das Leserecht am Pfeffer hat nicht das Server-Konto."
   }
   assert {
-    condition     = tostring(google_secret_manager_secret_version.pfeffer.secret_data_wo_version) == "1"
-    error_message = "Der Pfeffer bekäme einen neuen Wert; alle Konten wären unauffindbar."
+    # KRITISCH: Der Server liest fest Version 1. "latest" nähme eine später
+    # hinzugefügte Version, also einen anderen Pfeffer.
+    condition = one([
+      for e in google_cloud_run_v2_service.server.template[0].containers[0].env : e.value if e.name == "PFEFFER_SECRET"
+    ]) == "${google_secret_manager_secret.pfeffer.name}/versions/1"
+    error_message = "Der Server liest nicht fest Version 1 des Pfeffers."
   }
 }
 

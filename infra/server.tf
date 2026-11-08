@@ -53,23 +53,19 @@ resource "google_secret_manager_secret" "pfeffer" {
   }
 }
 
-# Der Wert entsteht nur während `tofu apply` (ephemeral) und wird write-only
-# übergeben: Er steht weder im Plan noch im Zustand im Bucket.
-ephemeral "random_password" "pfeffer" {
-  length  = 64
-  special = false # nur Buchstaben und Ziffern: 64 Zeichen ≈ 380 Bit
-}
+# KRITISCH: Den Wert (Version 1) verwaltet OpenTofu nicht (seit 2026-11-07).
+# Angelegt hat ihn anfangs OpenTofu write-only; beim Wiederherstellen müsste die
+# Version aber importiert werden, und dabei liest der Provider den Wert in den
+# Zustand, und der Plan will die Version ersetzen, also einen neuen, zufälligen
+# Pfeffer anlegen (Probe am 2026-11-07, Review-Lauf 7, Frage 3). Ein neuer Pfeffer
+# machte alle Konten unauffindbar. Anlegen und Wiederherstellen per gcloud:
+# docs/gcp-einrichtung.md.
+removed {
+  from = google_secret_manager_secret_version.pfeffer
 
-resource "google_secret_manager_secret_version" "pfeffer" {
-  secret                 = google_secret_manager_secret.pfeffer.id
-  secret_data_wo         = ephemeral.random_password.pfeffer.result
-  secret_data_wo_version = 1
-
-  # KRITISCH: Ein neuer Pfeffer macht alle bestehenden Konten unauffindbar
-  # (jede Kennung ergäbe einen anderen HMAC). Darum nie ersetzen; ein Wechsel
-  # bräuchte eine Migration. secret_data_wo_version erhöhen hieße: neuer Wert.
+  # Nur aus dem Zustand nehmen; die Version in GCP bleibt.
   lifecycle {
-    prevent_destroy = true
+    destroy = false
   }
 }
 
@@ -146,8 +142,10 @@ resource "google_cloud_run_v2_service" "server" {
       env {
         # Feste Version statt "latest": Ein versehentlich neuer Wert im Secret
         # Manager wirkt so erst, wenn er hier eingetragen wird.
-        name  = "PFEFFER_SECRET"
-        value = google_secret_manager_secret_version.pfeffer.name
+        name = "PFEFFER_SECRET"
+        # Fest Version 1 (siehe oben); "name" enthält die Projektnummer, wie
+        # vorher der Name der Version.
+        value = "${google_secret_manager_secret.pfeffer.name}/versions/1"
       }
       env {
         name  = "SICHERUNG_BUCKET"

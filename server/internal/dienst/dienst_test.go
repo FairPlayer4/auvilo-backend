@@ -99,11 +99,13 @@ func neuerTestServerMit(t *testing.T, sicherungen datensicherung.Ablage, gleichz
 
 func (ts *testServer) anmeldeAnfrage(t *testing.T, sub string, g *testhilfe.Geraet) *v1.AnmeldenRequest {
 	t.Helper()
-	token := ts.google.IDToken(t, sub, g, ts.jetzt)
+	zufall := testhilfe.NonceZufall(t)
+	token := ts.google.IDToken(t, sub, g, zufall, ts.jetzt)
 	return &v1.AnmeldenRequest{
 		GoogleIdToken:     token,
 		Geraeteschluessel: g.DER,
 		Signatur:          g.Signiere(t, geraeteschluessel.AnmeldeNachricht(token)),
+		NonceZufall:       zufall,
 	}
 }
 

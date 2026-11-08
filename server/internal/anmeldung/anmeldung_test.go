@@ -9,6 +9,7 @@ import (
 	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/x509"
+	"encoding/base64"
 	"errors"
 	"strings"
 	"testing"
@@ -29,6 +30,9 @@ const (
 )
 
 var jetzt = time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)
+
+// zufall ist der Zufallsanteil der Nonce in den Testanfragen (16 Bytes).
+var zufall = []byte("0123456789abcdef")
 
 // Testumgebung: ein "Google"-Schlüssel, ein fremder Schlüssel und ein Gerät.
 type umgebung struct {
@@ -64,7 +68,7 @@ func (u *umgebung) ansprueche() map[string]any {
 		"sub":   googleSub,
 		"iat":   jetzt.Add(-time.Minute).Unix(),
 		"exp":   jetzt.Add(time.Hour).Unix(),
-		"nonce": geraeteschluessel.Nonce(u.geraetDER),
+		"nonce": geraeteschluessel.Nonce(u.geraetDER, zufall),
 	}
 }
 
@@ -99,6 +103,7 @@ func (u *umgebung) anfrage(t *testing.T, ansprueche map[string]any) Anfrage {
 		IDToken:           token,
 		Geraeteschluessel: u.geraetDER,
 		Signatur:          signiere(t, u.geraet, geraeteschluessel.AnmeldeNachricht(token)),
+		NonceZufall:       zufall,
 	}
 }
 
@@ -186,8 +191,32 @@ func TestPruefe(t *testing.T) {
 		// Nonce
 		{"lehnt Token ohne Nonce ab", func() Anfrage { return u.anfrage(t, mit(gut, "nonce", nil)) }, ErrNonce},
 		{"lehnt Token mit Nonce eines anderen Geräts ab", func() Anfrage {
-			return u.anfrage(t, mit(gut, "nonce", geraeteschluessel.Nonce(anderesDER)))
+			return u.anfrage(t, mit(gut, "nonce", geraeteschluessel.Nonce(anderesDER, zufall)))
 		}, ErrNonce},
+		{"lehnt Token mit Nonce eines anderen Zufallsanteils ab", func() Anfrage {
+			a := u.anfrage(t, gut)
+			a.NonceZufall = []byte("fedcba9876543210")
+			return a
+		}, ErrNonce},
+		// Die alte, feste Nonce (nur der Schlüssel) gilt nicht mehr.
+		{"lehnt Token mit Nonce ohne Zufallsanteil ab", func() Anfrage {
+			s := sha256.Sum256(u.geraetDER)
+			a := u.anfrage(t, mit(gut, "nonce", base64.RawURLEncoding.EncodeToString(s[:])))
+			a.NonceZufall = nil
+			return a
+		}, ErrZufall},
+		{"lehnt zu kurzen Zufallsanteil ab, auch wenn die Nonce dazu passt", func() Anfrage {
+			kurz := zufall[:15]
+			a := u.anfrage(t, mit(gut, "nonce", geraeteschluessel.Nonce(u.geraetDER, kurz)))
+			a.NonceZufall = kurz
+			return a
+		}, ErrZufall},
+		{"lehnt zu langen Zufallsanteil ab, auch wenn die Nonce dazu passt", func() Anfrage {
+			lang := append([]byte("x"), zufall...)
+			a := u.anfrage(t, mit(gut, "nonce", geraeteschluessel.Nonce(u.geraetDER, lang)))
+			a.NonceZufall = lang
+			return a
+		}, ErrZufall},
 		{"lehnt abgefangenes Token mit eigenem Schlüssel des Angreifers ab", func() Anfrage {
 			a := u.anfrage(t, gut) // Token gehört zum Gerät des Opfers
 			a.Geraeteschluessel = anderesDER

@@ -7,6 +7,9 @@ import com.avlreminder.protokoll.LokalerStand
 import com.avlreminder.protokoll.OffenesBackup
 import com.avlreminder.protokoll.Schluesselbund
 import com.avlreminder.protokoll.SicherungsStand
+import com.avlreminder.verbindung.Geraeteschluessel
+import com.avlreminder.verbindung.Sitzung
+import com.avlreminder.verbindung.SitzungsAblage
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.io.File
@@ -24,11 +27,13 @@ import java.util.Base64
  * Ein simuliertes Gerät mit seinem Geräteschlüssel (ECDSA P-256). In der App
  * liegt der Schlüssel im Android Keystore; hier in einer Datei.
  */
-class Geraet(private val privat: PrivateKey, val der: ByteArray) {
+class Geraet(private val privat: PrivateKey, val der: ByteArray) : Geraeteschluessel {
     val id: String get() = Geraetenachrichten.geraetId(der)
 
+    override val oeffentlich: ByteArray get() = der
+
     /** Signatur im Format, das der Server erwartet (SHA-256, ASN.1/DER) – wie der Android Keystore. */
-    fun signiere(nachricht: ByteArray): ByteArray =
+    override fun signiere(nachricht: ByteArray): ByteArray =
         Signature.getInstance("SHA256withECDSA").run {
             initSign(privat)
             update(nachricht)
@@ -58,7 +63,7 @@ private data class GespeicherteSchluessel(
 
 /** Was ein Gerät sich über die Datensicherung seines Kontos merkt. */
 @Serializable
-private data class GespeicherterStand(val kontoId: String, val zaehler: Long, val version: Long, val gesehen: Long = 0)
+private data class GespeicherterStand(val kontoId: String, val zaehler: Long, val version: Long, val gesehen: Long = 0, val abgelehnt: Boolean = false)
 
 /**
  * Legt je Gerätename Dateien in [ordner] ab (standardmäßig
@@ -90,6 +95,19 @@ class Ablage(private val ordner: File) {
 
     fun speichereSitzung(name: String, sitzung: GespeicherteSitzung) =
         schreibe(datei("sitzung", name, "json"), json.encodeToString(sitzung))
+
+    /** Die Sitzung des Geräts für [com.avlreminder.verbindung.Anmeldung]. */
+    fun sitzungsAblage(name: String): SitzungsAblage = object : SitzungsAblage {
+        override suspend fun lesen(): Sitzung? {
+            val datei = datei("sitzung", name, "json")
+            if (!datei.exists()) return null
+            val s = lies<GespeicherteSitzung>(datei)
+            return Sitzung(s.kontoId, s.geraetId, s.token, s.laeuftAbUnix)
+        }
+
+        override suspend fun speichern(sitzung: Sitzung) =
+            speichereSitzung(name, GespeicherteSitzung(sitzung.kontoId, sitzung.geraetId, sitzung.token, sitzung.laeuftAbUnix))
+    }
 
     fun sitzung(name: String): GespeicherteSitzung {
         val datei = datei("sitzung", name, "json")
@@ -142,11 +160,11 @@ class Ablage(private val ordner: File) {
             if (s.kontoId != kontoId) {
                 throw Bedienfehler("Gerät \"$name\" hat den Sicherungsstand eines anderen Kontos - anderen Gerätenamen wählen oder $datei löschen.")
             }
-            return GemerkteSicherung(s.zaehler, s.version, s.gesehen)
+            return GemerkteSicherung(s.zaehler, s.version, s.gesehen, s.abgelehnt)
         }
 
         override fun speichern(stand: GemerkteSicherung) =
-            schreibe(datei("stand", name, "json"), json.encodeToString(GespeicherterStand(kontoId, stand.zaehler, stand.version, stand.gesehen)))
+            schreibe(datei("stand", name, "json"), json.encodeToString(GespeicherterStand(kontoId, stand.zaehler, stand.version, stand.gesehen, stand.abgelehnt)))
     }
 
     private fun datei(art: String, name: String, endung: String): File {

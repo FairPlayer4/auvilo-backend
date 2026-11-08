@@ -1,5 +1,5 @@
 # Review-Gedächtnis
-Letzter Lauf: 2026-11-05 @ a9abda7 (Fixes auf review/2026-11-05, nach develop gemergt)   Laufzähler: 8
+Letzter Lauf: 2026-11-08 @ 6552941, App `feature/backup` @ 36129f3 (Fixes auf review/2026-11-08 in beiden Repos, nicht gemergt)   Laufzähler: 9
 
 ## Beabsichtigte Architektur
 Vom Entwickler bestätigt am 2026-11-01.
@@ -35,16 +35,17 @@ Vom Entwickler bestätigt am 2026-11-01.
 | Infrastruktur | `infra/*.tf`, `infra/*.sh` | anforderungen.md 4.3, 5, 6; gcp-einrichtung.md; stand.md | `infra/tests/` (tofu test), `pruefe-regionen.sh` | 2026-11-05 (Lauf 8, Modul `oeffentlich`, Löschschutz) | gut nach Fixes; Deploy ohne CI-Gate, Textprüfung der Öffnung (E3, E4) |
 | Server: Anmeldung/Sitzung | `server/internal/{geraeteschluessel,anmeldung,sitzung,dienst/dienst.go}`, `proto/` | b1-entwurf.md, proto-Kommentare, anforderungen.md Kap. 11 | `*_test.go` | 2026-11-05 (Lauf 8) | gut; Sperren bei vielen Sitzungen (Frage 4), Schlüsselausfall = abgelehnt (E14) |
 | Server: Speicher/Start | `server/internal/speicher`, `server/cmd/server` | b1-entwurf.md (Daten, Betrieb) | `vertrag_test.go` (auch Emulator), `main_test.go` | 2026-11-05 (Lauf 8) | gut; `Speicher` 10 Methoden (E10), Geräte je Konto unbegrenzt (Frage 5) |
-| Server: Datensicherung | `server/internal/datensicherung`, `dienst/datensicherung.go`, `datensicherung.proto` | b2b-entwurf.md, proto-Kommentare | `vertrag_test.go` (Arbeitsspeicher, fake-gcs), `datensicherung_test.go` | 2026-11-05 (Lauf 8, Upload-Limit) | gut nach Fixes (unkomprimiert, Tageslimit-Tests); Holen unbegrenzt (Frage 3) |
+| Server: Datensicherung | `server/internal/datensicherung`, `dienst/datensicherung.go`, `datensicherung.proto` | b2b-entwurf.md, proto-Kommentare | `vertrag_test.go` (Arbeitsspeicher, fake-gcs), `datensicherung_test.go` | 2026-11-08 (Lauf 9, Tageslimits) | gut nach Fix (Limit je Konto mit zweitem Gerät geprüft, 72faf01) |
 | CI, Deploy und Container | `.github/`, `server/Dockerfile`, `.golangci.yml`, `proto/buf*.yaml` | anforderungen.md Q4, go-review.md, stand.md | CI-Job `container` | 2026-11-03 (Lauf 6, CI-Fix) | gut; Emulator ohne feste Version (Nit) |
 | Doku | `docs/`, `CLAUDE.md`, `README.md` | – | – | 2026-11-03 (Lauf 6, vollständig) | gut nach Fixes; CLAUDE.md-Verweise (E6), Nits |
-| Kotlin `protokoll` | `client/protokoll`, `proto/avlreminder/inhalt`, `proto/testvektoren` | b2-entwurf.md, b2b-entwurf.md, backup.proto | `*Test.kt`; Go prüft nur `geraetenachrichten.json` | 2026-11-03 (Lauf 6) | gut nach Fix; Regel „offenes Backup“ im Test-Client (E1) |
-| Kotlin `verbindung` | `client/verbindung` | b2b-entwurf.md, proto-Kommentare | `AdapterTest` (Connect-Nachbau) | 2026-11-05 (Lauf 8) | gut nach Fix (403 ohne Connect-Fehler); Sitzung noch im Test-Client (E5), Fehlerarten (E8, E9) |
-| Backup und Test-Client | `server/internal/dienst/schluessel.go`, Backup in `speicher`, `client/testclient`, `schluessel.proto` | b2-entwurf.md, proto-Kommentare | `schluessel_test.go`, `vertrag_test.go`, `EinrichtungTest`, `GoogleTest`, `AblageTest` | 2026-11-05 (Lauf 8) | gut nach Fix (kaputte Dateien ohne Inhalt); Löschen braucht Tresor (E2 Lauf 6) |
+| Kotlin `protokoll` | `client/protokoll`, `proto/avlreminder/inhalt`, `proto/testvektoren` | b2-entwurf.md, b2b-entwurf.md, backup.proto | `*Test.kt`; Go prüft nur `geraetenachrichten.json` | 2026-11-08 (Lauf 9, Sicherungsablauf, zweiter Blick) | gut nach Fix (c6aa2c5); Rückfragen nicht `suspend`, Regel „offenes Backup“ im Test-Client (R1) |
+| Kotlin `verbindung` | `client/verbindung` | b2b-entwurf.md, proto-Kommentare | `AdapterTest` (Connect-Nachbau) | 2026-11-08 (Lauf 9, mit App) | gut; Anmeldung jetzt hier; Adapter mit festem Token (R2) |
+| Backup und Test-Client | `server/internal/dienst/schluessel.go`, Backup in `speicher`, `client/testclient`, `schluessel.proto` | b2-entwurf.md, proto-Kommentare | `schluessel_test.go`, `vertrag_test.go`, `EinrichtungTest`, `GoogleTest`, `AblageTest` | 2026-11-08 (Lauf 9, Test-Client) | gut; Löschen ohne Tresor erledigt; Meldung nach erfolgtem Löschen (minor) |
+| App-Einbindung (App-Repo) | `../avlreminder/app/…/cloud/`, Einstellungen, `gradle/backend-commit.txt`, Composite Build, App-CI | App `docs/backup-entwurf.md` (A-1…A-14), b2b-entwurf.md | `CloudBackupTest` (Attrappen), App-CI; kein Gerätetest | 2026-11-08 (Lauf 9, neu) | gut für Schritt 2 nach Fixes (f3c0335, ec55e6d im App-Repo); Token, Freischalt-Ausweg, Schlüssel verwerfen offen (R2–R4); Lint nicht in CI (R6) |
 | Server: Diagnose | `server/internal/{diagnose,kontingent}`, `dienst/diagnose.go`, `diagnose.proto` | diagnose-entwurf.md, formate.md, proto | `vertrag_test.go` (Arbeitsspeicher, Emulatoren), `diagnose_test.go` | 2026-11-05 (Lauf 8, mit Datensicherung) | gut; Diagnose von nicht freigeschalteten Geräten (Frage 1) |
 | Diagnose: Skript und Kotlin | `werkzeuge/diagnose-holen.sh`, `client/*/Diagnose*`, `ServerDiagnoseAblage`, `diagnose-senden` | diagnose-entwurf.md E-D-6 | `DiagnoseTest`, `AdapterTest`, `TestDiagnoseTest`; Skript nur von Hand | 2026-11-04 (Lauf 7, neu) | gut nach Fixes; Grenzwert `MAX_NUTZLAST` ungetestet (E3), Skript noch nie gegen echte Sendungen |
 | Kotlin-Build | `client/*.gradle.kts`, `client/gradle/`, CI-Job `kotlin` | b2-entwurf.md (CI) | CI | 2026-11-05 (Lauf 8) | gut; Prüfsummen aller Abhängigkeiten |
-| Freischaltung (E-B2b-13) | `server/internal/{freischaltung,dienst/freischaltung.go}`, Freischaltung in `speicher`, `geraete.proto`, Kotlin `Einrichtung` | b2b-entwurf.md, geraete.proto | `freischaltung_test.go`, `vertrag_test.go`, `EinrichtungTest` | 2026-11-05 (Lauf 8, neu) | gut nach Fixes; Prüfung opt-in je Handler (E2), erstes Backup schaltet frei (Frage 2) |
+| Freischaltung (E-B2b-13) | `server/internal/{freischaltung,dienst/freischaltung.go}`, Freischaltung in `speicher`, `geraete.proto`, Kotlin `Einrichtung` | b2b-entwurf.md, geraete.proto | `freischaltung_test.go`, `vertrag_test.go`, `EinrichtungTest` | 2026-11-08 (Lauf 9, Fragen aus Lauf 8 umgesetzt) | major offen: zweites Gerät hängt ohne gültigen Schlüssel (Frage 1); Selbstsperren umgeht 10 offene Geräte (Frage 4) |
 
 ## Bekannte Schulden und beobachtete Drift
 - 2026-11-01 (Lauf 1): E7 (Herkunft der Budget-Meldung prüfen) offen, optional.
@@ -117,12 +118,37 @@ Vom Entwickler bestätigt am 2026-11-01.
   - Vor echten Daten: Kill-Switch-IAM-Sperrweg und echte 403-Antwort in der Cloud testen
     (E1); Deploy ohne CI-Gate (E3).
 
+- 2026-11-08 (Lauf 9, App-Einbindung), offen (Details, Fragen 1–4 und Empfehlungen
+  R1–R7 in runs/2026-11-08.md):
+  - **Trend (Lauf 5, 8, 9 – dritte Beobachtung): Rückfragen in `protokoll` synchron.**
+    `Einrichtung` ist umgestellt, `Sicherungsablauf` (`uebernehmen`, `bestaetigen`,
+    `anwenden`, `SicherungsStand`) nicht (R1). Vor App-Schritt 3 handeln.
+  - **Trend (Lauf 7, 8, 9): Ein Schutz wird nur positiv geprüft.** Lauf 9: Tageslimits
+    „je Konto“ nur gegen ein anderes Konto geprüft, nie mit zweitem Gerät desselben
+    Kontos (M4/M5 grün; gefixt 72faf01).
+  - Neu: **Testattrappe bildet eine Serverregel nicht nach** (`FalscheAblage` kennt
+    `nurUngeschuetzt` nicht) – deshalb blieb Frage 1 unentdeckt. Bei neuen Serverregeln
+    die Attrappe mitziehen.
+  - App: festes Token in Adaptern (R2), kein Ausweg bei „nicht freigeschaltet“ (R3,
+    Mutant M3 grün), Schlüssel verwerfen vor der Sicherheitsphase (R4),
+    Gerätetest-Checkliste (R5), Lint nicht in CI (R6).
+  - Erledigt in Lauf 9: Anmeldung in `verbindung` (E5 Lauf 8); Löschen ohne Tresor
+    (E2 Lauf 6).
+
 ## Offene Fragen an den Entwickler
-Aus Lauf 8 (runs/2026-11-05.md, je mit Vorschlag): 6 abgelehnte Übernahme lokal
-merken; 7 zwei Instanzen = 8 gleichzeitige Sicherungen. (1–5 am 2026-11-06 entschieden.)
-Aus Lauf 7 (runs/2026-11-04.md, je mit Vorschlag): 1 gescheitertes Ablegen zählt zum
-Tageslimit (seit Lauf 8 durch `TestGescheitertesAblegenZaehltTrotzdem` festgehalten);
-3 Pfeffer-Wiederherstellung einmal durchspielen.
+Lauf 9 (2026-11-08), Details in runs/2026-11-08.md:
+1. Erstes Backup eines nicht freigeschalteten Geräts: Server prüft Version zuerst und
+   schaltet bei angenommenem `nurUngeschuetzt` frei; Client fängt
+   `GeraetNichtFreigeschaltet` beim Hochladen. Vor Schritt 5.
+2. Abgelehntes Wiederherstellen einer fremden Fassung lässt das Sichern ruhen – so lassen?
+3. Worker: unbeantwortete Rückfrage gilt wie „nein“ – so festhalten?
+4. Zusätzlich höchstens 10 neue Geräte je Konto und Tag (vor der Sicherheitsphase)?
+
+Frühere: Lauf 7, Frage 3 (Pfeffer) am 2026-11-07 erledigt: Probe zeigte
+Pfeffer im Zustand und Ersatz beim Import; Version aus OpenTofu genommen, Anleitung neu.
+Erledigt am 2026-11-07: Lauf 8, Fragen 6 (Ablehnung gemerkt, automatische Sicherung
+ruht) und 7 (2 Instanzen bleiben); Lauf 7, Frage 1 bestätigt. Lauf 8, Fragen 1–5
+am 2026-11-06.
 Erledigt am 2026-11-05: Frage 2 (Adapter unterscheiden „zu groß“ und „Tageslimit“ an
 der gesendeten Größe, Diagnose und Datensicherung), Empfehlung E3 (Grenzwerttest
 `MAX_NUTZLAST`), Upload-Limit (48 je Tag, E-B2b-12).

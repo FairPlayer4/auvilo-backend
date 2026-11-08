@@ -6,6 +6,10 @@ plugins {
 }
 
 subprojects {
+    // Unter diesem Namen bindet die App die Module per Composite Build ein
+    // (includeBuild, App-Repo docs/backup-entwurf.md A-2).
+    group = "com.avlreminder.client"
+
     plugins.withId("org.jetbrains.kotlin.jvm") {
         extensions.configure<org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension> {
             jvmToolchain(21)

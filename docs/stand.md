@@ -27,6 +27,9 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
   öffentlich aufrufbar, eigenes Dienstkonto `server` (Firestore, nur Secret `pfeffer`).
   Adresse: `tofu output server_url`.
 - Secret `pfeffer` (nur europe-west1, feste Version 1, Wert nicht im Zustand).
+  Seit 2026-11-07 verwaltet OpenTofu nur das Secret, nicht die Version mit dem
+  Wert (Pfeffer-Probe: ein Import läse ihn in den Zustand; Ablauf in
+  [gcp-einrichtung.md](gcp-einrichtung.md)). Angewendet: 1 vergessen, sonst nichts.
   Schutz auch außerhalb von OpenTofu: Zerstörte Versionen bleiben 30 Tage
   wiederherstellbar (`version_destroy_ttl`, angewendet 2026-11-01). Das gilt für
   einzelne Versionen; gegen das Löschen des ganzen Secrets (Console, `gcloud
@@ -56,8 +59,11 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
   Ebenso kostet Speicher (Bucket der Datensicherungen) nach der Sperre weiter, bis
   zum Trennen; die Lebenszyklusregeln greifen erst verzögert. Das Hochladen
   begrenzt der Server auf 48 Sicherungen je Konto und Tag
-  ([b2b-entwurf.md](b2b-entwurf.md), E-B2b-12); Holen ist nicht begrenzt
-  (Ausgang kostet), nur durch höchstens 4 gleichzeitige Aufrufe.
+  ([b2b-entwurf.md](b2b-entwurf.md), E-B2b-12); Holen auf 50 und Löschen auf 20
+  je Konto und Tag (seit 2026-11-06), dazu höchstens 4 gleichzeitige Aufrufe und
+  der Egress-Alarm (1 GiB in 23 Stunden). Die Grenze von 4 gilt je Instanz; mit
+  bis zu 2 Instanzen laufen also höchstens 8 Sicherungen gleichzeitig (entschieden
+  2026-11-07).
 - **Bekannte Grenze (Absenz-Alarm):** schlägt erst an, nachdem der Kill-Switch
   einmal aufgerufen wurde. Nach einem Neuaufbau einmal eine Meldung unter der
   Schwelle schicken (`gcloud pubsub topics publish budget-meldungen
@@ -77,10 +83,14 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
   Rechte auf Dienste vergeben, auch sich selbst (z. B. `run.admin`, dann könnte
   er Dienste löschen). Ein fremdes Image starten kann er auch so nicht (kein
   actAs); die Dienste prüfen die Anmeldung ohnehin selbst.
-  **Noch nicht in der Cloud getestet** (Stand Review-Lauf 8): Der Test vom
-  2026-11-01 galt dem alten Weg über den Ingress. Vor echten Daten einmal mit
-  einem Testdienst durchspielen (Meldung 21/20, `allUsers` weg, andere Bindungen
-  bleiben, Mail kommt; danach Testdienst löschen).
+  **In der Cloud getestet** am 2026-11-06 (Meldung 21/20, Testdienst `kstest`
+  mit Zusatzbindung): `allUsers` an `kstest` und `server` nach ca. 10 s entfernt,
+  die anderen Bindungen (`deploy` an beiden) blieben, `killswitch` selbst nicht
+  gesperrt, Log-WARNING „2 gefunden, 2 gesperrt“, nicht getrennt, Mail kam an.
+  `kstest` antwortete sofort mit 403, `server` erst nach ca. 2 Minuten
+  (IAM-Verzögerung). `tofu plan` brach danach wie gewollt ab; mit
+  `-var=gesperrte_dienste_oeffnen=true` kam nur die Bindung `allUsers` zurück,
+  danach `tofu plan` ohne Änderungen und Testclient-Aufrufe wieder möglich.
 - **Löschschutz** (seit 2026-11-05, vor echten Daten): Firestore, der Dienst
   `server` und der Bucket der Datensicherungen lassen sich nicht mit `tofu destroy`
   löschen. In GCP selbst schützt nur Firestore (`delete_protection_state`): Den
@@ -218,12 +228,47 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
    Tageslimits für Holen (50) und Löschen (20) der Sicherung und für Sitzungen
    (200 je Gerät); Interceptor prüft „gesperrt“, Sperren löscht Sitzungen in
    Stapeln; höchstens 10 offene Geräte je Konto. Server, Schnittstelle (nur
-   Kommentare), Adapter und Test-Client. Deploy über PR nach `main`.
+   Kommentare), Adapter und Test-Client. Deploy über PR #12 am 2026-11-06.
+   **In der Cloud getestet** am 2026-11-07 (Geräte `r-pc`, `r-handy`): `r-pc`
+   wird freigeschaltet, weil das Konto kein freigeschaltetes Gerät hatte, löscht
+   das alte Schlüssel-Backup, sperrt die alten `cloud-*`-Geräte und sendet eine
+   Diagnose. `r-handy` ist nicht freigeschaltet: Sein erstes Backup lehnt der
+   Server ab, ebenso seine Diagnose; Geräte auflisten geht. Nachdem `r-pc` es
+   gesperrt hat, lehnt der Server seine noch laufende Sitzung beim nächsten
+   Aufruf ab (3 s später, `unauthenticated`). Log nur mit Geräte-IDs.
+   Nicht in der Cloud getestet (nur Tests): Gerätelimit und Tageslimits.
+   Die alte Testsicherung liegt noch im Bucket (`sicherung-loeschen` braucht
+   lokale Schlüssel; geht beim Zurücksetzen vor dem ersten weiteren Nutzer weg).
    Egress-Alarm (`infra/alarm.tf`: Mail, wenn der Server in 23 Stunden mehr als
    1 GiB sendet, ca. 0,40 $/Monat) am 2026-11-06 angewendet (2 neu, 1 geändert,
    1 entfernt); dabei wurde auch der Kill-Switch mit den Fixes aus Lauf 8 neu gebaut.
-   **Weiter mit:** die Schritte, die nur Kevin macht
-   (b2b-entwurf.md, „Vor echten Daten“, Punkte 1–3 und 6); Schritt 7 (App-Einbindung, eigener Entwurf im App-Repo). Offen aus
+   **Eigenbetrieb** seit 2026-11-07: Die App darf mit Kevins echten Daten gegen die
+   Cloud sichern, Claude darf die Schlüssel dafür kennen; zurückgesetzt wird vor dem
+   ersten weiteren Nutzer (b2b-entwurf.md, Checkliste; `CLAUDE.md`).
+   **Schritt 7 (App-Einbindung):** Entwurf im App-Repo bestätigt am 2026-11-07
+   (`../avlreminder/docs/backup-entwurf.md`, fünf Schritte); App und `core` bauen dafür
+   jetzt für Java 21. Vorab legt Kevin die OAuth-Clients (Web und Android) an; die
+   Web-Client-ID kommt in `google_client_ids` (`tofu apply`, nur Umgebungsvariable).
+   Teil 1 im Backend am 2026-11-07: Anmelden, Erneuern und „gültige Sitzung“
+   (`Anmeldung`, Geräteschlüssel und Sitzungsablage als Schnittstellen) liegen in
+   `verbindung`, getestet gegen den Connect-Nachbau; der Test-Client nutzt sie.
+   Module haben die Gruppe `com.avlreminder.client` für den Composite Build.
+   Teil 1 in der App am 2026-11-07 (Composite Build, CI mit Deploy-Key, grün). Teil 2
+   (Anmelden und Einrichten in der App) gebaut; dafür im Backend `SitzungsAblage` und die
+   Rückfragen der `Einrichtung` auf `suspend` umgestellt. Die Web-Client-ID der App steht
+   in `google_client_ids`, angewendet am 2026-11-08 (`tofu apply`, 0 neu, 1 geändert:
+   Umgebungsvariable `GOOGLE_CLIENT_IDS`, Revision `server-00013-fp2`, gleiches Image).
+   Kevins Konto am 2026-11-08 geräumt (Test-Client, Gerät `r-pc`): Datensicherung und
+   Schlüssel-Backup gelöscht, alle sechs Geräte gesperrt; `sicherung-loeschen` braucht
+   dafür keine lokalen Schlüssel mehr (`Sicherungsablauf.loeschen` ohne Tresor). `ServerGeraete.sperren` liegt jetzt in `verbindung` (die App setzt damit ihr Cloud-Konto zurück).
+   **Nonce mit Zufall (2026-11-08):** Erneutes Anmelden desselben Geräts innerhalb
+   einer Stunde scheiterte („ID-Token zu alt“), weil Google bei fester Nonce das
+   gecachte Token lieferte. Jetzt schickt jede Anmeldung 16 Zufallsbytes mit
+   (`nonce_zufall`, `Anmeldung.versuch()`); der Server verlangt sie. Den Go-Code aus
+   `proto/` erzeugt `buf generate` derzeit im Container (`golang:1.27`), weil die
+   Windows-Anwendungssteuerung die lokalen Plugins blockiert.
+   **Weiter mit:** Gerätetest von Schritt 2 in der App; Pfeffer
+   offline sichern, sobald die App echte Daten sichert. Offen aus
    Lauf 5: Empfehlungen E5–E7; aus Lauf 6: E1–E6.
 5. Für den B3-Entwurf aus Lauf 4: A2 (Mitgliedschaft: Server-Liste oder signiertes
    Log), A4 (Umschläge an Kontext binden, Keyset-Typen prüfen), A5 (Speicher und

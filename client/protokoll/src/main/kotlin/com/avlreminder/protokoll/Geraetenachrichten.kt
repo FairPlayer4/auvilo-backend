@@ -21,9 +21,19 @@ object Geraetenachrichten {
     fun geraetId(oeffentlichDer: ByteArray): String =
         HexFormat.of().formatHex(sha256(oeffentlichDer).copyOf(16))
 
-    /** Nonce für den Google-Login: SHA-256 über den Schlüssel, base64url ohne Auffüllung. */
-    fun nonce(oeffentlichDer: ByteArray): String =
-        Base64.getUrlEncoder().withoutPadding().encodeToString(sha256(oeffentlichDer))
+    /** So viele zufällige Bytes gehören zu jeder Nonce. */
+    const val NONCE_ZUFALL_LAENGE = 16
+
+    /**
+     * Nonce für den Google-Login: SHA-256 über den Schlüssel und dahinter [zufall]
+     * ([NONCE_ZUFALL_LAENGE] Bytes, je Anmeldung neu), base64url ohne Auffüllung.
+     * Bei gleicher Nonce gäbe Google bis zu einer Stunde lang dasselbe, für den
+     * Server zu alte ID-Token zurück.
+     */
+    fun nonce(oeffentlichDer: ByteArray, zufall: ByteArray): String {
+        require(zufall.size == NONCE_ZUFALL_LAENGE) { "Zufallsanteil der Nonce braucht $NONCE_ZUFALL_LAENGE Bytes" }
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(sha256(oeffentlichDer + zufall))
+    }
 
     /** Wird beim Anmelden signiert. */
     fun anmelden(idToken: String): ByteArray = (ZWECK_ANMELDEN + idToken).toByteArray()

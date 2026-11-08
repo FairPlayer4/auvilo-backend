@@ -73,13 +73,25 @@ func IstGeraetID(s string) bool {
 	return true
 }
 
-// Nonce ist der Wert, den das Gerät beim Google-Login als "nonce" mitschickt.
+// NonceZufallLaenge ist die Länge des Zufallsanteils der Nonce in Bytes.
+const NonceZufallLaenge = 16
+
+// Nonce ist der Wert, den das Gerät beim Google-Login als "nonce" mitschickt:
+// SHA-256 über den Schlüssel (PKIX/DER) und dahinter den Zufallsanteil.
 // Google übernimmt ihn ins ID-Token; der Server vergleicht. So gehört ein
 // ID-Token zu genau einem Geräteschlüssel – ein abgefangenes Token nützt mit
 // einem anderen Schlüssel nichts.
-func Nonce(der []byte) string {
-	summe := sha256.Sum256(der)
-	return base64.RawURLEncoding.EncodeToString(summe[:])
+//
+// Der Zufallsanteil (NonceZufallLaenge Bytes, je Anmeldung neu) sorgt dafür,
+// dass Google jedes Mal ein frisches ID-Token ausstellt: Bei gleicher Nonce
+// liefert es bis zu einer Stunde lang dasselbe Token zurück, und das ist für
+// den Server nach MaxAlter zu alt. Weil der Zufallsanteil eine feste Länge hat,
+// ist die Verkettung eindeutig.
+func Nonce(der, zufall []byte) string {
+	h := sha256.New()
+	h.Write(der)
+	h.Write(zufall)
+	return base64.RawURLEncoding.EncodeToString(h.Sum(nil))
 }
 
 // AnmeldeNachricht sind die Bytes, die das Gerät beim Anmelden signiert.

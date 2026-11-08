@@ -15,6 +15,8 @@ import com.avlreminder.schnittstelle.v1.DiagnoseSendenRequest
 import com.avlreminder.schnittstelle.v1.DiagnoseSendenResponse
 import com.avlreminder.schnittstelle.v1.GeraetFreischaltenRequest
 import com.avlreminder.schnittstelle.v1.GeraetFreischaltenResponse
+import com.avlreminder.schnittstelle.v1.GeraetSperrenRequest
+import com.avlreminder.schnittstelle.v1.GeraetSperrenResponse
 import com.avlreminder.schnittstelle.v1.MitWiederherstellungFreischaltenRequest
 import com.avlreminder.schnittstelle.v1.MitWiederherstellungFreischaltenResponse
 import com.avlreminder.schnittstelle.v1.SicherungHolenResponse
@@ -208,6 +210,16 @@ class AdapterTest {
     }
 
     @Test
+    fun `sperrt ein Gerät mit Sitzung`() {
+        antwort = Antwort.Ok(GeraetSperrenResponse.getDefaultInstance())
+        runBlocking { ServerGeraete(verbindung(), TOKEN).sperren("geraet-1") }
+        val a = anfragen.single()
+        assertEquals("/avlreminder.v1.GeraeteDienst/GeraetSperren", a.pfad)
+        assertEquals("Bearer $TOKEN", a.autorisierung)
+        assertEquals("geraet-1", GeraetSperrenRequest.parseFrom(a.inhalt).geraetId)
+    }
+
+    @Test
     fun `holt das Schlüssel-Backup`() {
         antwort = Antwort.Ok(BackupHolenResponse.newBuilder().setChiffrat(ByteString.copyFrom(CHIFFRAT)).setVersion(5).build())
         val b = runBlocking { ServerBackupAblage(verbindung(), TOKEN).holen() }!!
@@ -298,6 +310,9 @@ class AdapterTest {
             Fall("Gerät freischalten: keine Erlaubnis heißt nicht freigeschaltet", Code.PERMISSION_DENIED, { geraete(it).freischalten("x") }, GeraetNichtFreigeschaltet::class),
             Fall("Gerät freischalten: nicht gefunden bleibt Serverfehler", Code.NOT_FOUND, { geraete(it).freischalten("x") }, Serverfehler::class),
             Fall("Gerät freischalten: gesperrt bleibt Serverfehler", Code.FAILED_PRECONDITION, { geraete(it).freischalten("x") }, Serverfehler::class),
+            Fall("Gerät sperren: keine Erlaubnis heißt nicht freigeschaltet", Code.PERMISSION_DENIED, { geraete(it).sperren("x") }, GeraetNichtFreigeschaltet::class),
+            Fall("Gerät sperren: ungültige Sitzung bleibt Serverfehler", Code.UNAUTHENTICATED, { geraete(it).sperren("x") }, Serverfehler::class),
+            Fall("Gerät sperren: nicht gefunden bleibt Serverfehler", Code.NOT_FOUND, { geraete(it).sperren("x") }, Serverfehler::class),
             // Diagnose
             Fall("Diagnose senden: keine Erlaubnis heißt nicht freigeschaltet", Code.PERMISSION_DENIED, { diagnose(it) }, DiagnoseNichtFreigeschaltet::class),
             Fall("Diagnose senden: erschöpft bei kleiner Sendung heißt Tageslimit", Code.RESOURCE_EXHAUSTED, { diagnose(it) }, DiagnoseTageslimit::class),

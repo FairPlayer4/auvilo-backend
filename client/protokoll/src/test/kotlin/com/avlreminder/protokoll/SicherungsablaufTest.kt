@@ -19,13 +19,20 @@ class SicherungsablaufTest {
     /** Server-Ablage im Speicher; Versionen springen wie bei Cloud Storage (nicht +1). */
     class FalscheAblage(var sicherung: GeholteSicherung? = null) : SicherungsAblage {
         var gespeichert = 0
+
+        /** Alle Aufrufe beim Server, auch abgelehnte: Jeder zählt dort zum Tageslimit. */
+        var aufrufe = 0
         var vorDemSpeichern: (() -> Unit)? = null
         var antwortGehtVerloren = false
         private var naechste = 1_000L
 
-        override suspend fun holen() = sicherung
+        override suspend fun holen(): GeholteSicherung? {
+            aufrufe++
+            return sicherung
+        }
 
         override suspend fun speichern(chiffrat: ByteArray, erwartet: Long): Long {
+            aufrufe++
             vorDemSpeichern?.invoke()?.also { vorDemSpeichern = null }
             if ((sicherung?.version ?: 0L) != erwartet) throw VersionVeraltet()
             gespeichert++
@@ -57,11 +64,11 @@ class SicherungsablaufTest {
         }
     }
 
-    private class Geraet(
+    class Geraet(
         val server: FalscheAblage,
         val stand: FalscherStand = FalscherStand(),
         val id: String = "handy",
-        val uebernimmt: Boolean = false,
+        var uebernimmt: Boolean = false,
     ) {
         var gefragt: Sicherungskopf? = null
 
@@ -70,7 +77,9 @@ class SicherungsablaufTest {
             uebernimmt
         }, uhr = { JETZT })
 
-        fun sichern(nutzlast: String = "Daten") = runBlocking { ablauf.sichern(nutzlast.toByteArray(), SCHEMA) }
+        /** Standardmäßig wie die stündliche Sicherung der App; von Hand mit [automatisch] = false. */
+        fun sichern(nutzlast: String = "Daten", automatisch: Boolean = true) =
+            runBlocking { ablauf.sichern(nutzlast.toByteArray(), SCHEMA, automatisch) }
     }
 
     // --- Sichern -------------------------------------------------------------
@@ -136,7 +145,7 @@ class SicherungsablaufTest {
         assertInstanceOf(Gesichert.AnderesGeraet::class.java, ergebnis)
         assertEquals("tablet", g.gefragt?.geraetId)
         assertEquals("tablet", server.inhalt().kopf.geraetId)
-        assertEquals(gemerkt?.copy(gesehen = 9), g.stand.stand) // eigener Stand bleibt, Zähler 9 gesehen
+        assertEquals(gemerkt?.copy(gesehen = 9, abgelehnt = true), g.stand.stand) // eigener Stand bleibt, Zähler 9 gesehen
     }
 
     // KRITISCH: Gegenstück zu „übernimmt nach Zustimmung“: Ohne Zustimmung bleibt die
@@ -152,7 +161,7 @@ class SicherungsablaufTest {
         assertEquals(Gesichert.AnderesGeraet(server.inhalt().kopf), ergebnis)
         assertSame(vorher, server.sicherung)
         assertEquals(0, server.gespeichert)
-        assertEquals(GemerkteSicherung(zaehler = 0, version = 0, gesehen = 5), g.stand.stand)
+        assertEquals(GemerkteSicherung(zaehler = 0, version = 0, gesehen = 5, abgelehnt = true), g.stand.stand)
     }
 
     // KRITISCH: E-B2b-3 „gesichert oder gesehen“: Hat der Mensch eine Sicherung
@@ -164,20 +173,61 @@ class SicherungsablaufTest {
         g.sichern()
         server.vonGeraet("tablet", zaehler = 4) // Server liefert eine ältere Fassung
 
-        assertThrows<AeltereSicherung> { g.sichern() }
+        assertThrows<AeltereSicherung> { g.sichern(automatisch = false) }
         assertThrows<AeltereSicherung> { runBlocking { g.ablauf.wiederherstellen(SCHEMA, { true }, { }) } }
         assertEquals(0, server.gespeichert)
     }
 
+    // Gegenprobe zu „ruht nach abgelehnter Übernahme“: Von Hand fragt es wieder.
     @Test
-    fun `nach abgelehnter Übernahme fragt das Gerät bei derselben Fassung wieder nach`() {
+    fun `von Hand fragt das Gerät nach abgelehnter Übernahme wieder nach`() {
         val server = FalscheAblage().apply { vonGeraet("tablet", zaehler = 5) }
         val g = Geraet(server, uebernimmt = false)
         g.sichern()
         g.gefragt = null
 
-        assertInstanceOf(Gesichert.AnderesGeraet::class.java, g.sichern())
+        assertInstanceOf(Gesichert.AnderesGeraet::class.java, g.sichern(automatisch = false))
         assertEquals(5, g.gefragt?.zaehler)
+    }
+
+    // KRITISCH: E-B2b-6 „fragt einmal“ und Review-Lauf 8, Frage 6: Nach einer Ablehnung
+    // fragt die stündliche Sicherung nicht wieder und ruft den Server gar nicht auf.
+    // Sonst verbrauchte jeder Lauf einen Versuch vom Tageslimit.
+    @Test
+    fun `nach abgelehnter Übernahme ruht das automatische Sichern, ohne den Server zu fragen`() {
+        val server = FalscheAblage().apply { vonGeraet("tablet", zaehler = 5) }
+        val vorher = server.sicherung
+        val g = Geraet(server, uebernimmt = false)
+        assertInstanceOf(Gesichert.AnderesGeraet::class.java, g.sichern()) // fragt einmal
+        assertEquals(5, g.gefragt?.zaehler)
+        g.gefragt = null
+        val aufrufe = server.aufrufe
+
+        repeat(3) { assertEquals(Gesichert.Ruht, g.sichern()) }
+        assertNull(g.gefragt)
+        assertEquals(aufrufe, server.aufrufe)
+        assertSame(vorher, server.sicherung)
+    }
+
+    data class Freigabe(val name: String, val ausloesen: (Geraet) -> Unit) {
+        override fun toString() = name
+    }
+
+    // Was das automatische Sichern nach einer Ablehnung wieder in Gang bringt: Der
+    // Mensch hat selbst entschieden. Danach sichert es ohne Rückfrage.
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("freigaben")
+    fun `nach abgelehnter Übernahme sichert das Gerät wieder automatisch`(fall: Freigabe) {
+        val server = FalscheAblage().apply { vonGeraet("tablet", zaehler = 5) }
+        val g = Geraet(server, uebernimmt = false)
+        g.sichern() // abgelehnt
+        fall.ausloesen(g)
+        g.uebernimmt = false
+        g.gefragt = null
+
+        assertInstanceOf(Gesichert.Ja::class.java, g.sichern())
+        assertNull(g.gefragt)
+        assertEquals("handy", server.inhalt().kopf.geraetId)
     }
 
     // KRITISCH: Ein Server, der eine ältere Fassung zeigt als das Gerät kennt, bringt
@@ -216,7 +266,7 @@ class SicherungsablaufTest {
             }
         }
         val ablauf = Sicherungsablauf(KONTO, "handy", tresor, ablage, FalscherStand(), uebernehmen = { true }, uhr = { JETZT })
-        assertThrows<VersionVeraltet> { runBlocking { ablauf.sichern("x".toByteArray(), SCHEMA) } }
+        assertThrows<VersionVeraltet> { runBlocking { ablauf.sichern("x".toByteArray(), SCHEMA, automatisch = true) } }
         assertEquals("tablet", server.inhalt().kopf.geraetId)
     }
 
@@ -347,6 +397,21 @@ class SicherungsablaufTest {
         assertEquals(fall.danach, stand.stand)
     }
 
+    // KRITISCH: Das Ruhen gilt nur nach „nein“ auf die Übernahme einer fremden Sicherung
+    // (E-B2b-6). Bricht der Mensch das Wiederherstellen der eigenen ab, sichert das
+    // Gerät weiter automatisch; sonst stünde das Backup unbemerkt still.
+    @Test
+    fun `nach abgelehnter Wiederherstellung der eigenen Sicherung sichert das Gerät weiter automatisch`() {
+        val server = FalscheAblage()
+        val stand = FalscherStand()
+        val g = Geraet(server, stand, id = "neu")
+        g.sichern()
+        assertEquals(Wiederhergestellt.Abgelehnt, wiederherstellen(server, stand, bestaetigt = false))
+
+        assertInstanceOf(Gesichert.Ja::class.java, g.sichern())
+        assertNull(g.gefragt)
+    }
+
     // --- Löschen --------------------------------------------------------------
 
     // KRITISCH: Nach dem Löschen zählt das Gerät weiter, damit andere Geräte, die
@@ -382,10 +447,10 @@ class SicherungsablaufTest {
     }
 
     @Test
-    fun `löscht auch ohne gemerkten Stand und merkt sich nichts`() {
+    fun `löscht auch ohne Schlüssel und ohne gemerkten Stand und merkt sich nichts`() {
         val server = FalscheAblage().apply { vonGeraet("tablet", zaehler = 4) }
         val stand = FalscherStand()
-        runBlocking { Sicherungsablauf(KONTO, "neu", tresor, server, stand, uebernehmen = { false }).loeschen() }
+        runBlocking { Sicherungsablauf.loeschen(server, stand) }
         assertNull(server.sicherung)
         assertNull(stand.stand)
     }
@@ -409,10 +474,31 @@ class SicherungsablaufTest {
         private fun kopf(geraet: String, zaehler: Long) = Sicherungskopf(zaehler, JETZT, geraet, SCHEMA)
 
         @JvmStatic
+        fun freigaben() = listOf(
+            Freigabe("von Hand übernommen") {
+                it.uebernimmt = true
+                assertInstanceOf(Gesichert.Ja::class.java, it.sichern(automatisch = false))
+            },
+            Freigabe("wiederhergestellt") {
+                runBlocking { it.ablauf.wiederherstellen(SCHEMA, { true }, { }) }
+            },
+            Freigabe("gelöscht") {
+                runBlocking { it.ablauf.loeschen() }
+            },
+        )
+
+        @JvmStatic
         fun ablehnungen() = listOf(
             Ablehnung(
                 "nicht ohne Bestätigung",
                 { FalscheAblage().apply { vonGeraet("tablet", 4) } },
+                bestaetigt = false,
+                danach = GemerkteSicherung(0, 0, gesehen = 4, abgelehnt = true),
+            ),
+            // Die eigene Fassung muss das Gerät nicht übernehmen: Ablehnen merkt nur den Zähler.
+            Ablehnung(
+                "nicht ohne Bestätigung, auch die eigene Sicherung",
+                { FalscheAblage().apply { vonGeraet("neu", 4) } },
                 bestaetigt = false,
                 danach = GemerkteSicherung(0, 0, gesehen = 4),
             ),

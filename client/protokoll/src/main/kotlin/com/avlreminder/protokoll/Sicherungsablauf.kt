@@ -36,8 +36,12 @@ interface SicherungsAblage {
  * @property gesehen der höchste Zähler einer Sicherung, die dieses Gerät gesehen, aber
  *   nicht übernommen hat (der Mensch hat abgelehnt). Sie ist echt, denn sie ließ sich
  *   entschlüsseln; ältere Fassungen gelten deshalb ebenfalls als veraltet.
+ * @property abgelehnt der Mensch wollte die Sicherung eines anderen Geräts nicht
+ *   übernehmen (E-B2b-6: „fragt einmal“). Solange das gilt, sichert dieses Gerät nicht
+ *   mehr automatisch, erst wieder, wenn der Mensch selbst sichert, wiederherstellt
+ *   oder löscht.
  */
-data class GemerkteSicherung(val zaehler: Long, val version: Long, val gesehen: Long = 0) {
+data class GemerkteSicherung(val zaehler: Long, val version: Long, val gesehen: Long = 0, val abgelehnt: Boolean = false) {
     /** Sicherungen mit kleinerem Zähler sind älter, als dieses Gerät kennt. */
     val untergrenze get() = maxOf(zaehler, gesehen)
 }
@@ -78,9 +82,17 @@ sealed interface Gesichert {
 
     /**
      * Ein anderes Gerät sichert; der Mensch wollte nicht übernehmen. Auf dem Server
-     * bleibt alles, wie es ist; das Gerät merkt sich nur den Zähler als gesehen.
+     * bleibt alles, wie es ist; das Gerät merkt sich den Zähler als gesehen und dass
+     * die automatische Sicherung ruht ([Ruht]).
      */
     data class AnderesGeraet(val kopf: Sicherungskopf) : Gesichert
+
+    /**
+     * Automatisches Sichern ruht, weil der Mensch die Übernahme schon abgelehnt hat
+     * ([GemerkteSicherung.abgelehnt]); der Server wurde nicht gefragt. Die App bietet
+     * an, von Hand zu sichern (dann fragt sie wieder).
+     */
+    data object Ruht : Gesichert
 }
 
 /** Ergebnis von [Sicherungsablauf.wiederherstellen]. */
@@ -89,7 +101,11 @@ sealed interface Wiederhergestellt {
 
     data object KeineSicherung : Wiederhergestellt
 
-    /** Der Mensch hat nach Anzeige des Kopfs abgelehnt. Nichts angewendet; das Gerät merkt sich nur den Zähler als gesehen. */
+    /**
+     * Der Mensch hat nach Anzeige des Kopfs abgelehnt. Nichts angewendet; das Gerät merkt
+     * sich den Zähler als gesehen. Stammt die Sicherung von einem anderen Gerät, gilt das
+     * als „nicht übernehmen“, und die automatische Sicherung ruht (E-B2b-6).
+     */
     data object Abgelehnt : Wiederhergestellt
 }
 
@@ -119,9 +135,16 @@ class Sicherungsablauf(
      *    mit der Server-Version,
      *  - von einem anderen Gerät: nur nach Rückfrage,
      *  - Zähler kleiner als gemerkt: [AeltereSicherung], nichts hochladen.
+     *
+     * KRITISCH: [automatisch] (die stündliche Sicherung der App) fragt nach einer
+     * Ablehnung nicht erneut und ruft den Server gar nicht erst auf ([Gesichert.Ruht]).
+     * Sonst verbrauchte jeder Lauf einen Versuch vom Tageslimit (Review-Lauf 8, Frage 6),
+     * und der Mensch würde stündlich gefragt. Von Hand ([automatisch] = false) fragt es
+     * wieder.
      */
-    suspend fun sichern(nutzlast: ByteArray, schemaVersion: Int): Gesichert {
+    suspend fun sichern(nutzlast: ByteArray, schemaVersion: Int, automatisch: Boolean): Gesichert {
         val gemerkt = stand.laden()
+        if (automatisch && gemerkt?.abgelehnt == true) return Gesichert.Ruht
         var zaehler = (gemerkt?.untergrenze ?: 0) + 1
         var erwartet = gemerkt?.version ?: 0
         // Höchstens ein zweiter Versuch: nach dem Abgleich mit der Server-Fassung.
@@ -148,7 +171,7 @@ class Sicherungsablauf(
             val kopf = Datensicherung.entschluesseln(vorhanden.chiffrat, tresor, kontoId).kopf
             if (gemerkt != null && kopf.zaehler < gemerkt.untergrenze) throw AeltereSicherung(gemerkt.untergrenze, kopf.zaehler)
             if (kopf.geraetId != geraetId && !uebernehmen(kopf)) {
-                merkeGesehen(gemerkt, kopf.zaehler)
+                merkeGesehen(gemerkt, kopf.zaehler, abgelehnt = true)
                 return Gesichert.AnderesGeraet(kopf)
             }
             zaehler = maxOf(zaehler, kopf.zaehler + 1)
@@ -182,7 +205,9 @@ class Sicherungsablauf(
             throw NeueresSchema(sicherung.kopf.schemaVersion, hoechsteSchemaVersion)
         }
         if (!bestaetigen(sicherung.kopf)) {
-            merkeGesehen(gemerkt, sicherung.kopf.zaehler)
+            // KRITISCH: Nur die Fassung eines anderen Geräts ist eine abgelehnte Übernahme.
+            // Die eigene abzulehnen darf das automatische Sichern nicht stilllegen.
+            merkeGesehen(gemerkt, sicherung.kopf.zaehler, abgelehnt = sicherung.kopf.geraetId != geraetId)
             return Wiederhergestellt.Abgelehnt
         }
         anwenden(sicherung)
@@ -195,18 +220,32 @@ class Sicherungsablauf(
      *
      * KRITISCH: Der gemerkte Zähler bleibt, nur die Version wird 0. Die nächste
      * Sicherung zählt also weiter; finge sie bei 1 an, lehnten andere Geräte, die
-     * schon einen höheren Zähler kennen, sie als [AeltereSicherung] ab.
+     * schon einen höheren Zähler kennen, sie als [AeltereSicherung] ab. Eine
+     * Ablehnung gilt danach nicht mehr: Es gibt keine fremde Sicherung mehr zu schützen.
      */
-    suspend fun loeschen() {
-        server.loeschen()
-        val gemerkt = stand.laden() ?: return
-        stand.speichern(gemerkt.copy(version = 0))
+    suspend fun loeschen() = loeschen(server, stand)
+
+    companion object {
+        /**
+         * Wie [Sicherungsablauf.loeschen], aber ohne Schlüssel: Zum Löschen braucht es
+         * keinen Tresorschlüssel, etwa wenn auf dem Gerät keine Schlüssel mehr sind.
+         */
+        suspend fun loeschen(server: SicherungsAblage, stand: SicherungsStand) {
+            server.loeschen()
+            val gemerkt = stand.laden() ?: return
+            stand.speichern(gemerkt.copy(version = 0, abgelehnt = false))
+        }
     }
 
-    /** Merkt sich den Zähler einer abgelehnten Sicherung als Untergrenze (E-B2b-3). */
-    private fun merkeGesehen(gemerkt: GemerkteSicherung?, zaehler: Long) {
+    /**
+     * Merkt sich den Zähler einer abgelehnten Sicherung als Untergrenze (E-B2b-3) und,
+     * mit [abgelehnt], dass der Mensch die Übernahme abgelehnt hat (E-B2b-6). Eine
+     * frühere Ablehnung bleibt bestehen.
+     */
+    private fun merkeGesehen(gemerkt: GemerkteSicherung?, zaehler: Long, abgelehnt: Boolean) {
         val bisher = gemerkt ?: GemerkteSicherung(0, 0)
-        if (zaehler > bisher.gesehen) stand.speichern(bisher.copy(gesehen = zaehler))
+        val neu = bisher.copy(gesehen = maxOf(bisher.gesehen, zaehler), abgelehnt = bisher.abgelehnt || abgelehnt)
+        if (neu != bisher) stand.speichern(neu)
     }
 }
 

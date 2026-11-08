@@ -23,12 +23,17 @@ dependencies {
 
 // Code für die Server-Schnittstelle (proto/avlreminder/v1): Nachrichten (lite)
 // und Connect-Clients. Die Client-Formate (inhalt) kommen aus :protokoll.
+// Das Protobuf-Plugin übernimmt einen include-Filter an srcDir nicht: Es erzeugte
+// sonst auch die Formate (inhalt, gehören nach :protokoll), und die App hätte jede Klasse doppelt
+// (D8 bricht ab). Darum kommen nur die ausgewählten Dateien in einen eigenen Ordner.
+val protoAuswahl = tasks.register<Sync>("protoAuswahl") {
+    from("../../proto") { include("avlreminder/v1/**") }
+    into(layout.buildDirectory.dir("proto-auswahl"))
+}
+
 sourceSets {
     main {
-        proto {
-            srcDir("../../proto")
-            include("avlreminder/v1/**")
-        }
+        proto { srcDir(protoAuswahl) }
     }
 }
 

@@ -24,14 +24,18 @@ const (
 
 type AnmeldenRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// ID-Token von Google. Sein Feld "nonce" muss SHA-256 des Geräteschlüssels
-	// (base64url ohne Auffüllung) sein.
+	// ID-Token von Google. Sein Feld "nonce" muss SHA-256 über
+	// geraeteschluessel und dahinter nonce_zufall sein (base64url ohne Auffüllung).
 	GoogleIdToken string `protobuf:"bytes,1,opt,name=google_id_token,json=googleIdToken,proto3" json:"google_id_token,omitempty"`
 	// Öffentlicher Geräteschlüssel: ECDSA P-256, PKIX/DER.
 	Geraeteschluessel []byte `protobuf:"bytes,2,opt,name=geraeteschluessel,proto3" json:"geraeteschluessel,omitempty"`
 	// ECDSA-Signatur (ASN.1/DER, SHA-256; Android: "SHA256withECDSA") über die
 	// UTF-8-Bytes von "avlreminder/anmelden/v1\n" + google_id_token.
-	Signatur      []byte `protobuf:"bytes,3,opt,name=signatur,proto3" json:"signatur,omitempty"`
+	Signatur []byte `protobuf:"bytes,3,opt,name=signatur,proto3" json:"signatur,omitempty"`
+	// Genau 16 zufällige Bytes, für jede Anmeldung neu. Ohne sie wäre die Nonce
+	// für ein Gerät immer gleich, und Google gäbe ein zwischengespeichertes,
+	// für den Server zu altes ID-Token zurück. Andere Längen: abgelehnt.
+	NonceZufall   []byte `protobuf:"bytes,4,opt,name=nonce_zufall,json=nonceZufall,proto3" json:"nonce_zufall,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -83,6 +87,13 @@ func (x *AnmeldenRequest) GetGeraeteschluessel() []byte {
 func (x *AnmeldenRequest) GetSignatur() []byte {
 	if x != nil {
 		return x.Signatur
+	}
+	return nil
+}
+
+func (x *AnmeldenRequest) GetNonceZufall() []byte {
+	if x != nil {
+		return x.NonceZufall
 	}
 	return nil
 }
@@ -332,11 +343,12 @@ var File_avlreminder_v1_anmeldung_proto protoreflect.FileDescriptor
 
 const file_avlreminder_v1_anmeldung_proto_rawDesc = "" +
 	"\n" +
-	"\x1eavlreminder/v1/anmeldung.proto\x12\x0eavlreminder.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\x83\x01\n" +
+	"\x1eavlreminder/v1/anmeldung.proto\x12\x0eavlreminder.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xa6\x01\n" +
 	"\x0fAnmeldenRequest\x12&\n" +
 	"\x0fgoogle_id_token\x18\x01 \x01(\tR\rgoogleIdToken\x12,\n" +
 	"\x11geraeteschluessel\x18\x02 \x01(\fR\x11geraeteschluessel\x12\x1a\n" +
-	"\bsignatur\x18\x03 \x01(\fR\bsignatur\"\xc6\x01\n" +
+	"\bsignatur\x18\x03 \x01(\fR\bsignatur\x12!\n" +
+	"\fnonce_zufall\x18\x04 \x01(\fR\vnonceZufall\"\xc6\x01\n" +
 	"\x10AnmeldenResponse\x12\x19\n" +
 	"\bkonto_id\x18\x01 \x01(\tR\akontoId\x12\x1b\n" +
 	"\tgeraet_id\x18\x02 \x01(\tR\bgeraetId\x121\n" +
