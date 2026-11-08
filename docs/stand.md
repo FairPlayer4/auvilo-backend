@@ -256,9 +256,9 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
    Teil 1 in der App am 2026-11-07 (Composite Build, CI mit Deploy-Key, grün). Teil 2
    (Anmelden und Einrichten in der App) gebaut; dafür im Backend `SitzungsAblage` und die
    Rückfragen der `Einrichtung` auf `suspend` umgestellt. Die Web-Client-ID der App steht
-   in `google_client_ids`, **noch nicht angewendet** (Plan: nur die Umgebungsvariable
-   `GOOGLE_CLIENT_IDS` des Dienstes `server`, neue Revision mit gleichem Image).
-   **Weiter mit:** `tofu apply` für die Client-ID (Kevins Go), Test-Schlüssel von Kevins
+   in `google_client_ids`, angewendet am 2026-11-08 (`tofu apply`, 0 neu, 1 geändert:
+   Umgebungsvariable `GOOGLE_CLIENT_IDS`, Revision `server-00013-fp2`, gleiches Image).
+   **Weiter mit:** Test-Schlüssel von Kevins
    Konto räumen, Gerätetest von Schritt 2 in der App; Pfeffer
    offline sichern, sobald die App echte Daten sichert. Offen aus
    Lauf 5: Empfehlungen E5–E7; aus Lauf 6: E1–E6.
