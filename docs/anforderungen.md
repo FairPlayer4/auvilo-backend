@@ -59,7 +59,7 @@ liegt in einem Kotlin-Modul, das später in die App übernommen werden kann. [E]
 - ID3 Eine **Person** hat einen **Personenschlüssel** (siehe 4.1) und mehrere **Geräte**.
   Neues Gerät: per QR-Code von einem vorhandenen Gerät oder mit dem
   Wiederherstellungsschlüssel.
-- ID4 **Wiederherstellungsschlüssel** (zum Ausdrucken) entschlüsselt ein
+- ID4 **Wiederherstellungsschlüssel** (zum Ausdrucken oder im Passwortdienst, App-Anf. 7.33) entschlüsselt ein
   verschlüsseltes Schlüssel-Backup auf dem Server. Ohne ihn und ohne Gerät sind
   private Daten verloren (gewollt); Geteiltes kann man sich neu freigeben lassen.
 - ID5 Missbrauchsschutz: Rate-Limits pro Konto und Gerät; später für den Play Store
@@ -161,7 +161,7 @@ Optionales Backup der Nachweis-Fotos und -Audios mit einem Kontingent, zum Preis
 | **Personenschlüssel** | Schlüsselpaar für Schlüsselaustausch + Signatur | alle eigenen Geräte | Andere verschlüsseln Freigabe-Schlüssel *für mich*; ich signiere Operationen |
 | **Tresorschlüssel** (privat) | symmetrisch | alle eigenen Geräte | **Nur eigene Daten**: Sync/Backup zwischen eigenen Geräten |
 | **Freigabe-Schlüssel** | symmetrisch, einer pro Freigabe, mit Versionen | alle Mitglieder der Freigabe | Inhalte und Operationen dieser Freigabe |
-| **Wiederherstellungsschlüssel** | symmetrisch, ausgedruckt | nur Papier | entschlüsselt das Backup von Personen- und Tresorschlüssel |
+| **Wiederherstellungsschlüssel** | symmetrisch, ausgedruckt oder im Passwortdienst | Papier oder Passwortdienst | entschlüsselt das Backup von Personen- und Tresorschlüssel |
 
 - Das entspricht deiner Idee „ein privater Schlüssel plus Mehrfach-Schlüssel für
   Geteiltes“. Ergänzt um den Personenschlüssel, über den Freigabe-Schlüssel sicher
@@ -397,4 +397,5 @@ tragen die Tests die Spezifikation. Anleitung zum Review: [go-review.md](go-revi
 | 2026-11-07 | Ergebnis der Pfeffer-Probe: Beim Import der Secret-Version liest der Provider den Pfeffer in den Zustand, und der Plan will die Version ersetzen. Darum verwaltet OpenTofu nur noch das Secret, nicht den Wert (`removed`, angewendet am selben Tag); Version 1 entsteht und wird wiederhergestellt per gcloud, beim Wiederherstellen wird nur das Secret importiert. Der Server liest weiter fest Version 1 (tofu-Test) |
 | 2026-11-07 | **Eigenbetrieb** bis zum ersten weiteren Nutzer: Echte Daten nur von Kevin; die App darf gegen die Cloud sichern, Claude darf Pfeffer, Wiederherstellungsschlüssel, Keysets, Geräteschlüssel und Sitzungen kennen (nur bei Bedarf). Nie: Passwörter, 2FA, Dienstkonto-Schlüssel, Google-ID-Tokens, Auth-Codes, OAuth-Client-Secret, Klartext-Inhalte, Daten anderer. Die Sicherheitsphase beginnt vor dem Teilen mit einer anderen Person, dem ersten Tester oder der Veröffentlichung; dann wird nach Checkliste (b2b-entwurf.md) alles zurückgesetzt und mit neuen Secrets eingerichtet. Ersetzt den Beginn „erste Einrichtung der App gegen die Cloud“ (2026-11-02) |
 | 2026-11-07 | App-Einbindung (B2b Schritt 7): Entwurf im App-Repo (`../avlreminder/docs/backup-entwurf.md`, A-1 bis A-14) bestätigt. Im Eigenbetrieb **keine eigene App-Variante**: Das Backup kommt in den normalen Build hinter den Schalter (App-Anf. 7.28 PS8), damit Kevins echte Daten gesichert werden; Variante und interner Test-Track kommen mit dem ersten Tester (präzisiert E-B2b-11). Composite Build mit festem Commit dieses Repos, in der App-CI per Deploy-Key; Anmelden und Erneuern wandern aus dem Test-Client nach `verbindung`. Für die App braucht der Server die Web-Client-ID in `google_client_ids` |
+| 2026-11-08 | Wiederherstellungsschlüssel: Die App bietet automatisch an, ihn im Passwortdienst des Handys zu sichern (Credential Manager), und holt ihn beim Wiederherstellen von dort (App-Anf. 7.33). Präzisiert ID4: Papier oder Passwortdienst. Der Server erfährt den Schlüssel weiterhin nie |
 | 2026-11-04 | Diagnose-Log aus der App ([diagnose-entwurf.md](diagnose-entwurf.md)): unverschlüsselt, ohne Inhalte (nur feste Ereignisse, typisierte Felder, Stapel ohne Meldungstext), nur auf Knopfdruck, nur freigeschaltete Konten, eigener Bucket in der EU, 14 Tage; Claude darf diese Logs lesen |
