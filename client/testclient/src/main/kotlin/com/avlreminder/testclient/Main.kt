@@ -279,8 +279,9 @@ private class Werkzeug(
     }
 
     suspend fun sicherungLoeschen() {
-        // Der Ablauf behält den gemerkten Zähler (siehe Sicherungsablauf.loeschen).
-        sicherungsablauf { false }.loeschen()
+        // Braucht keine Schlüssel; der gemerkte Zähler bleibt (siehe Sicherungsablauf.loeschen).
+        val s = ablage.sitzung(name)
+        Sicherungsablauf.loeschen(ServerSicherungsAblage(verbindung, s.token), ablage.sicherungsStand(name, s.kontoId))
         println("Datensicherung gelöscht (mit allen älteren Fassungen).")
     }
 

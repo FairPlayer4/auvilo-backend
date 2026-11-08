@@ -432,10 +432,10 @@ class SicherungsablaufTest {
     }
 
     @Test
-    fun `löscht auch ohne gemerkten Stand und merkt sich nichts`() {
+    fun `löscht auch ohne Schlüssel und ohne gemerkten Stand und merkt sich nichts`() {
         val server = FalscheAblage().apply { vonGeraet("tablet", zaehler = 4) }
         val stand = FalscherStand()
-        runBlocking { Sicherungsablauf(KONTO, "neu", tresor, server, stand, uebernehmen = { false }).loeschen() }
+        runBlocking { Sicherungsablauf.loeschen(server, stand) }
         assertNull(server.sicherung)
         assertNull(stand.stand)
     }

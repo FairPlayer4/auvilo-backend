@@ -216,10 +216,18 @@ class Sicherungsablauf(
      * schon einen höheren Zähler kennen, sie als [AeltereSicherung] ab. Eine
      * Ablehnung gilt danach nicht mehr: Es gibt keine fremde Sicherung mehr zu schützen.
      */
-    suspend fun loeschen() {
-        server.loeschen()
-        val gemerkt = stand.laden() ?: return
-        stand.speichern(gemerkt.copy(version = 0, abgelehnt = false))
+    suspend fun loeschen() = loeschen(server, stand)
+
+    companion object {
+        /**
+         * Wie [Sicherungsablauf.loeschen], aber ohne Schlüssel: Zum Löschen braucht es
+         * keinen Tresorschlüssel, etwa wenn auf dem Gerät keine Schlüssel mehr sind.
+         */
+        suspend fun loeschen(server: SicherungsAblage, stand: SicherungsStand) {
+            server.loeschen()
+            val gemerkt = stand.laden() ?: return
+            stand.speichern(gemerkt.copy(version = 0, abgelehnt = false))
+        }
     }
 
     /**

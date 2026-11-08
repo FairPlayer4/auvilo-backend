@@ -258,8 +258,10 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
    Rückfragen der `Einrichtung` auf `suspend` umgestellt. Die Web-Client-ID der App steht
    in `google_client_ids`, angewendet am 2026-11-08 (`tofu apply`, 0 neu, 1 geändert:
    Umgebungsvariable `GOOGLE_CLIENT_IDS`, Revision `server-00013-fp2`, gleiches Image).
-   **Weiter mit:** Test-Schlüssel von Kevins
-   Konto räumen, Gerätetest von Schritt 2 in der App; Pfeffer
+   Kevins Konto am 2026-11-08 geräumt (Test-Client, Gerät `r-pc`): Datensicherung und
+   Schlüssel-Backup gelöscht, alle sechs Geräte gesperrt; `sicherung-loeschen` braucht
+   dafür keine lokalen Schlüssel mehr (`Sicherungsablauf.loeschen` ohne Tresor).
+   **Weiter mit:** Gerätetest von Schritt 2 in der App; Pfeffer
    offline sichern, sobald die App echte Daten sichert. Offen aus
    Lauf 5: Empfehlungen E5–E7; aus Lauf 6: E1–E6.
 5. Für den B3-Entwurf aus Lauf 4: A2 (Mitgliedschaft: Server-Liste oder signiertes
