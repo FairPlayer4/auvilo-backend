@@ -270,9 +270,11 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
    die lokalen Plugins zeitweise blockiert (entwicklungsumgebung.md).
    Gerätetest von Schritt 2 bestanden (2026-11-08 19:39). Schritt 3 der App (von Hand
    sichern, Backend-Logger, *Diagnose senden*) gebaut, Pin `e114120`, noch nicht
-   installiert. **Weiter mit:** Gerätetest von Schritt 3; Kevins Konto-ID muss für die
-   Diagnose in `diagnose_konten` stehen (`infra/diagnose.tf`). **Pfeffer offline sichern,
-   bevor die App echte Daten sichert** (mit Schritt 3 ist das der Fall). Offen aus
+   installiert. Am 2026-11-08 installiert und getestet; Kevins Konto-ID steht jetzt in
+   `diagnose_konten` (Revision `server-00015-q9f`), der Pfeffer ist offline in Kevins
+   Passwortmanager gesichert und geprüft. `verbindung` meldet einen Aufruf ohne Antwort
+   jetzt als `IOException` statt als Serverfehler „unknown“. **Weiter mit:** Diagnose
+   aus der App lesen (`werkzeuge/diagnose-holen.sh`), dann App-Schritt 4. Offen aus
    Lauf 5: Empfehlungen E5–E7; aus Lauf 6: E1–E6.
 5. Für den B3-Entwurf aus Lauf 4: A2 (Mitgliedschaft: Server-Liste oder signiertes
    Log), A4 (Umschläge an Kontext binden, Keyset-Typen prüfen), A5 (Speicher und
