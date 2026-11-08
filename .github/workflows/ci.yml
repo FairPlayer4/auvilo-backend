@@ -160,7 +160,7 @@ jobs:
     defaults:
       run:
         working-directory: proto
-    # Versionen wie lokal (docs/entwicklungsumgebung.md). Andere Versionen der
+    # Versionen wie lokal (werkzeuge/buf.sh liest sie hier aus). Andere Versionen der
     # Plugins erzeugen anderen Code, dann schlüge die Prüfung unten fehl.
     env:
       BUF_VERSION: v1.75.0

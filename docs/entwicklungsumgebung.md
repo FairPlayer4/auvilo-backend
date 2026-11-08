@@ -41,7 +41,14 @@ angegeben.
   `MSYS_NO_PATHCONV=1 docker run --rm -v "$(pwd -W):/repo" -w /repo rhysd/actionlint:1.7.12 -no-color -oneline`
   (PowerShell: `docker run --rm -v "${PWD}:/repo" -w /repo rhysd/actionlint:1.7.12 -no-color -oneline`).
   Ohne Ausgabe und mit Exit-Code 0 ist alles in Ordnung.
-- Code neu erzeugen nach Änderungen an `proto/`: `cd proto && buf generate`.
+- Code neu erzeugen nach Änderungen an `proto/`: `werkzeuge/buf.sh` (Git Bash, Docker
+  Desktop muss laufen). Das Skript führt `buf generate` in einem Image mit buf und den
+  Plugins aus; weitere Befehle gehen durch, z. B. `werkzeuge/buf.sh lint`. Die
+  Versionen liest es aus `ci.yml` und `server/go.mod`, ein neues Image entsteht nur
+  bei geänderten Versionen (das erste Mal etwa 10 Minuten). Grund: Smart App Control
+  in Windows 11 blockiert die selbst gebauten Plugins in `~/go/bin` zeitweise
+  (Code-Integrity-Protokoll, Ereignis 3077); auch `gopls.exe` ist betroffen.
+  Lokal installiert geht `cd proto && buf generate` weiterhin, solange Windows es zulässt.
 - Firestore-Emulator für die Server-Tests (in einem eigenen Terminal):
   `gcloud emulators firestore start --host-port=localhost:8086`, dann
   `FIRESTORE_EMULATOR_HOST=localhost:8086 go test ./...` in `server/`. Ohne die

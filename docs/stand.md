@@ -266,8 +266,8 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
    gecachte Token lieferte. Jetzt schickt jede Anmeldung 16 Zufallsbytes mit
    (`nonce_zufall`, `Anmeldung.versuch()`); der Server verlangt sie. Deployt per
    PR #17 (Revision `server-00014-qdr`). Den Go-Code aus
-   `proto/` erzeugt `buf generate` derzeit im Container (`golang:1.27`), weil die
-   Windows-Anwendungssteuerung die lokalen Plugins blockiert.
+   `proto/` erzeugt jetzt `werkzeuge/buf.sh` in Docker, weil Smart App Control
+   die lokalen Plugins zeitweise blockiert (entwicklungsumgebung.md).
    **Weiter mit:** Gerätetest von Schritt 2 in der App; Pfeffer
    offline sichern, sobald die App echte Daten sichert. Offen aus
    Lauf 5: Empfehlungen E5–E7; aus Lauf 6: E1–E6.
