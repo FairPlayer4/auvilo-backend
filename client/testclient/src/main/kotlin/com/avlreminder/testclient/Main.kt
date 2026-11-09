@@ -268,7 +268,7 @@ private class Werkzeug(
         // Beim Wiederherstellen wird nichts hochgeladen, also auch nichts überschrieben.
         val ergebnis = sicherungsablauf { false }.wiederherstellen(
             SCHEMA_VERSION,
-            bestaetigen = { kopf -> frage("Sicherung von ${beschreibe(kopf)} nach $datei schreiben?") },
+            bestaetigen = { sicherung -> frage("Sicherung von ${beschreibe(sicherung.kopf)} nach $datei schreiben?") },
             anwenden = { sicherung -> schreibeDatei(datei, sicherung.nutzlast) },
         )
         when (ergebnis) {

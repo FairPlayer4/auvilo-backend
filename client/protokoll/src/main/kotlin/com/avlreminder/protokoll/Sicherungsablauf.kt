@@ -181,18 +181,21 @@ class Sicherungsablauf(
     }
 
     /**
-     * Spielt die neueste Sicherung ein: holen, entschlüsseln, den Kopf zeigen und
-     * erst nach Bestätigung [anwenden] aufrufen.
+     * Spielt die neueste Sicherung ein: holen, entschlüsseln, dem Menschen zeigen und
+     * erst nach Bestätigung [anwenden] aufrufen. [bestaetigen] bekommt die ganze
+     * entschlüsselte Sicherung, damit die App sie vor der Rückfrage prüfen und mit
+     * ihren Daten vergleichen kann (App-Entwurf W-5); wirft die Prüfung, endet der
+     * Ablauf mit dieser Ausnahme.
      *
      * KRITISCH: Nichts wird angewendet, wenn die Sicherung sich nicht entschlüsseln
      * lässt, älter ist als gemerkt ([AeltereSicherung]), eine Schema-Version über
-     * [hoechsteSchemaVersion] hat oder der Mensch ablehnt (dann merkt es sich nur
-     * den Zähler als gesehen). Den Stand merkt sich das Gerät erst, wenn [anwenden]
-     * ohne Fehler durchgelaufen ist; danach sichert es selbst weiter.
+     * [hoechsteSchemaVersion] hat, [bestaetigen] wirft oder der Mensch ablehnt (dann
+     * merkt es sich nur den Zähler als gesehen). Den Stand merkt sich das Gerät erst,
+     * wenn [anwenden] ohne Fehler durchgelaufen ist; danach sichert es selbst weiter.
      */
     suspend fun wiederherstellen(
         hoechsteSchemaVersion: Int,
-        bestaetigen: suspend (Sicherungskopf) -> Boolean,
+        bestaetigen: suspend (Sicherung) -> Boolean,
         anwenden: (Sicherung) -> Unit,
     ): Wiederhergestellt {
         val geholt = server.holen() ?: return Wiederhergestellt.KeineSicherung
@@ -204,7 +207,7 @@ class Sicherungsablauf(
         if (sicherung.kopf.schemaVersion > hoechsteSchemaVersion) {
             throw NeueresSchema(sicherung.kopf.schemaVersion, hoechsteSchemaVersion)
         }
-        if (!bestaetigen(sicherung.kopf)) {
+        if (!bestaetigen(sicherung)) {
             // KRITISCH: Nur die Fassung eines anderen Geräts ist eine abgelehnte Übernahme.
             // Die eigene abzulehnen darf das automatische Sichern nicht stilllegen.
             merkeGesehen(gemerkt, sicherung.kopf.zaehler, abgelehnt = sicherung.kopf.geraetId != geraetId)
