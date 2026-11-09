@@ -10,6 +10,7 @@
 package com.avlreminder.testclient
 
 import com.avlreminder.protokoll.AeltereSicherung
+import com.avlreminder.protokoll.CloudLoeschen
 import com.avlreminder.protokoll.Diagnose
 import com.avlreminder.protokoll.DiagnoseNichtFreigeschaltet
 import com.avlreminder.protokoll.DiagnoseTageslimit
@@ -35,6 +36,7 @@ import com.avlreminder.verbindung.NichtAngemeldet
 import com.avlreminder.verbindung.ServerBackupAblage
 import com.avlreminder.verbindung.ServerDiagnoseAblage
 import com.avlreminder.verbindung.ServerGeraete
+import com.avlreminder.verbindung.ServerKonto
 import com.avlreminder.verbindung.ServerSicherungsAblage
 import com.avlreminder.verbindung.Serverfehler
 import com.avlreminder.verbindung.Verbindung
@@ -66,6 +68,8 @@ private const val HILFE = """Befehle:
                     Datensicherung des Kontos mit allen Fassungen löschen
   schluessel-loeschen
                     Schlüssel-Backup des Kontos löschen (lokale Schlüssel bleiben)
+  cloud-loeschen    wie „Cloud-Daten löschen“ in der App: beide Backups löschen
+                    und alle Geräte des Kontos sperren, dieses zuletzt
   diagnose-senden   eine Test-Diagnose ohne Inhalte senden (Konto muss
                     freigeschaltet sein, infra: diagnose_konten)
 Schalter:
@@ -138,6 +142,7 @@ private suspend fun ausfuehren(args: List<String>) {
         rest.size == 2 && rest[0] == "wiederherstellen" -> werkzeug.wiederherstellen(File(rest[1]))
         rest == listOf("sicherung-loeschen") -> werkzeug.sicherungLoeschen()
         rest == listOf("schluessel-loeschen") -> werkzeug.schluesselLoeschen()
+        rest == listOf("cloud-loeschen") -> werkzeug.cloudLoeschen()
         rest == listOf("diagnose-senden") -> werkzeug.diagnoseSenden()
         else -> {
             println(HILFE)
@@ -289,6 +294,12 @@ private class Werkzeug(
         val s = ablage.sitzung(name)
         ServerBackupAblage(verbindung, s.token).loeschen()
         println("Schlüssel-Backup gelöscht. Die Schlüssel auf diesem Gerät bleiben.")
+    }
+
+    suspend fun cloudLoeschen() {
+        val s = ablage.sitzung(name)
+        val andere = CloudLoeschen.alles(ServerKonto(verbindung, s.token))
+        println("Beide Backups gelöscht, $andere andere Geräte und dieses Gerät gesperrt.")
     }
 
     suspend fun diagnoseSenden() {

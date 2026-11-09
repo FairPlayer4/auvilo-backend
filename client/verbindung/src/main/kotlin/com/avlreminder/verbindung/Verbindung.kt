@@ -11,6 +11,8 @@ import com.avlreminder.protokoll.GeraeteFreischaltung
 import com.avlreminder.protokoll.GeraetNichtFreigeschaltet
 import com.avlreminder.protokoll.GeholteSicherung
 import com.avlreminder.protokoll.GeholtesBackup
+import com.avlreminder.protokoll.KontoAufDemServer
+import com.avlreminder.protokoll.KontoGeraet
 import com.avlreminder.protokoll.SicherungTageslimit
 import com.avlreminder.protokoll.SicherungZuGross
 import com.avlreminder.protokoll.SicherungsAblage
@@ -24,6 +26,7 @@ import com.avlreminder.schnittstelle.v1.DiagnoseDienstClient
 import com.avlreminder.schnittstelle.v1.DiagnoseSendenRequest
 import com.avlreminder.schnittstelle.v1.GeraetFreischaltenRequest
 import com.avlreminder.schnittstelle.v1.GeraetSperrenRequest
+import com.avlreminder.schnittstelle.v1.GeraeteAuflistenRequest
 import com.avlreminder.schnittstelle.v1.GeraeteDienstClient
 import com.avlreminder.schnittstelle.v1.MitWiederherstellungFreischaltenRequest
 import com.avlreminder.schnittstelle.v1.SchluesselDienstClient
@@ -178,6 +181,11 @@ class ServerGeraete(private val verbindung: Verbindung, private val token: Strin
         }
     }
 
+    /** Die Geräte des Kontos, auch gesperrte. */
+    suspend fun auflisten(): List<KontoGeraet> =
+        verbindung.geraete.geraeteAuflisten(GeraeteAuflistenRequest.getDefaultInstance(), mitSitzung(token)).ergebnis()
+            .geraeteList.map { KontoGeraet(it.geraetId, it.gesperrt, it.diesesGeraet) }
+
     /** Schaltet ein anderes Gerät des Kontos frei; dieses Gerät muss selbst freigeschaltet sein. */
     suspend fun freischalten(geraetId: String) {
         try {
@@ -187,6 +195,18 @@ class ServerGeraete(private val verbindung: Verbindung, private val token: Strin
             throw e.nichtFreigeschaltetOder()
         }
     }
+}
+
+/** Das Konto auf dem Server für „Cloud-Daten löschen“ ([com.avlreminder.protokoll.CloudLoeschen]). */
+class ServerKonto(verbindung: Verbindung, token: String) : KontoAufDemServer {
+    private val geraete = ServerGeraete(verbindung, token)
+    private val sicherung = ServerSicherungsAblage(verbindung, token)
+    private val schluessel = ServerBackupAblage(verbindung, token)
+
+    override suspend fun geraete() = geraete.auflisten()
+    override suspend fun sperren(geraetId: String) = geraete.sperren(geraetId)
+    override suspend fun datensicherungLoeschen() = sicherung.loeschen()
+    override suspend fun schluesselBackupLoeschen() = schluessel.loeschen()
 }
 
 /**
