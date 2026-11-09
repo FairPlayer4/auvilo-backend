@@ -282,7 +282,8 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
    Geräte je Konto und Tag (`kontingent` „neues_geraet“). Beide Testattrappen (App
    `FakeServer`, `FalscheAblage`) bilden die Regel fürs erste Schlüssel-Backup nach; ein
    gemeinsames Testmodul gibt es nicht (lohnt erst, wenn die Regeln wachsen).
-   **Deploy des Servers wartet auf Kevins Go.**
+   Deployt am 2026-11-09 per PR #18 (Revision `server-00016-r4r`, startet ohne Warnungen,
+   öffentlich); in der Cloud noch nicht mit der App getestet.
    App-Schritte 4 und 5 und alles Weitere: App-Repo `docs/stand.md`. Offene
    Review-Punkte stehen in `.review/state.md` („Offen“).
 5. Für den B3-Entwurf aus Lauf 4: A2 (Mitgliedschaft: Server-Liste oder signiertes

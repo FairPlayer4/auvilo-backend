@@ -73,8 +73,7 @@ Das eigentliche Gedächtnis: wiederkehrende Muster, nach denen jeder Lauf geziel
   (`CloudBackup.kt` teilen), R5 (Tests), übrige minor-Funde (Rückfrage hält den Mutex,
   halb gescheitertes Löschen, `cannotActOnServer`, `compareNow`, W-7-Reihenfolge,
   `beforeName`, `takeIfDue`, `RestoreFiles`), Doku kürzen.
-- Lauf 9 (runs/2026-11-08.md): Fragen 1 und 4 und R3 umgesetzt am 2026-11-09 (Server noch
-  nicht deployt); R2 bis B3 zurückgestellt; R5 (Cloud-Fälle in App `geraetetest.md`)
+- Lauf 9 (runs/2026-11-08.md): Fragen 1 und 4 und R3 umgesetzt und deployt am 2026-11-09; R2 bis B3 zurückgestellt; R5 (Cloud-Fälle in App `geraetetest.md`)
   kommt mit der Überarbeitung der Gerätetests.
 - Lauf 8 (runs/2026-11-05.md), Stand am 2026-11-09 im Code geprüft: erledigt E1, E5, E12;
   weitgehend E6; teilweise E7 (App-Regeln im Test-Client), E8 (Fehlerarten im Adapter);
