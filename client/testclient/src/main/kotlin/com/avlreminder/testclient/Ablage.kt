@@ -149,6 +149,10 @@ class Ablage(private val ordner: File) {
         override fun laden() = schluessel(name, kontoId)
 
         override fun speichern(stand: LokalerStand) = speichereSchluessel(name, kontoId, stand)
+
+        override fun loeschen() {
+            datei("schluessel", name, "json").delete()
+        }
     }
 
     /** Der Sicherungsstand eines Geräts für ein Konto, wie der [com.avlreminder.protokoll.Sicherungsablauf] ihn braucht. */
