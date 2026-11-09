@@ -67,13 +67,14 @@ Das eigentliche Gedächtnis: wiederkehrende Muster, nach denen jeder Lauf geziel
   Erledigtes steht nur in Berichten und git, nicht in state.md oder stand.md.
 
 ## Offen (Details in den Berichten)
-- Lauf 10 (runs/2026-11-09.md): R1–R5; minor-Funde zu Löschen, Mutex, Wiederherstellen;
-  wackliger Test `aPendingOrFailedRestoreHoldsTheBackup`; Doku kürzen. Umsetzen der
-  Antworten auf Fragen 1–3 (Löschen sperrt alle Geräte, abgelehnte Sitzung, lokales
-  Wiederherstellen wie W-7).
-- Lauf 9 (runs/2026-11-08.md): Umsetzen der Antworten auf Fragen 1 und 4 (Version vor
-  „geschützt“, Freischalten beim ersten Backup; 10 neue Geräte je Tag) mit R3 (Knopf
-  „Freischalten“); R2 bis B3 zurückgestellt; R5 (Cloud-Fälle in App `geraetetest.md`)
+- Lauf 10 (runs/2026-11-09.md): erledigt am 2026-11-09 (Phase A) R1, R2, R4 (Regel fürs
+  erste Schlüssel-Backup in beiden Attrappen, kein gemeinsames Modul), Fragen 1–3, die
+  minor-Funde `setUp`/`unlocked` und Mutex in `work`, der wacklige Test. Offen: R3
+  (`CloudBackup.kt` teilen), R5 (Tests), übrige minor-Funde (Rückfrage hält den Mutex,
+  halb gescheitertes Löschen, `cannotActOnServer`, `compareNow`, W-7-Reihenfolge,
+  `beforeName`, `takeIfDue`, `RestoreFiles`), Doku kürzen.
+- Lauf 9 (runs/2026-11-08.md): Fragen 1 und 4 und R3 umgesetzt am 2026-11-09 (Server noch
+  nicht deployt); R2 bis B3 zurückgestellt; R5 (Cloud-Fälle in App `geraetetest.md`)
   kommt mit der Überarbeitung der Gerätetests.
 - Lauf 8 (runs/2026-11-05.md), Stand am 2026-11-09 im Code geprüft: erledigt E1, E5, E12;
   weitgehend E6; teilweise E7 (App-Regeln im Test-Client), E8 (Fehlerarten im Adapter);

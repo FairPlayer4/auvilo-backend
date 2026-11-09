@@ -275,6 +275,14 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
    Passwortmanager gesichert und geprüft. `verbindung` meldet einen Aufruf ohne Antwort
    jetzt als `IOException` statt als Serverfehler „unknown“. Die Diagnosen der App
    vom 2026-11-08 sind geholt (`werkzeuge/diagnose-holen.sh`, liegen in `.diagnose/`).
+   **Phase A am 2026-11-09:** `CloudLoeschen` in `protokoll` (erst andere Geräte sperren,
+   dann löschen, zuletzt dieses Gerät; Test-Client `cloud-loeschen`), `Einrichtung` verwirft
+   ein abgelehntes erstes Backup; Server: Version vor „geschützt“, ein nicht
+   freigeschaltetes Gerät ist nach dem ersten Backup freigeschaltet, höchstens 10 neue
+   Geräte je Konto und Tag (`kontingent` „neues_geraet“). Beide Testattrappen (App
+   `FakeServer`, `FalscheAblage`) bilden die Regel fürs erste Schlüssel-Backup nach; ein
+   gemeinsames Testmodul gibt es nicht (lohnt erst, wenn die Regeln wachsen).
+   **Deploy des Servers wartet auf Kevins Go.**
    App-Schritte 4 und 5 und alles Weitere: App-Repo `docs/stand.md`. Offene
    Review-Punkte stehen in `.review/state.md` („Offen“).
 5. Für den B3-Entwurf aus Lauf 4: A2 (Mitgliedschaft: Server-Liste oder signiertes
