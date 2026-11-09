@@ -1,6 +1,7 @@
 # Erzeugt Go-Code für den Server: buf generate (im Ordner proto/).
-# Die Plugins sind lokal installiert, Versionen in docs/entwicklungsumgebung.md
-# und in der CI festgelegt. Der erzeugte Code wird eingecheckt.
+# Lokal am besten über werkzeuge/buf.sh (buf und Plugins in Docker), sonst mit
+# lokal installierten Plugins. Versionen in der CI festgelegt
+# (docs/entwicklungsumgebung.md). Der erzeugte Code wird eingecheckt.
 version: v2
 # clean: Zielordner vorher leeren, damit Code gelöschter .proto-Dateien nicht
 # liegen bleibt (sonst merkt die Prüfung in der CI das nicht).

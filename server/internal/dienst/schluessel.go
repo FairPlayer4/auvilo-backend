@@ -30,7 +30,11 @@ var _ avlreminderv1connect.SchluesselDienstHandler = (*dienste)(nil)
 //     ungesperrtes Gerät hat (geprüft in der Transaktion des Speichers). Sonst
 //     legte ein fremdes Gerät mit Google-Login ein Backup mit eigenem
 //     Freischaltschlüssel an, solange das erste Gerät noch keins hochgeladen
-//     hat, und schaltete sich damit frei.
+//     hat, und schaltete sich damit frei. Wird es angenommen, ist das Gerät
+//     danach freigeschaltet (Review-Lauf 9).
+//   - Eine veraltete Version meldet failed_precondition, auch an ein nicht
+//     freigeschaltetes Gerät: Es holt dann das Backup und schaltet sich mit dem
+//     Wiederherstellungsschlüssel frei.
 func (d *dienste) BackupSpeichern(ctx context.Context, req *connect.Request[v1.BackupSpeichernRequest]) (*connect.Response[v1.BackupSpeichernResponse], error) {
 	id, err := identitaet(ctx)
 	if err != nil {
@@ -48,8 +52,12 @@ func (d *dienste) BackupSpeichern(ctx context.Context, req *connect.Request[v1.B
 		slog.WarnContext(ctx, "Backup ersetzen von nicht freigeschaltetem Gerät abgelehnt", "geraet", id.GeraetID)
 		return nil, errNichtFreigeschaltet()
 	}
-	version, err := d.k.Speicher.BackupSpeichern(ctx, id.KontoID, chiffrat, fs, erwartet, !frei, d.k.Jetzt())
-	if errors.Is(err, speicher.ErrKontoGeschuetzt) {
+	ungeschuetztFuer := "" // freigeschaltet: keine Einschränkung
+	if !frei {
+		ungeschuetztFuer = id.GeraetID
+	}
+	version, err := d.k.Speicher.BackupSpeichern(ctx, id.KontoID, chiffrat, fs, erwartet, ungeschuetztFuer, d.k.Jetzt())
+	if errors.Is(err, speicher.ErrKontoGeschuetzt) || errors.Is(err, speicher.ErrNichtGefunden) || errors.Is(err, speicher.ErrGeraetGesperrt) {
 		slog.WarnContext(ctx, "Erstes Backup von nicht freigeschaltetem Gerät abgelehnt", "geraet", id.GeraetID)
 		return nil, errNichtFreigeschaltet()
 	}

@@ -18,12 +18,16 @@ import org.junit.jupiter.params.provider.MethodSource
 class EinrichtungTest {
 
     /**
-     * Server im Speicher, mit derselben Versionsprüfung wie der Server und
-     * echter Prüfung der Freischalt-Signatur (für das Gerät [GERAET]).
+     * Server im Speicher mit den Regeln des Servers (schluessel.go): erst die
+     * Version, dann der Schutz des Kontos; ein angenommenes erstes Backup schaltet
+     * das Gerät frei. Echte Prüfung der Freischalt-Signatur (für das Gerät [GERAET]).
+     *
+     * @param geschuetzt das Konto hat ein anderes freigeschaltetes, ungesperrtes Gerät.
      */
     class FalscheAblage(
         var backup: GeholtesBackup? = null,
         var freischaltschluessel: ByteArray? = null,
+        var geschuetzt: Boolean = false,
     ) : BackupAblage, GeraeteFreischaltung {
         var gespeichert = 0
         var freigeschaltet = false
@@ -44,7 +48,9 @@ class EinrichtungTest {
             vorDemSpeichern?.invoke()?.also { vorDemSpeichern = null }
             if (nichtErreichbar) throw Netzfehler()
             if ((backup?.version ?: 0L) != erwartet) throw VersionVeraltet()
+            if (!freigeschaltet && (erwartet > 0 || geschuetzt)) throw GeraetNichtFreigeschaltet()
             gespeichert++
+            freigeschaltet = true
             backup = GeholtesBackup(chiffrat, erwartet + 1)
             this.freischaltschluessel = freischaltschluessel
             if (antwortGehtVerloren) throw Netzfehler()
@@ -73,6 +79,10 @@ class EinrichtungTest {
         override fun speichern(stand: LokalerStand) {
             this.stand = stand
         }
+
+        override fun loeschen() {
+            stand = null
+        }
     }
 
     /** Ein Lauf der Einrichtung; merkt sich den angezeigten Wiederherstellungsschlüssel. */
@@ -85,6 +95,7 @@ class EinrichtungTest {
         val freigeschaltet: Boolean = false,
     ) {
         var angezeigt: Wiederherstellungsschluessel? = null
+        val meldungen = mutableListOf<String>()
         private val rest = eingaben.toMutableList()
 
         fun ausfuehren() = runBlocking {
@@ -101,7 +112,7 @@ class EinrichtungTest {
                     beimAnzeigen()
                     bestaetigt
                 },
-                meldung = {},
+                meldung = { meldungen += it },
             ).ausfuehren()
         }
     }
@@ -195,6 +206,41 @@ class EinrichtungTest {
         assertNull(lauf.lokal.stand!!.offenesBackup)
     }
 
+    // KRITISCH: Hat das Konto schon ein freigeschaltetes Gerät ohne Backup, lehnt
+    // der Server das erste Backup ab. Dann ist alles verworfen, auch nach einem
+    // Abbruch beim Hochladen, und der Mensch erfährt, dass der Schlüssel nicht gilt.
+    @Test
+    fun `ein abgelehntes erstes Backup wird verworfen, und der angezeigte Schlüssel gilt nicht`() {
+        for (vorherAbgebrochen in listOf(false, true)) {
+            val server = FalscheAblage(geschuetzt = true)
+            val lokal = FalscherLokalerSpeicher()
+            if (vorherAbgebrochen) {
+                server.nichtErreichbar = true
+                assertThrows<Netzfehler> { Lauf(server, lokal).ausfuehren() }
+                assertNotNull(lokal.stand?.offenesBackup)
+                server.nichtErreichbar = false
+            }
+            val lauf = Lauf(server, lokal)
+
+            assertThrows<EinrichtungAbgebrochen> { lauf.ausfuehren() }
+
+            assertNull(lokal.stand, "vorher abgebrochen: $vorherAbgebrochen")
+            assertNull(server.backup)
+            assertFalse(server.freigeschaltet)
+            assertTrue(lauf.meldungen.any { "gilt nicht" in it }, lauf.meldungen.toString())
+        }
+    }
+
+    // Gegenprobe: Ohne freigeschaltetes Gerät nimmt der Server das erste Backup an
+    // und schaltet das Gerät damit frei.
+    @Test
+    fun `ohne freigeschaltetes Gerät im Konto ist das erste Backup angenommen und das Gerät freigeschaltet`() {
+        val lauf = Lauf(FalscheAblage(geschuetzt = false))
+        assertInstanceOf(Eingerichtet.Neu::class.java, lauf.ausfuehren())
+        assertTrue(lauf.server.freigeschaltet)
+        assertNotNull(lauf.lokal.stand)
+    }
+
     // --- Weitere Geräte ----------------------------------------------------
 
     @Test
@@ -252,6 +298,7 @@ class EinrichtungTest {
         val ergebnis = Lauf(server, FalscherLokalerSpeicher(LokalerStand(bund, null)), freigeschaltet = true).ausfuehren()
         assertInstanceOf(Eingerichtet.Vorhanden::class.java, ergebnis)
         assertSame(bund, ergebnis.bund)
+        assertTrue((ergebnis as Eingerichtet.Vorhanden).freigeschaltet)
     }
 
     // --- Eingerichtet, aber nicht freigeschaltet ---------------------------
@@ -265,6 +312,7 @@ class EinrichtungTest {
         val ergebnis = lauf.ausfuehren()
 
         assertInstanceOf(Eingerichtet.Vorhanden::class.java, ergebnis)
+        assertTrue((ergebnis as Eingerichtet.Vorhanden).freigeschaltet, "Ergebnis meldet die Freischaltung")
         assertTrue(lauf.server.freigeschaltet)
         assertSame(stand, lauf.lokal.stand)
         assertEquals(0, lauf.server.gespeichert)
@@ -274,7 +322,9 @@ class EinrichtungTest {
     fun `ohne Eingabe bleibt ein eingerichtetes Gerät eingerichtet, aber nicht freigeschaltet`() {
         val stand = LokalerStand(Schluesselbund.erzeugen(), null)
         val lauf = Lauf(vorhanden.server(), FalscherLokalerSpeicher(stand), null)
-        assertInstanceOf(Eingerichtet.Vorhanden::class.java, lauf.ausfuehren())
+        val ergebnis = lauf.ausfuehren()
+        assertInstanceOf(Eingerichtet.Vorhanden::class.java, ergebnis)
+        assertFalse((ergebnis as Eingerichtet.Vorhanden).freigeschaltet)
         assertFalse(lauf.server.freigeschaltet)
         assertEquals(0, lauf.server.freischaltVersuche)
         assertSame(stand, lauf.lokal.stand)
@@ -295,7 +345,9 @@ class EinrichtungTest {
     fun `ohne Backup bleibt ein eingerichtetes, nicht freigeschaltetes Gerät, wie es ist`() {
         val stand = LokalerStand(Schluesselbund.erzeugen(), null)
         val lauf = Lauf(FalscheAblage(), FalscherLokalerSpeicher(stand))
-        assertInstanceOf(Eingerichtet.Vorhanden::class.java, lauf.ausfuehren())
+        val ergebnis = lauf.ausfuehren()
+        assertInstanceOf(Eingerichtet.Vorhanden::class.java, ergebnis)
+        assertFalse((ergebnis as Eingerichtet.Vorhanden).freigeschaltet)
         assertEquals(0, lauf.server.gespeichert)
         assertSame(stand, lauf.lokal.stand)
     }

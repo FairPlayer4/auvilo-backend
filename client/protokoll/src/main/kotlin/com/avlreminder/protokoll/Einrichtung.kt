@@ -24,7 +24,11 @@ interface BackupAblage {
     /**
      * Speichert das Backup samt Freischaltschlüssel
      * ([Wiederherstellungsschluessel.freischaltschluessel]); wirft
-     * [VersionVeraltet], wenn [erwartet] nicht mehr stimmt.
+     * [VersionVeraltet], wenn [erwartet] nicht mehr stimmt (das prüft der Server
+     * zuerst), und [GeraetNichtFreigeschaltet], wenn ein nicht freigeschaltetes
+     * Gerät ein erstes Backup anlegen will, das Konto aber schon ein
+     * freigeschaltetes Gerät hat. Nimmt der Server das erste Backup eines nicht
+     * freigeschalteten Geräts an, ist es danach freigeschaltet.
      */
     suspend fun speichern(chiffrat: ByteArray, freischaltschluessel: ByteArray, erwartet: Long): Long
 }
@@ -55,6 +59,9 @@ interface LokaleAblage {
     fun laden(): LokalerStand?
 
     fun speichern(stand: LokalerStand)
+
+    /** Entfernt den Stand für das Konto; gibt es keinen, ist das kein Fehler. */
+    fun loeschen()
 }
 
 /** Ergebnis der Einrichtung. */
@@ -69,9 +76,12 @@ sealed interface Eingerichtet {
 
     /**
      * Das Gerät hatte die Schlüssel schon; am Schlüsselbund nichts geändert.
-     * War es noch nicht freigeschaltet, hat es sich eventuell dabei freigeschaltet.
+     *
+     * @property freigeschaltet ob das Gerät jetzt freigeschaltet ist: Es war es
+     *   schon, oder es hat sich gerade mit dem Wiederherstellungsschlüssel
+     *   freigeschaltet. Die anderen Ergebnisse sind immer freigeschaltet.
      */
-    class Vorhanden(override val bund: Schluesselbund) : Eingerichtet
+    class Vorhanden(override val bund: Schluesselbund, val freigeschaltet: Boolean) : Eingerichtet
 }
 
 /**
@@ -119,8 +129,8 @@ class Einrichtung(
             // Schlüssel da, aber nicht freigeschaltet (z. B. neu angemeldet mit
             // neuem Geräteschlüssel): ohne diesen Schritt bliebe das Gerät
             // ohne zweites Gerät für immer nur lesend.
-            if (!freigeschaltet) server.holen()?.let { freischalten(it) }
-            return Eingerichtet.Vorhanden(stand.bund)
+            val jetztFrei = freigeschaltet || (server.holen()?.let { freischalten(it) } ?: false)
+            return Eingerichtet.Vorhanden(stand.bund, jetztFrei)
         }
         server.holen()?.let { return wiederherstellen(it) }
 
@@ -140,10 +150,24 @@ class Einrichtung(
      * nur die Antwort ging verloren. Liegt ein anderes dort, war ein anderes Gerät
      * schneller; dann übernimmt dieses Gerät dessen Schlüssel. Sonst gäbe es zwei
      * verschiedene Personenschlüssel für dasselbe Konto.
+     *
+     * KRITISCH: Lehnt der Server das erste Backup ab, weil das Konto schon ein
+     * freigeschaltetes Gerät hat (das noch kein Backup hochgeladen hat), wird
+     * alles verworfen, was dieses Gerät erzeugt hat. Der angezeigte
+     * Wiederherstellungsschlüssel gilt dann nie; bliebe der Bund liegen, nähme
+     * das Gerät später das Backup des anderen Geräts nicht an, sondern bliebe
+     * bei seinen eigenen Schlüsseln.
      */
     private suspend fun hochladen(bund: Schluesselbund, offen: OffenesBackup): Eingerichtet {
         try {
             server.speichern(offen.chiffrat, offen.freischaltschluessel, erwartet = 0)
+        } catch (_: GeraetNichtFreigeschaltet) {
+            lokal.loeschen()
+            meldung(
+                "Ein anderes Gerät dieses Kontos ist schon freigeschaltet, hat aber noch kein Backup hochgeladen - " +
+                    "der angezeigte Wiederherstellungsschlüssel gilt nicht. Erst dort einrichten, dann hier erneut.",
+            )
+            throw EinrichtungAbgebrochen("Konto hat schon ein freigeschaltetes Gerät - der angezeigte Wiederherstellungsschlüssel gilt nicht")
         } catch (_: VersionVeraltet) {
             val vorhanden = server.holen() ?: throw EinrichtungAbgebrochen("Backup ist verschwunden - später erneut versuchen")
             if (!vorhanden.chiffrat.contentEquals(offen.chiffrat)) {
@@ -174,15 +198,19 @@ class Einrichtung(
      * Wiederherstellungsschlüssel frei. Ohne Eingabe bleibt es nur lesend; ein
      * freigeschaltetes Gerät kann es dann noch bestätigen. Der lokale
      * Schlüsselbund bleibt, wie er ist.
+     *
+     * @return ob das Gerät jetzt freigeschaltet ist.
      */
-    private suspend fun freischalten(backup: GeholtesBackup) {
+    private suspend fun freischalten(backup: GeholtesBackup): Boolean {
         meldung(
             "Dieses Gerät ist noch nicht freigeschaltet. Zum Freischalten den Wiederherstellungsschlüssel " +
                 "eingeben (leer = später; ein freigeschaltetes Gerät kann es auch bestätigen).",
         )
         if (mitWiederherstellungsschluessel(backup) == null) {
             meldung("Nicht freigeschaltet - dieses Gerät kann Daten holen, aber nichts ändern oder löschen.")
+            return false
         }
+        return true
     }
 
     /**

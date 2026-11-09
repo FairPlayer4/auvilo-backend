@@ -264,12 +264,27 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
    **Nonce mit Zufall (2026-11-08):** Erneutes Anmelden desselben Geräts innerhalb
    einer Stunde scheiterte („ID-Token zu alt“), weil Google bei fester Nonce das
    gecachte Token lieferte. Jetzt schickt jede Anmeldung 16 Zufallsbytes mit
-   (`nonce_zufall`, `Anmeldung.versuch()`); der Server verlangt sie. Den Go-Code aus
-   `proto/` erzeugt `buf generate` derzeit im Container (`golang:1.27`), weil die
-   Windows-Anwendungssteuerung die lokalen Plugins blockiert.
-   **Weiter mit:** Gerätetest von Schritt 2 in der App; Pfeffer
-   offline sichern, sobald die App echte Daten sichert. Offen aus
-   Lauf 5: Empfehlungen E5–E7; aus Lauf 6: E1–E6.
+   (`nonce_zufall`, `Anmeldung.versuch()`); der Server verlangt sie. Deployt per
+   PR #17 (Revision `server-00014-qdr`). Den Go-Code aus
+   `proto/` erzeugt jetzt `werkzeuge/buf.sh` in Docker, weil Smart App Control
+   die lokalen Plugins zeitweise blockiert (entwicklungsumgebung.md).
+   Gerätetest von Schritt 2 bestanden (2026-11-08 19:39). Schritt 3 der App (von Hand
+   sichern, Backend-Logger, *Diagnose senden*) gebaut, Pin `e114120`, noch nicht
+   installiert. Am 2026-11-08 installiert und getestet; Kevins Konto-ID steht jetzt in
+   `diagnose_konten` (Revision `server-00015-q9f`), der Pfeffer ist offline in Kevins
+   Passwortmanager gesichert und geprüft. `verbindung` meldet einen Aufruf ohne Antwort
+   jetzt als `IOException` statt als Serverfehler „unknown“. Die Diagnosen der App
+   vom 2026-11-08 sind geholt (`werkzeuge/diagnose-holen.sh`, liegen in `.diagnose/`).
+   **Phase A am 2026-11-09:** `CloudLoeschen` in `protokoll` (erst andere Geräte sperren,
+   dann löschen, zuletzt dieses Gerät; Test-Client `cloud-loeschen`), `Einrichtung` verwirft
+   ein abgelehntes erstes Backup; Server: Version vor „geschützt“, ein nicht
+   freigeschaltetes Gerät ist nach dem ersten Backup freigeschaltet, höchstens 10 neue
+   Geräte je Konto und Tag (`kontingent` „neues_geraet“). Beide Testattrappen (App
+   `FakeServer`, `FalscheAblage`) bilden die Regel fürs erste Schlüssel-Backup nach; ein
+   gemeinsames Testmodul gibt es nicht (lohnt erst, wenn die Regeln wachsen).
+   **Deploy des Servers wartet auf Kevins Go.**
+   App-Schritte 4 und 5 und alles Weitere: App-Repo `docs/stand.md`. Offene
+   Review-Punkte stehen in `.review/state.md` („Offen“).
 5. Für den B3-Entwurf aus Lauf 4: A2 (Mitgliedschaft: Server-Liste oder signiertes
    Log), A4 (Umschläge an Kontext binden, Keyset-Typen prüfen), A5 (Speicher und
    Dienste aufteilen; Anfang in B2b). A3 (Formate festschreiben) kommt in B2b.

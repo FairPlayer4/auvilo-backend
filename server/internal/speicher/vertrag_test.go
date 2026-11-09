@@ -330,19 +330,19 @@ func pruefeVertrag(t *testing.T, neu func(t *testing.T) Speicher) {
 		}, true},
 		{"neues Gerät ist es nicht, wenn es ein Backup mit Freischaltschlüssel gibt", func(t *testing.T, s Speicher) {
 			e := anmelden(t, s, "kennung-a", "geraet-alt", "hash-alt", 0)
-			_, err := s.BackupSpeichern(ctx, e.KontoID, []byte("backup"), fsSchluessel, 0, false, t0)
+			_, err := s.BackupSpeichern(ctx, e.KontoID, []byte("backup"), fsSchluessel, 0, "", t0)
 			muss(t, err)
 			muss(t, s.GeraetSperren(ctx, e.KontoID, "geraet-alt", t0))
 		}, false},
 		{"Backup ohne Freischaltschlüssel (vor E-B2b-13) schützt nichts", func(t *testing.T, s Speicher) {
 			e := anmelden(t, s, "kennung-a", "geraet-alt", "hash-alt", 0)
-			_, err := s.BackupSpeichern(ctx, e.KontoID, []byte("backup"), nil, 0, false, t0)
+			_, err := s.BackupSpeichern(ctx, e.KontoID, []byte("backup"), nil, 0, "", t0)
 			muss(t, err)
 			muss(t, s.GeraetSperren(ctx, e.KontoID, "geraet-alt", t0))
 		}, true},
 		{"nach dem Löschen des Backups schützt sein Schlüssel nichts mehr", func(t *testing.T, s Speicher) {
 			e := anmelden(t, s, "kennung-a", "geraet-alt", "hash-alt", 0)
-			_, err := s.BackupSpeichern(ctx, e.KontoID, []byte("backup"), fsSchluessel, 0, false, t0)
+			_, err := s.BackupSpeichern(ctx, e.KontoID, []byte("backup"), fsSchluessel, 0, "", t0)
 			muss(t, err)
 			muss(t, s.GeraetSperren(ctx, e.KontoID, "geraet-alt", t0))
 			muss(t, s.BackupLoeschen(ctx, e.KontoID))
@@ -354,7 +354,7 @@ func pruefeVertrag(t *testing.T, neu func(t *testing.T) Speicher) {
 		}, true},
 		{"Geräte und Backup eines anderen Kontos zählen nicht", func(t *testing.T, s Speicher) {
 			e := anmelden(t, s, "kennung-b", "geraet-b", "hash-b", 0)
-			_, err := s.BackupSpeichern(ctx, e.KontoID, []byte("backup"), fsSchluessel, 0, false, t0)
+			_, err := s.BackupSpeichern(ctx, e.KontoID, []byte("backup"), fsSchluessel, 0, "", t0)
 			muss(t, err)
 		}, true},
 	}
@@ -508,7 +508,7 @@ func pruefeVertrag(t *testing.T, neu func(t *testing.T) Speicher) {
 
 	t.Run("erstes Backup bekommt Version 1", func(t *testing.T) {
 		s := neu(t)
-		v, err := s.BackupSpeichern(ctx, "konto-a", []byte("backup-1"), fsSchluessel, 0, false, t0)
+		v, err := s.BackupSpeichern(ctx, "konto-a", []byte("backup-1"), fsSchluessel, 0, "", t0)
 		muss(t, err)
 		if v != 1 {
 			t.Errorf("Version = %d, erwartet 1", v)
@@ -525,9 +525,9 @@ func pruefeVertrag(t *testing.T, neu func(t *testing.T) Speicher) {
 
 	t.Run("Backup mit passender Version ersetzt das alte", func(t *testing.T) {
 		s := neu(t)
-		_, err := s.BackupSpeichern(ctx, "konto-a", []byte("backup-1"), fsSchluessel, 0, false, t0)
+		_, err := s.BackupSpeichern(ctx, "konto-a", []byte("backup-1"), fsSchluessel, 0, "", t0)
 		muss(t, err)
-		v, err := s.BackupSpeichern(ctx, "konto-a", []byte("backup-2"), []byte("neuer-schluessel"), 1, false, t0.Add(time.Minute))
+		v, err := s.BackupSpeichern(ctx, "konto-a", []byte("backup-2"), []byte("neuer-schluessel"), 1, "", t0.Add(time.Minute))
 		muss(t, err)
 		if v != 2 {
 			t.Errorf("Version = %d, erwartet 2", v)
@@ -555,10 +555,10 @@ func pruefeVertrag(t *testing.T, neu func(t *testing.T) Speicher) {
 		t.Run(fall.name, func(t *testing.T) {
 			s := neu(t)
 			for i := range fall.vorher {
-				_, err := s.BackupSpeichern(ctx, "konto-a", []byte(fmt.Sprintf("backup-%d", i+1)), fsSchluessel, int64(i), false, t0)
+				_, err := s.BackupSpeichern(ctx, "konto-a", []byte(fmt.Sprintf("backup-%d", i+1)), fsSchluessel, int64(i), "", t0)
 				muss(t, err)
 			}
-			_, err := s.BackupSpeichern(ctx, "konto-a", []byte("fremd"), fsSchluessel, fall.erwartet, false, t0)
+			_, err := s.BackupSpeichern(ctx, "konto-a", []byte("fremd"), fsSchluessel, fall.erwartet, "", t0)
 			if !errors.Is(err, ErrVersionVeraltet) {
 				t.Fatalf("Fehler = %v, erwartet ErrVersionVeraltet", err)
 			}
@@ -581,9 +581,9 @@ func pruefeVertrag(t *testing.T, neu func(t *testing.T) Speicher) {
 
 	t.Run("nach dem Löschen ist das Backup weg, ein neues beginnt mit Version 1", func(t *testing.T) {
 		s := neu(t)
-		_, err := s.BackupSpeichern(ctx, "konto-a", []byte("backup-1"), fsSchluessel, 0, false, t0)
+		_, err := s.BackupSpeichern(ctx, "konto-a", []byte("backup-1"), fsSchluessel, 0, "", t0)
 		muss(t, err)
-		_, err = s.BackupSpeichern(ctx, "konto-b", []byte("backup-b"), fsSchluessel, 0, false, t0)
+		_, err = s.BackupSpeichern(ctx, "konto-b", []byte("backup-b"), fsSchluessel, 0, "", t0)
 		muss(t, err)
 		muss(t, s.BackupLoeschen(ctx, "konto-a"))
 		if _, err := s.BackupHolen(ctx, "konto-a"); !errors.Is(err, ErrNichtGefunden) {
@@ -591,7 +591,7 @@ func pruefeVertrag(t *testing.T, neu func(t *testing.T) Speicher) {
 		}
 		// KRITISCH: Gelöscht wird nur das Backup dieses Kontos.
 		backupPruefen(t, s, "konto-b", "backup-b", 1)
-		v, err := s.BackupSpeichern(ctx, "konto-a", []byte("neu"), fsSchluessel, 0, false, t0)
+		v, err := s.BackupSpeichern(ctx, "konto-a", []byte("neu"), fsSchluessel, 0, "", t0)
 		muss(t, err)
 		if v != 1 {
 			t.Errorf("Version = %d, erwartet 1", v)
@@ -604,9 +604,9 @@ func pruefeVertrag(t *testing.T, neu func(t *testing.T) Speicher) {
 
 	t.Run("Backups verschiedener Konten sind getrennt", func(t *testing.T) {
 		s := neu(t)
-		_, err := s.BackupSpeichern(ctx, "konto-a", []byte("backup-a"), fsSchluessel, 0, false, t0)
+		_, err := s.BackupSpeichern(ctx, "konto-a", []byte("backup-a"), fsSchluessel, 0, "", t0)
 		muss(t, err)
-		_, err = s.BackupSpeichern(ctx, "konto-b", []byte("backup-b"), fsSchluessel, 0, false, t0)
+		_, err = s.BackupSpeichern(ctx, "konto-b", []byte("backup-b"), fsSchluessel, 0, "", t0)
 		muss(t, err)
 		backupPruefen(t, s, "konto-a", "backup-a", 1)
 		backupPruefen(t, s, "konto-b", "backup-b", 1)
@@ -615,51 +615,81 @@ func pruefeVertrag(t *testing.T, neu func(t *testing.T) Speicher) {
 		}
 	})
 
-	// KRITISCH: Ein nicht freigeschaltetes Gerät (nurUngeschuetzt) legt das
+	// KRITISCH: Ein nicht freigeschaltetes Gerät (ungeschuetztFuer) legt das
 	// erste Backup nur an, wenn das Konto kein freigeschaltetes, ungesperrtes
-	// Gerät hat. Jeder Fall bereitet das Konto "kennung-a" vor.
+	// Gerät hat, und ist danach freigeschaltet. Die Version wird vorher
+	// geprüft. Jeder Fall bereitet Konto "kennung-a" mit dem nicht
+	// freigeschalteten Gerät "geraet-neu" vor.
 	ungeschuetztFaelle := []struct {
 		name    string
-		vorher  func(t *testing.T, s Speicher) string // liefert die Konto-ID
-		erlaubt bool
+		vorher  func(t *testing.T, s Speicher, kontoA string) // kontoA hat geraet-alt (frei) und geraet-neu
+		geraet  string                                        // wer speichert
+		wantErr error                                         // nil: erlaubt
 	}{
-		{"abgelehnt, wenn es ein freigeschaltetes Gerät gibt", func(t *testing.T, s Speicher) string {
-			e := anmelden(t, s, "kennung-a", "geraet-alt", "hash-alt", 0)
-			anmelden(t, s, "kennung-a", "geraet-neu", "hash-neu", 1)
-			return e.KontoID
-		}, false},
-		{"erlaubt, wenn das einzige freigeschaltete Gerät gesperrt ist", func(t *testing.T, s Speicher) string {
-			e := anmelden(t, s, "kennung-a", "geraet-alt", "hash-alt", 0)
-			anmelden(t, s, "kennung-a", "geraet-neu", "hash-neu", 1)
-			muss(t, s.GeraetSperren(ctx, e.KontoID, "geraet-alt", t0))
-			return e.KontoID
-		}, true},
-		{"Geräte eines anderen Kontos zählen nicht", func(t *testing.T, s Speicher) string {
-			anmelden(t, s, "kennung-b", "geraet-b", "hash-b", 0)
-			return "konto-ohne-geraete"
-		}, true},
+		{"abgelehnt, wenn es ein freigeschaltetes Gerät gibt",
+			func(*testing.T, Speicher, string) {}, "geraet-neu", ErrKontoGeschuetzt},
+		{"erlaubt, wenn das einzige freigeschaltete Gerät gesperrt ist",
+			func(t *testing.T, s Speicher, kontoA string) {
+				muss(t, s.GeraetSperren(ctx, kontoA, "geraet-alt", t0))
+			}, "geraet-neu", nil},
+		{"erlaubt, Geräte eines anderen Kontos zählen nicht",
+			func(t *testing.T, s Speicher, kontoA string) {
+				muss(t, s.GeraetSperren(ctx, kontoA, "geraet-alt", t0))
+				anmelden(t, s, "kennung-b", "geraet-b", "hash-b", 2)
+			}, "geraet-neu", nil},
+		{"abgelehnt für ein Gerät eines anderen Kontos",
+			func(t *testing.T, s Speicher, kontoA string) {
+				muss(t, s.GeraetSperren(ctx, kontoA, "geraet-alt", t0))
+				anmelden(t, s, "kennung-b", "geraet-b", "hash-b", 2)
+			}, "geraet-b", ErrNichtGefunden},
 	}
 	for _, fall := range ungeschuetztFaelle {
 		t.Run("erstes Backup eines nicht freigeschalteten Geräts: "+fall.name, func(t *testing.T) {
 			s := neu(t)
-			kontoID := fall.vorher(t, s)
-			v, err := s.BackupSpeichern(ctx, kontoID, []byte("backup-neu"), fsSchluessel, 0, true, t0)
-			if fall.erlaubt {
+			kontoA := anmelden(t, s, "kennung-a", "geraet-alt", "hash-alt", 0).KontoID
+			anmelden(t, s, "kennung-a", "geraet-neu", "hash-neu", 1)
+			fall.vorher(t, s, kontoA)
+			v, err := s.BackupSpeichern(ctx, kontoA, []byte("backup-neu"), fsSchluessel, 0, fall.geraet, t0)
+			g, gErr := s.Geraet(ctx, fall.geraet)
+			muss(t, gErr)
+			if fall.wantErr == nil {
 				muss(t, err)
-				backupPruefen(t, s, kontoID, "backup-neu", v)
+				backupPruefen(t, s, kontoA, "backup-neu", v)
+				if !g.Freigeschaltet {
+					t.Error("Gerät ist nach dem ersten Backup nicht freigeschaltet")
+				}
 				return
 			}
-			if !errors.Is(err, ErrKontoGeschuetzt) {
-				t.Fatalf("Fehler = %v, erwartet ErrKontoGeschuetzt", err)
+			if !errors.Is(err, fall.wantErr) {
+				t.Fatalf("Fehler = %v, erwartet %v", err, fall.wantErr)
 			}
-			if _, err := s.BackupHolen(ctx, kontoID); !errors.Is(err, ErrNichtGefunden) {
+			if _, err := s.BackupHolen(ctx, kontoA); !errors.Is(err, ErrNichtGefunden) {
 				t.Errorf("Backup wurde trotzdem angelegt: %v", err)
 			}
+			if fall.geraet == "geraet-neu" && g.Freigeschaltet {
+				t.Error("abgelehntes Gerät ist freigeschaltet")
+			}
 			// Gegenprobe: Ohne die Einschränkung (freigeschaltetes Gerät) geht es.
-			_, err = s.BackupSpeichern(ctx, kontoID, []byte("backup-alt"), fsSchluessel, 0, false, t0)
+			_, err = s.BackupSpeichern(ctx, kontoA, []byte("backup-alt"), fsSchluessel, 0, "", t0)
 			muss(t, err)
 		})
 	}
+
+	// KRITISCH: Erst die Version, dann der Schutz. Ein nicht freigeschaltetes
+	// Gerät mit veralteter Version erfährt, dass es ein Backup gibt (und holt
+	// es), statt nur „nicht freigeschaltet“ zu hören (Review-Lauf 9).
+	t.Run("veraltete Version eines nicht freigeschalteten Geräts meldet ErrVersionVeraltet", func(t *testing.T) {
+		s := neu(t)
+		kontoA := anmelden(t, s, "kennung-a", "geraet-alt", "hash-alt", 0).KontoID
+		anmelden(t, s, "kennung-a", "geraet-neu", "hash-neu", 1)
+		_, err := s.BackupSpeichern(ctx, kontoA, []byte("backup-alt"), fsSchluessel, 0, "", t0)
+		muss(t, err)
+		_, err = s.BackupSpeichern(ctx, kontoA, []byte("backup-neu"), fsSchluessel, 0, "geraet-neu", t0)
+		if !errors.Is(err, ErrVersionVeraltet) {
+			t.Fatalf("Fehler = %v, erwartet ErrVersionVeraltet", err)
+		}
+		backupPruefen(t, s, kontoA, "backup-alt", 1)
+	})
 
 	// Gleichzeitigkeit: Die folgenden Fälle starten mehrere Aufrufe zur selben
 	// Zeit (Goroutinen = leichtgewichtige Threads). Ein Rennen tritt nicht in
@@ -783,14 +813,14 @@ func pruefeVertrag(t *testing.T, neu func(t *testing.T) Speicher) {
 	t.Run("gleichzeitiges Speichern derselben Version: genau einer gewinnt", func(t *testing.T) {
 		for runde := range gleichzeitigRunden {
 			s := neu(t)
-			_, err := s.BackupSpeichern(ctx, "konto-a", []byte("backup-0"), fsSchluessel, 0, false, t0)
+			_, err := s.BackupSpeichern(ctx, "konto-a", []byte("backup-0"), fsSchluessel, 0, "", t0)
 			muss(t, err)
 
 			fehler := make([]error, gleichzeitigAufrufe)
 			var wg sync.WaitGroup
 			for i := range gleichzeitigAufrufe {
 				wg.Go(func() {
-					_, fehler[i] = s.BackupSpeichern(ctx, "konto-a", []byte(fmt.Sprintf("geraet-%d", i)), fsSchluessel, 1, false, t0)
+					_, fehler[i] = s.BackupSpeichern(ctx, "konto-a", []byte(fmt.Sprintf("geraet-%d", i)), fsSchluessel, 1, "", t0)
 				})
 			}
 			wg.Wait()

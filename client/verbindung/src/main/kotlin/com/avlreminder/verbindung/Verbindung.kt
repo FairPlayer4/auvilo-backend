@@ -11,6 +11,8 @@ import com.avlreminder.protokoll.GeraeteFreischaltung
 import com.avlreminder.protokoll.GeraetNichtFreigeschaltet
 import com.avlreminder.protokoll.GeholteSicherung
 import com.avlreminder.protokoll.GeholtesBackup
+import com.avlreminder.protokoll.KontoAufDemServer
+import com.avlreminder.protokoll.KontoGeraet
 import com.avlreminder.protokoll.SicherungTageslimit
 import com.avlreminder.protokoll.SicherungZuGross
 import com.avlreminder.protokoll.SicherungsAblage
@@ -24,6 +26,7 @@ import com.avlreminder.schnittstelle.v1.DiagnoseDienstClient
 import com.avlreminder.schnittstelle.v1.DiagnoseSendenRequest
 import com.avlreminder.schnittstelle.v1.GeraetFreischaltenRequest
 import com.avlreminder.schnittstelle.v1.GeraetSperrenRequest
+import com.avlreminder.schnittstelle.v1.GeraeteAuflistenRequest
 import com.avlreminder.schnittstelle.v1.GeraeteDienstClient
 import com.avlreminder.schnittstelle.v1.MitWiederherstellungFreischaltenRequest
 import com.avlreminder.schnittstelle.v1.SchluesselDienstClient
@@ -41,6 +44,7 @@ import com.connectrpc.okhttp.ConnectOkHttpClient
 import com.connectrpc.protocols.NetworkProtocol
 import com.google.protobuf.ByteString
 import okhttp3.OkHttpClient
+import java.io.IOException
 
 /** Die Connect-Clients für einen Server. */
 class Verbindung(server: String, val http: OkHttpClient = OkHttpClient()) {
@@ -62,12 +66,23 @@ class Verbindung(server: String, val http: OkHttpClient = OkHttpClient()) {
 /** Header mit dem Sitzungs-Token. */
 fun mitSitzung(token: String): Headers = mapOf("Authorization" to listOf("Bearer $token"))
 
-/** Die Antwort oder eine verständliche Fehlermeldung. */
+/**
+ * Die Antwort oder eine verständliche Fehlermeldung.
+ *
+ * KRITISCH: Kam gar keine Antwort (kein Netz, Verbindung abgelehnt, Zeitüberschreitung),
+ * meldet Connect das als Fehler mit Code „unknown“ und der [IOException] darin. Die
+ * wird hier wieder eine [IOException], damit die App „kein Netz“ sagt und nicht
+ * „Server gesperrt oder gestört“.
+ */
 fun <T> ResponseMessage<T>.ergebnis(): T =
     when (this) {
         is ResponseMessage.Success -> message
-        is ResponseMessage.Failure -> throw Serverfehler(cause, vomDienst = istConnectFehler(headers))
+        is ResponseMessage.Failure -> throw netzfehler(cause) ?: Serverfehler(cause, vomDienst = istConnectFehler(headers))
     }
+
+/** Die [IOException] in [e], wenn der Aufruf den Server nicht erreicht hat. */
+private fun netzfehler(e: ConnectException): IOException? =
+    generateSequence(e.exception) { it.cause }.take(5).filterIsInstance<IOException>().firstOrNull()
 
 /**
  * Eine Fehlerantwort des Dienstes selbst kommt bei Connect als JSON. Antworten
@@ -166,6 +181,11 @@ class ServerGeraete(private val verbindung: Verbindung, private val token: Strin
         }
     }
 
+    /** Die Geräte des Kontos, auch gesperrte. */
+    suspend fun auflisten(): List<KontoGeraet> =
+        verbindung.geraete.geraeteAuflisten(GeraeteAuflistenRequest.getDefaultInstance(), mitSitzung(token)).ergebnis()
+            .geraeteList.map { KontoGeraet(it.geraetId, it.gesperrt, it.diesesGeraet) }
+
     /** Schaltet ein anderes Gerät des Kontos frei; dieses Gerät muss selbst freigeschaltet sein. */
     suspend fun freischalten(geraetId: String) {
         try {
@@ -175,6 +195,18 @@ class ServerGeraete(private val verbindung: Verbindung, private val token: Strin
             throw e.nichtFreigeschaltetOder()
         }
     }
+}
+
+/** Das Konto auf dem Server für „Cloud-Daten löschen“ ([com.avlreminder.protokoll.CloudLoeschen]). */
+class ServerKonto(verbindung: Verbindung, token: String) : KontoAufDemServer {
+    private val geraete = ServerGeraete(verbindung, token)
+    private val sicherung = ServerSicherungsAblage(verbindung, token)
+    private val schluessel = ServerBackupAblage(verbindung, token)
+
+    override suspend fun geraete() = geraete.auflisten()
+    override suspend fun sperren(geraetId: String) = geraete.sperren(geraetId)
+    override suspend fun datensicherungLoeschen() = sicherung.loeschen()
+    override suspend fun schluesselBackupLoeschen() = schluessel.loeschen()
 }
 
 /**

@@ -3,6 +3,7 @@ package speicher
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	"cloud.google.com/go/firestore"
@@ -407,21 +408,14 @@ func (f *Firestore) GeraetFreischalten(ctx context.Context, kontoID, geraetID st
 // KRITISCH: Version lesen und Backup schreiben in einer Transaktion. Ändert
 // ein anderes Gerät das Backup dazwischen, wiederholt Firestore die Funktion,
 // und die Versionsprüfung schlägt dann fehl – nie gewinnen beide. Ebenso wird
-// mit nurUngeschuetzt in der Transaktion geprüft, dass das Konto kein
-// freigeschaltetes Gerät hat; ein gleichzeitiges Freischalten wiederholt sie.
-func (f *Firestore) BackupSpeichern(ctx context.Context, kontoID string, chiffrat, freischaltschluessel []byte, erwartet int64, nurUngeschuetzt bool, jetzt time.Time) (int64, error) {
+// mit ungeschuetztFuer in der Transaktion geprüft, dass das Konto kein
+// freigeschaltetes Gerät hat, und das Gerät freigeschaltet; ein gleichzeitiges
+// Freischalten wiederholt sie. (Firestore verlangt erst alle Lesezugriffe, dann
+// die Schreibzugriffe.)
+func (f *Firestore) BackupSpeichern(ctx context.Context, kontoID string, chiffrat, freischaltschluessel []byte, erwartet int64, ungeschuetztFuer string, jetzt time.Time) (int64, error) {
 	ref := f.c.Collection(sammlungBackups).Doc(kontoID)
 	var neu int64
 	err := f.c.RunTransaction(ctx, func(ctx context.Context, tx *firestore.Transaction) error {
-		if nurUngeschuetzt {
-			geraete, err := f.geraeteIn(tx, kontoID)
-			if err != nil {
-				return err
-			}
-			if gibtFreigeschaltetes(geraete) {
-				return ErrKontoGeschuetzt
-			}
-		}
 		var aktuell int64 // 0, falls es noch keins gibt
 		snap, err := tx.Get(ref)
 		switch {
@@ -437,13 +431,35 @@ func (f *Firestore) BackupSpeichern(ctx context.Context, kontoID string, chiffra
 		if aktuell != erwartet {
 			return ErrVersionVeraltet
 		}
+		if ungeschuetztFuer != "" {
+			geraete, err := f.geraeteIn(tx, kontoID)
+			if err != nil {
+				return err
+			}
+			if gibtFreigeschaltetes(geraete) {
+				return ErrKontoGeschuetzt
+			}
+			i := slices.IndexFunc(geraete, func(g Geraet) bool { return g.ID == ungeschuetztFuer })
+			if i < 0 {
+				return ErrNichtGefunden
+			}
+			if geraete[i].Gesperrt {
+				return ErrGeraetGesperrt
+			}
+		}
 		neu = erwartet + 1
-		return tx.Set(ref, backupDok{
+		if err := tx.Set(ref, backupDok{
 			Chiffrat:             chiffrat,
 			Freischaltschluessel: freischaltschluessel,
 			Version:              neu,
 			Geaendert:            jetzt.UTC().Truncate(time.Millisecond),
-		})
+		}); err != nil {
+			return err
+		}
+		if ungeschuetztFuer == "" {
+			return nil
+		}
+		return tx.Update(f.c.Collection(sammlungGeraete).Doc(ungeschuetztFuer), []firestore.Update{{Path: "freigeschaltet", Value: true}})
 	})
 	if err != nil {
 		return 0, fmt.Errorf("Backup speichern: %w", err)

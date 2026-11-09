@@ -465,6 +465,37 @@ class SicherungsablaufTest {
         assertFalse(Geraet(server, stand, id = "neu").sichern() is Gesichert.Ja)
     }
 
+    // Die App prüft und vergleicht die Sicherung vor der Rückfrage (App-Entwurf W-5);
+    // dafür braucht sie die entschlüsselte Nutzlast, nicht nur den Kopf.
+    @Test
+    fun `die Rückfrage sieht die ganze entschlüsselte Sicherung`() {
+        val server = FalscheAblage().apply { vonGeraet("tablet", zaehler = 4, nutzlast = "alles") }
+        val gezeigt = mutableListOf<Sicherung>()
+        runBlocking {
+            Sicherungsablauf(KONTO, "neu", tresor, server, FalscherStand(), uebernehmen = { false }, uhr = { JETZT })
+                .wiederherstellen(SCHEMA, bestaetigen = { gezeigt += it; false }, anwenden = { })
+        }
+        assertEquals("alles", String(gezeigt.single().nutzlast))
+        assertEquals(4, gezeigt.single().kopf.zaehler)
+    }
+
+    // KRITISCH: Scheitert die Prüfung in der Rückfrage (Sicherung beschädigt), wird nichts
+    // angewendet und nichts gemerkt, auch kein „gesehen“ oder „abgelehnt“.
+    @Test
+    fun `wirft die Prüfung in der Rückfrage, bleibt alles unverändert`() {
+        val server = FalscheAblage().apply { vonGeraet("tablet", zaehler = 4) }
+        val stand = FalscherStand()
+        val angewendet = mutableListOf<Sicherung>()
+        assertThrows<IllegalStateException> {
+            runBlocking {
+                Sicherungsablauf(KONTO, "neu", tresor, server, stand, uebernehmen = { false }, uhr = { JETZT })
+                    .wiederherstellen(SCHEMA, bestaetigen = { error("beschädigt") }, anwenden = { angewendet += it })
+            }
+        }
+        assertTrue(angewendet.isEmpty())
+        assertNull(stand.stand)
+    }
+
     companion object {
         private const val KONTO = "konto-a"
         private const val SCHEMA = 5

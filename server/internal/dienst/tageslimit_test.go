@@ -26,15 +26,15 @@ type zaehlerAttrappe struct {
 	aufrufe int
 	fehler  error
 	echt    kontingent.Zaehler
-	// mitSitzungen: auch Sitzungen (Anmelden, SitzungErneuern) zählen und
-	// scheitern lassen. Sonst lässt die Attrappe sie ungezählt durch, damit
-	// sich die Tests anmelden können.
+	// mitSitzungen: auch Sitzungen und neue Geräte (Anmelden,
+	// SitzungErneuern) zählen und scheitern lassen. Sonst lässt die Attrappe
+	// sie ungezählt durch, damit sich die Tests anmelden können.
 	mitSitzungen bool
 }
 
 func (z *zaehlerAttrappe) Verbrauche(ctx context.Context, art, id string, jetzt time.Time, max int) error {
 	z.mu.Lock()
-	if art == kontingentSitzung && !z.mitSitzungen {
+	if (art == kontingentSitzung || art == kontingentNeuesGeraet) && !z.mitSitzungen {
 		z.mu.Unlock()
 		return nil
 	}
