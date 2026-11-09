@@ -67,34 +67,31 @@ Das eigentliche Gedächtnis: wiederkehrende Muster, nach denen jeder Lauf geziel
   Erledigtes steht nur in Berichten und git, nicht in state.md oder stand.md.
 
 ## Offen (Details in den Berichten)
-- Lauf 10 (runs/2026-11-09.md): Fragen 1–3; R1–R5; minor-Funde zu Löschen, Mutex,
-  Wiederherstellen; wackliger Test `aPendingOrFailedRestoreHoldsTheBackup`; Doku kürzen.
-- Lauf 9 (runs/2026-11-08.md): R2 (Adapter mit festem Token), R3 (Ausweg „nicht
-  freigeschaltet“, in Lauf 10 erneut gesehen), R4 (Schlüssel verwerfen – evtl. durch
-  „Dieses Gerät abmelden“ erledigt), R5 (Cloud-Kerntests in App `geraetetest.md`).
-- Lauf 8 (runs/2026-11-05.md): E2/E10 (Drift), E3 (Deploy ohne CI-Gate), E4 (Textprüfung
-  der Öffnung); Stand der übrigen E-Punkte nicht festgehalten.
+- Lauf 10 (runs/2026-11-09.md): R1–R5; minor-Funde zu Löschen, Mutex, Wiederherstellen;
+  wackliger Test `aPendingOrFailedRestoreHoldsTheBackup`; Doku kürzen. Umsetzen der
+  Antworten auf Fragen 1–3 (Löschen sperrt alle Geräte, abgelehnte Sitzung, lokales
+  Wiederherstellen wie W-7).
+- Lauf 9 (runs/2026-11-08.md): Umsetzen der Antworten auf Fragen 1 und 4 (Version vor
+  „geschützt“, Freischalten beim ersten Backup; 10 neue Geräte je Tag) mit R3 (Knopf
+  „Freischalten“); R2 bis B3 zurückgestellt; R5 (Cloud-Fälle in App `geraetetest.md`)
+  kommt mit der Überarbeitung der Gerätetests.
+- Lauf 8 (runs/2026-11-05.md), Stand am 2026-11-09 im Code geprüft: erledigt E1, E5, E12;
+  weitgehend E6; teilweise E7 (App-Regeln im Test-Client), E8 (Fehlerarten im Adapter);
+  offen E2/E10 (Drift), E3 (Deploy ohne CI-Gate), E4 (Textprüfung der Öffnung), E9
+  (Antwortgröße, Zeitlimits), E11 (A2), E13 (Begriffe), E14–E16, E17 (stand.md, mit dem
+  Kürzungsplan aus Lauf 10), E18 (Tests). Kevin will sie jetzt angehen.
 - Lauf 6 (runs/2026-11-03-2.md): E4 (30 s bei 8 MiB nicht gemessen), E5 (Skript-Check
   Cloud-Run-Regeln, Leerlauf 0 €), E6 (CLAUDE.md nennt formate.md, b1-entwurf.md nicht).
 - Lauf 5 (runs/2026-11-03.md): Testlücken Server (Streaming im Interceptor, Sperr-Rennen
   in `SitzungErneuern`, Speicherfehler im Gerätedienst) – seit Lauf 2.
-- Lauf 4 (runs/2026-11-01-4.md): A2–A5 im B3-Entwurf; Ausnahme `FILE_SAME_JAVA_*` in
-  `proto/buf.yaml` noch da (nötig?).
+- Lauf 4 (runs/2026-11-01-4.md): A2–A5 im B3-Entwurf.
 - Lauf 1–3: Drossel beim Laden der Google-Schlüssel, Desktop-Client-ID entfernen
   (`infra/variablen.tf`), WARN „Trennen beginnt“, E7 Lauf 1 (Herkunft der Budget-Meldung,
   optional).
 - Nicht in der Cloud getestet: Trennen ab 150 %, Geräte- und Tageslimits.
 
 ## Offene Fragen an den Entwickler
-Lauf 10: runs/2026-11-09.md, Fragen 1–3.
-Lauf 9 (bisher nirgends beantwortet; runs/2026-11-08.md):
-1. Erstes Backup eines nicht freigeschalteten Geräts: Server prüft „geschützt“ vor der
-   Version (`firestore.go`); war „vor Schritt 5“ gewünscht, Schritt 5 ist installiert.
-2. Abgelehntes Wiederherstellen einer fremden Fassung lässt das Sichern ruhen – teils
-   durch W-7 überholt.
-3. Worker: unbeantwortete Rückfrage gilt wie „nein“ – in der App so umgesetzt
-   (backup-entwurf.md, Ergänzung zu A-10), im Backend nicht festgehalten.
-4. Zusätzlich höchstens 10 neue Geräte je Konto und Tag (vor der Sicherheitsphase)?
+Keine (Lauf 9 und 10 am 2026-11-09 beantwortet).
 
 ## Getroffene Entscheidungen
 - 2026-11-01: Architekturbild bestätigt; `.review/` wird versioniert.
@@ -134,3 +131,10 @@ Lauf 9 (bisher nirgends beantwortet; runs/2026-11-08.md):
   Geräte je Konto; Egress-Alarm 1 GiB in 23 h. Nicht erneut als Frage stellen.
 - 2026-11-07 (Lauf 8, Fragen 6, 7): Ablehnung gemerkt, automatische Sicherung ruht;
   2 Instanzen bleiben.
+- 2026-11-09 (Lauf 9 Fragen 1–4, Lauf 10 Fragen 1–3, R2–R4; anforderungen.md Kap. 11,
+  App Kap. 9): Server prüft die Version vor „geschützt“ und schaltet beim ersten Backup
+  frei; abgelehnte fremde Fassung ruht; Worker: unbeantwortet = nein; höchstens 10 neue
+  Geräte je Konto und Tag; *Cloud-Daten löschen* sperrt alle Geräte; abgelehnte Sitzung
+  benachrichtigt, 3-Tage-Hinweis am Konto; lokales Wiederherstellen wie W-7; R2 bis B3;
+  R4 erledigt durch *Dieses Gerät abmelden*. `FILE_SAME_JAVA_*` in `proto/buf.yaml` ist
+  gewollt (B2). Nicht erneut als Frage stellen.
