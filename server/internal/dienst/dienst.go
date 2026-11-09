@@ -41,6 +41,16 @@ const SitzungenJeTag = 200
 // kontingentSitzung ist die Art im Tageszähler; gezählt wird je Gerät.
 const kontingentSitzung = "sitzung"
 
+// NeueGeraeteJeTag gibt an, wie viele neue Geräte sich je Konto und Tag (UTC)
+// höchstens anmelden (Entscheidung nach Review-Lauf 9). Die Grenze von 10
+// offenen Geräten (speicher.MaxOffeneGeraete) allein hält niemanden auf, der
+// den Google-Login hat: Er sperrt ein neues Gerät und legt das nächste an.
+const NeueGeraeteJeTag = 10
+
+// kontingentNeuesGeraet ist die Art im Tageszähler; gezählt wird je Konto
+// (über die Kennung, das Konto kennt der Dienst vor dem Anmelden noch nicht).
+const kontingentNeuesGeraet = "neues_geraet"
+
 // AnmeldePruefer ist der Teil von anmeldung.Pruefer, den die Dienste brauchen.
 type AnmeldePruefer interface {
 	Pruefe(ctx context.Context, a anmeldung.Anfrage) (anmeldung.Ergebnis, error)
@@ -167,11 +177,15 @@ func (d *dienste) Anmelden(ctx context.Context, req *connect.Request[v1.Anmelden
 	if err := d.verbrauche(ctx, kontingentSitzung, erg.GeraetID, SitzungenJeTag, "Tageslimit für Sitzungen dieses Geräts erreicht – morgen wieder"); err != nil {
 		return nil, err
 	}
+	kennung := anmeldung.Kennung(d.k.Pfeffer, erg.GoogleSub)
+	if err := d.neuesGeraetZaehlen(ctx, kennung, erg.GeraetID); err != nil {
+		return nil, err
+	}
 
 	jetzt := d.k.Jetzt()
 	token, neueSitzung := sitzung.Neu(jetzt)
 	geraet := speicher.Geraet{ID: erg.GeraetID, Schluessel: req.Msg.GetGeraeteschluessel(), Erstellt: jetzt}
-	ergebnis, err := d.k.Speicher.Anmelden(ctx, anmeldung.Kennung(d.k.Pfeffer, erg.GoogleSub), geraet, neueSitzung)
+	ergebnis, err := d.k.Speicher.Anmelden(ctx, kennung, geraet, neueSitzung)
 	switch {
 	case errors.Is(err, speicher.ErrZuVieleGeraete):
 		slog.WarnContext(ctx, "Anmeldung abgelehnt: zu viele nicht freigeschaltete Geräte", "geraet", erg.GeraetID)
@@ -194,6 +208,24 @@ func (d *dienste) Anmelden(ctx context.Context, req *connect.Request[v1.Anmelden
 		NeuesKonto:     ergebnis.NeuesKonto,
 		Freigeschaltet: ergebnis.Freigeschaltet,
 	}), nil
+}
+
+// neuesGeraetZaehlen zählt ein Gerät, das der Server noch nicht kennt, im
+// Tageszähler des Kontos; ein bekanntes Gerät zählt nicht.
+//
+// KRITISCH: Gezählt wird vor dem Anlegen, auch wenn das Anmelden danach noch
+// scheitert. Zwei gleichzeitige Anmeldungen desselben neuen Geräts zählen
+// doppelt; das ist billiger als eine Transaktion über Zähler und Speicher und
+// irrt nur zur sicheren Seite.
+func (d *dienste) neuesGeraetZaehlen(ctx context.Context, kennung, geraetID string) error {
+	_, err := d.k.Speicher.Geraet(ctx, geraetID)
+	if err == nil {
+		return nil
+	}
+	if !errors.Is(err, speicher.ErrNichtGefunden) {
+		return speicherFehler(ctx, err)
+	}
+	return d.verbrauche(ctx, kontingentNeuesGeraet, kennung, NeueGeraeteJeTag, "Tageslimit für neue Geräte dieses Kontos erreicht – morgen wieder")
 }
 
 func (d *dienste) SitzungErneuern(ctx context.Context, req *connect.Request[v1.SitzungErneuernRequest]) (*connect.Response[v1.SitzungErneuernResponse], error) {

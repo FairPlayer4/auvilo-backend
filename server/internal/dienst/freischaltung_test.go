@@ -262,7 +262,9 @@ func TestNichtFreigeschaltetesGeraetDarfLesenUndSichAbmelden(t *testing.T) {
 // das Konto kein freigeschaltetes, ungesperrtes Gerät hat (Entscheidung nach
 // Review-Lauf 8). Sonst brächte ein fremdes Gerät mit dem Google-Login seinen
 // eigenen Freischaltschlüssel ins Konto, solange das Handy noch kein Backup
-// hochgeladen hat, und schaltete sich damit selbst frei.
+// hochgeladen hat, und schaltete sich damit selbst frei. Wird es angenommen,
+// ist das Gerät danach freigeschaltet; eine veraltete Version meldet es vor
+// dem Schutz (Review-Lauf 9).
 func TestErstesBackupEinesNichtFreigeschaltetenGeraets(t *testing.T) {
 	faelle := []struct {
 		name    string
@@ -277,6 +279,12 @@ func TestErstesBackupEinesNichtFreigeschaltetenGeraets(t *testing.T) {
 					t.Fatal(err)
 				}
 			}, 0},
+		{"veraltete Version: meldet failed_precondition statt nicht freigeschaltet",
+			func(t *testing.T, ts *testServer, handySitzung string, _ *testhilfe.Geraet) {
+				if _, err := ts.backupSpeichern(handySitzung, []byte("backup-handy"), 0); err != nil {
+					t.Fatal(err)
+				}
+			}, connect.CodeFailedPrecondition},
 	}
 	for _, fall := range faelle {
 		t.Run(fall.name, func(t *testing.T) {
@@ -297,11 +305,19 @@ func TestErstesBackupEinesNichtFreigeschaltetenGeraets(t *testing.T) {
 				erwarteCode(t, err, fall.wantErr)
 			}
 			b, err := ts.backupHolen(laptop.Sitzung.Token)
-			switch {
-			case fall.wantErr == 0 && (err != nil || string(b.Chiffrat) != "backup-laptop"):
+			if fall.wantErr == 0 && (err != nil || string(b.Chiffrat) != "backup-laptop") {
 				t.Errorf("Backup = %v, Fehler %v", b, err)
-			case fall.wantErr != 0 && connect.CodeOf(err) != connect.CodeNotFound:
-				t.Errorf("Backup nach der Ablehnung: Code %v, erwartet not_found", connect.CodeOf(err))
+			}
+			if fall.wantErr != 0 && err == nil && string(b.Chiffrat) == "backup-laptop" {
+				t.Error("Backup des Laptops liegt trotz Ablehnung vor")
+			}
+			// Danach freigeschaltet heißt: Es darf, was nur freigeschaltete Geräte dürfen.
+			darf := ts.sicherungLoeschen(laptop.Sitzung.Token)
+			if fall.wantErr == 0 && darf != nil {
+				t.Errorf("Laptop ist nach dem ersten Backup nicht freigeschaltet: %v", darf)
+			}
+			if fall.wantErr != 0 && connect.CodeOf(darf) != connect.CodePermissionDenied {
+				t.Errorf("Laptop nach der Ablehnung: Code %v, erwartet permission_denied", connect.CodeOf(darf))
 			}
 		})
 	}

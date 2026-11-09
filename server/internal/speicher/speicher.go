@@ -157,13 +157,22 @@ type Speicher interface {
 	// nie unbemerkt ein Backup, das ein anderes Gerät inzwischen geändert hat.
 	// Der Freischaltschlüssel wird mit dem Backup gespeichert und ersetzt.
 	//
-	// KRITISCH: Mit nurUngeschuetzt (Aufruf eines nicht freigeschalteten
-	// Geräts) wird nur geschrieben, wenn das Konto kein freigeschaltetes,
-	// ungesperrtes Gerät hat – geprüft in derselben Transaktion. Sonst
-	// ErrKontoGeschuetzt. Wer nur den Google-Login hat, kann so kein erstes
-	// Backup mit eigenem Freischaltschlüssel anlegen und sich damit selbst
-	// freischalten.
-	BackupSpeichern(ctx context.Context, kontoID string, chiffrat, freischaltschluessel []byte, erwartet int64, nurUngeschuetzt bool, jetzt time.Time) (int64, error)
+	// KRITISCH: Mit ungeschuetztFuer (ID des aufrufenden, nicht
+	// freigeschalteten Geräts; leer = das Gerät ist freigeschaltet) wird nur
+	// geschrieben, wenn das Konto kein freigeschaltetes, ungesperrtes Gerät hat
+	// – geprüft in derselben Transaktion. Sonst ErrKontoGeschuetzt. Wer nur den
+	// Google-Login hat, kann so kein erstes Backup mit eigenem
+	// Freischaltschlüssel anlegen und sich damit selbst freischalten. Wird das
+	// Backup angenommen, ist das Gerät danach freigeschaltet, in derselben
+	// Transaktion (Entscheidung nach Review-Lauf 9): Es hat den
+	// Freischaltschlüssel gerade selbst gesetzt. Ist es kein ungesperrtes Gerät
+	// des Kontos, ErrNichtGefunden bzw. ErrGeraetGesperrt.
+	//
+	// KRITISCH: Die Version wird vor dem Schutz geprüft. Ein Gerät mit
+	// veralteter Version bekommt ErrVersionVeraltet, holt das Backup und
+	// schaltet sich mit dem Wiederherstellungsschlüssel frei, statt als
+	// „nicht freigeschaltet“ festzuhängen.
+	BackupSpeichern(ctx context.Context, kontoID string, chiffrat, freischaltschluessel []byte, erwartet int64, ungeschuetztFuer string, jetzt time.Time) (int64, error)
 
 	// BackupHolen liefert das Backup des Kontos oder ErrNichtGefunden.
 	BackupHolen(ctx context.Context, kontoID string) (Backup, error)

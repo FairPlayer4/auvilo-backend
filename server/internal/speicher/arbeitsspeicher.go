@@ -155,15 +155,26 @@ func (a *Arbeitsspeicher) GeraetFreischalten(_ context.Context, kontoID, geraetI
 	return nil
 }
 
-func (a *Arbeitsspeicher) BackupSpeichern(_ context.Context, kontoID string, chiffrat, freischaltschluessel []byte, erwartet int64, nurUngeschuetzt bool, jetzt time.Time) (int64, error) {
+func (a *Arbeitsspeicher) BackupSpeichern(_ context.Context, kontoID string, chiffrat, freischaltschluessel []byte, erwartet int64, ungeschuetztFuer string, jetzt time.Time) (int64, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	if nurUngeschuetzt && gibtFreigeschaltetes(a.geraeteVon(kontoID)) {
-		return 0, ErrKontoGeschuetzt
-	}
 	// Ohne Eintrag liefert die Map den Nullwert: Version 0 = es gibt keins.
 	if a.backups[kontoID].Version != erwartet {
 		return 0, ErrVersionVeraltet
+	}
+	if ungeschuetztFuer != "" {
+		if gibtFreigeschaltetes(a.geraeteVon(kontoID)) {
+			return 0, ErrKontoGeschuetzt
+		}
+		g, ok := a.geraete[ungeschuetztFuer]
+		if !ok || g.KontoID != kontoID {
+			return 0, ErrNichtGefunden
+		}
+		if g.Gesperrt {
+			return 0, ErrGeraetGesperrt
+		}
+		g.Freigeschaltet = true
+		a.geraete[ungeschuetztFuer] = g
 	}
 	b := Backup{
 		Chiffrat:             slices.Clone(chiffrat),

@@ -473,8 +473,9 @@ func TestWiederholteAnfrageImZeitfensterGiltBewusst(t *testing.T) {
 // Die Grenzen aus anmeldung.proto als eigene Zahlen (nicht SitzungenJeTag,
 // speicher.MaxOffeneGeraete).
 const (
-	sitzungenAmTag = 200
-	offeneGeraete  = 10
+	sitzungenAmTag   = 200
+	offeneGeraete    = 10
+	neueGeraeteAmTag = 10
 )
 
 // KRITISCH: Ein Gerät bekommt am Tag (UTC) nur begrenzt viele Sitzungen,
@@ -540,12 +541,18 @@ func TestSitzungenHabenEinTageslimitJeGeraet(t *testing.T) {
 // Einzelnen prüft der Vertragstest des Speichers.
 func TestZuVieleNeueGeraeteWerdenAbgewiesen(t *testing.T) {
 	ts := neuerTestServer(t)
-	handySitzung := ts.anmelden(t, "google-kevin", testhilfe.NeuesGeraet(t)).Sitzung.Token
+	handy := testhilfe.NeuesGeraet(t)
+	ts.anmelden(t, "google-kevin", handy)
 	neue := make([]*testhilfe.Geraet, offeneGeraete)
 	for i := range neue {
+		if i == neueGeraeteAmTag-1 {
+			// Sonst greift zuerst das Tageslimit für neue Geräte (eigener Test).
+			ts.jetzt = start.Add(24 * time.Hour)
+		}
 		neue[i] = testhilfe.NeuesGeraet(t)
 		ts.anmelden(t, "google-kevin", neue[i])
 	}
+	handySitzung := ts.anmelden(t, "google-kevin", handy).Sitzung.Token
 	ctx := context.Background()
 	weiteres := testhilfe.NeuesGeraet(t)
 
@@ -561,4 +568,62 @@ func TestZuVieleNeueGeraeteWerdenAbgewiesen(t *testing.T) {
 		ts.geraetFreischaltenOK(t, handySitzung, neue[0].ID())
 		ts.anmelden(t, "google-kevin", weiteres)
 	})
+}
+
+// KRITISCH: Je Konto und Tag melden sich höchstens 10 neue Geräte an
+// (Entscheidung nach Review-Lauf 9). Die Grenze für offene Geräte allein hält
+// niemanden auf, der den Google-Login hat: Er sperrt sie und legt neue an.
+func TestHoechstensZehnNeueGeraeteJeKontoUndTag(t *testing.T) {
+	ctx := context.Background()
+	// vorbereitet liefert die Sitzung des Handys, nachdem sich am ersten Tag
+	// so viele neue Geräte angemeldet haben, wie erlaubt ist (das Handy
+	// eingeschlossen). Die anderen sperrt das Handy, damit die Grenze für
+	// offene Geräte nicht mitspielt.
+	vorbereitet := func(t *testing.T) (*testServer, *testhilfe.Geraet) {
+		ts := neuerTestServer(t)
+		handy := testhilfe.NeuesGeraet(t)
+		handySitzung := ts.anmelden(t, "google-kevin", handy).Sitzung.Token
+		for range neueGeraeteAmTag - 1 {
+			g := testhilfe.NeuesGeraet(t)
+			ts.anmelden(t, "google-kevin", g)
+			if err := ts.sperren(handySitzung, g.ID()); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return ts, handy
+	}
+	faelle := []struct {
+		name    string
+		jetzt   time.Duration // nach start
+		sub     string
+		bekannt bool // das Handy statt eines neuen Geräts
+		erlaubt bool
+	}{
+		{"weiteres neues Gerät am selben Tag abgewiesen", 0, "google-kevin", false, false},
+		{"bekanntes Gerät meldet sich weiter an", 0, "google-kevin", true, true},
+		{"neues Gerät eines anderen Kontos zählt nicht mit", 0, "google-anna", false, true},
+		{"am nächsten Tag wieder erlaubt", 24 * time.Hour, "google-kevin", false, true},
+	}
+	for _, fall := range faelle {
+		t.Run(fall.name, func(t *testing.T) {
+			ts, handy := vorbereitet(t)
+			ts.jetzt = start.Add(fall.jetzt)
+			g := testhilfe.NeuesGeraet(t)
+			if fall.bekannt {
+				g = handy
+			}
+			_, err := ts.anmelde.Anmelden(ctx, connect.NewRequest(ts.anmeldeAnfrage(t, fall.sub, g)))
+			_, gErr := ts.speicher.Geraet(ctx, g.ID())
+			if fall.erlaubt {
+				if err != nil || gErr != nil {
+					t.Fatalf("Anmelden: %v, Gerät: %v", err, gErr)
+				}
+				return
+			}
+			erwarteCode(t, err, connect.CodeResourceExhausted)
+			if !errors.Is(gErr, speicher.ErrNichtGefunden) {
+				t.Errorf("abgewiesenes Gerät ist angelegt (Fehler %v)", gErr)
+			}
+		})
+	}
 }
