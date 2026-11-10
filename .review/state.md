@@ -35,12 +35,12 @@ Vom Entwickler bestätigt am 2026-11-01.
 | Kill-Switch | `infra/killswitch/` | anforderungen.md KO3, stand.md | `*_test.go` | 2026-11-05 (Lauf 8, IAM-Sperrweg) | gut; Sperrweg am 2026-11-06 in der Cloud getestet |
 | Infrastruktur | `infra/*.tf`, `infra/*.sh` | anforderungen.md 4.3, 5, 6; gcp-einrichtung.md; stand.md | `infra/tests/` (tofu test), `pruefe-regionen.sh` | 2026-11-05 (Lauf 8, Modul `oeffentlich`, Löschschutz) | gut nach Fixes; CI-Gate und Textprüfung der Öffnung seit 2026-11-10 |
 | Server: Anmeldung/Sitzung | `server/internal/{geraeteschluessel,anmeldung,sitzung,dienst/dienst.go}`, `proto/` | b1-entwurf.md, proto-Kommentare, anforderungen.md Kap. 11 | `*_test.go` | 2026-11-05 (Lauf 8) | gut |
-| Server: Speicher/Start | `server/internal/speicher`, `server/cmd/server` | b1-entwurf.md (Daten, Betrieb) | `vertrag_test.go` (auch Emulator), `main_test.go` | 2026-11-05 (Lauf 8) | gut; `Speicher` 10 Methoden (E10, Trend) |
+| Server: Speicher/Start | `server/internal/speicher`, `server/cmd/server` | b1-entwurf.md (Daten, Betrieb) | `vertrag_test.go` (auch Emulator), `main_test.go` | 2026-11-05 (Lauf 8) | gut; Entscheidungen als reine Funktionen (E10, 2026-11-10) |
 | Server: Datensicherung | `server/internal/datensicherung`, `dienst/datensicherung.go`, `datensicherung.proto` | b2b-entwurf.md, proto-Kommentare | `vertrag_test.go` (Arbeitsspeicher, fake-gcs), `datensicherung_test.go` | 2026-11-08 (Lauf 9, Tageslimits) | gut nach Fix (72faf01) |
 | CI, Deploy und Container | `.github/`, `server/Dockerfile`, `.golangci.yml`, `proto/buf*.yaml` | anforderungen.md Q4, go-review.md, stand.md | CI-Job `container` | 2026-11-03 (Lauf 6, CI-Fix) | gut; Emulator ohne feste Version (Nit) |
 | Doku | `docs/`, `CLAUDE.md`, `README.md`, beide `stand.md` | – | – | 2026-11-09 (Lauf 10, Kürzbarkeit beider Repos) | stand.md ist Tagebuch und teils falsch; Kürzungsplan in runs/2026-11-09.md |
 | Kotlin `protokoll` | `client/protokoll`, `proto/avlreminder/inhalt`, `proto/testvektoren` | b2-entwurf.md, b2b-entwurf.md, backup.proto | `*Test.kt`; Go prüft nur `geraetenachrichten.json` | 2026-11-09 (Lauf 10, als Aufrufer der App) | gut; Rückfragen `suspend` (e114120); Reset-Folge und W-7 gehören hierher (R3 Lauf 10) |
-| Kotlin `verbindung` | `client/verbindung` | b2b-entwurf.md, proto-Kommentare | `AdapterTest` (Connect-Nachbau) | 2026-11-08 (Lauf 9, mit App) | gut; ohne Netz `IOException`; Adapter mit festem Token (R2 Lauf 9) |
+| Kotlin `verbindung` | `client/verbindung` | b2b-entwurf.md, proto-Kommentare | `AdapterTest` (Connect-Nachbau) | 2026-11-08 (Lauf 9, mit App) | gut; ohne Netz `IOException`; Adapter mit Token-Lieferant (R2, 2026-11-10) |
 | Backup und Test-Client | `server/internal/dienst/schluessel.go`, Backup in `speicher`, `client/testclient`, `schluessel.proto` | b2-entwurf.md, proto-Kommentare | `schluessel_test.go`, `vertrag_test.go`, `EinrichtungTest`, `GoogleTest`, `AblageTest` | 2026-11-08 (Lauf 9, Test-Client) | gut; Meldung nach erfolgtem Löschen (minor) |
 | App-Einbindung (App-Repo) | `../avlreminder/app/…/cloud/`, Einstellungen, `gradle/backend-commit.txt`, Composite Build, App-CI | App `docs/backup-entwurf.md` (A-1…A-15), b2b-entwurf.md | `CloudBackupTest` (Attrappen), `CloudBackupUiTest`, App-CI mit Lint; Gerätetest von Hand | 2026-11-09 (Lauf 10, Schritte 3–5, zweiter Blick) | 3 major offen (Löschen ohne Sitzung, Automatik nach abgelehnter Sitzung, andere Geräte beim Löschen); Attrappe ohne Serverregeln (R4) |
 | App: Wiederherstellen (App-Repo) | `../avlreminder/app/…/restore/`, Prüfen/Wiederherstellen in `CloudBackup`, `AvlApp.finishRestore`, `RestoreViews` | App `docs/wiederherstellen-entwurf.md` (W-1…W-8, R-1…R-6), design.md 13 | `RestoreFilesTest` (echte DB-Dateien), `LocalRestoreTest`, `CorruptCopyTest` | 2026-11-09 (Lauf 10, neu, zweiter Blick) | critical gefixt (82528b0, App); major offen: Einstellungen blockieren den Auftrag (R1); Room löscht beschädigte DB (R2) |
@@ -62,8 +62,10 @@ Das eigentliche Gedächtnis: wiederkehrende Muster, nach denen jeder Lauf geziel
 - **Abläufe außerhalb von `protokoll`** (Lauf 4, 5, 8, 10): Einrichtung, Sitzung,
   Rückfragen, Reset-Folge (`CloudLoeschen`) und W-7 sind umgezogen (zuletzt 2026-11-10).
   Beim nächsten App-Review prüfen, ob neue Regeln wieder in der App entstehen.
-- **Drift: `speicher.Speicher` und `dienst` wachsen** (Lauf 4 → 8: 6 → 10 Methoden,
-  Freischaltprüfung opt-in je Handler; E2, E10 Lauf 8). Vor B3 handeln.
+- **Drift: `speicher.Speicher` und `dienst` wachsen** (Lauf 4 → 8: 6 → 10 Methoden).
+  Am 2026-11-10 (Phase D) angegangen: Richtlinie je Prozedur (E2), ein Typ je Dienst mit
+  kleinen Schnittstellen, Speicher-Entscheidungen als reine Funktionen (E10). Beim
+  nächsten Architektur-Review prüfen, ob es so bleibt.
 - **stand.md wird Tagebuch** (Lauf 6, 8, 10). Kürzungsplan in runs/2026-11-09.md.
   Erledigtes steht nur in Berichten und git, nicht in state.md oder stand.md.
 
@@ -74,18 +76,19 @@ Das eigentliche Gedächtnis: wiederkehrende Muster, nach denen jeder Lauf geziel
   (Phase C) R3 und W-7 „zu weit“ aus R5. Offen: R5 (übrige Tests), übrige minor-Funde (Rückfrage hält den Mutex,
   halb gescheitertes Löschen, `cannotActOnServer`, `compareNow`, W-7-Reihenfolge,
   `beforeName`, `takeIfDue`, `RestoreFiles`), Doku kürzen.
-- Lauf 9 (runs/2026-11-08.md): Fragen 1 und 4 und R3 umgesetzt und deployt am 2026-11-09; R2 bis B3 zurückgestellt; R5 (Cloud-Fälle in App `geraetetest.md`)
+- Lauf 9 (runs/2026-11-08.md): Fragen 1 und 4 und R3 umgesetzt und deployt am 2026-11-09; R2 am 2026-11-10 (Phase D); R5 (Cloud-Fälle in App `geraetetest.md`)
   kommt mit der Überarbeitung der Gerätetests.
 - Lauf 8 (runs/2026-11-05.md), Stand am 2026-11-09 im Code geprüft: erledigt E1, E5, E12;
   weitgehend E6; erledigt am 2026-11-10 (Phase B) E3, E4, E9, E14, E16, E18, (Phase C)
-  E7 und E8 (`Fehlergrund` als Error-Detail zurückgestellt, anforderungen.md 2026-11-10). Offen E2/E10 (Drift), E11
-  (A2), E13 (Begriffe), E15 (Plätze je Konto, U2), E17 (stand.md, mit dem Kürzungsplan
-  aus Lauf 10).
+  E7 und E8 (`Fehlergrund` als Error-Detail zurückgestellt, anforderungen.md 2026-11-10),
+  (Phase D) E2, E10, E11 (als Vorgabe B3-1), E13. Offen E15 (Plätze je Konto, U2), E17
+  (stand.md, mit dem Kürzungsplan aus Lauf 10).
 - Lauf 6 (runs/2026-11-03-2.md): E4 (30 s bei 8 MiB nicht gemessen), E5 (Skript-Check
   Cloud-Run-Regeln, Leerlauf 0 €), E6 (CLAUDE.md nennt formate.md, b1-entwurf.md nicht).
 - Lauf 5 (runs/2026-11-03.md): Testlücken Server (Streaming im Interceptor, Sperr-Rennen
   in `SitzungErneuern`, Speicherfehler im Gerätedienst) – seit Lauf 2.
-- Lauf 4 (runs/2026-11-01-4.md): A2–A5 im B3-Entwurf.
+- Lauf 4 (runs/2026-11-01-4.md): A2 und A4 als Vorgaben für B3 (anforderungen.md 4.6),
+  A5 als E10 erledigt (2026-11-10).
 - Lauf 1–3: Drossel beim Laden der Google-Schlüssel, WARN „Trennen beginnt“, E7 Lauf 1 (Herkunft der Budget-Meldung,
   optional).
 

@@ -305,11 +305,14 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
    `Sicherungsablauf` (nach fremder Fassung Version 0), `SitzungAbgelehnt` und
    `Anmeldung.mitSitzung` (abgelehnte Sitzung einmal erneuern). In der App ist
    `CloudBackup.kt` geteilt (Pin `83009b7`).
+   **Phase D am 2026-11-10** (Server-Änderung, Deploy per PR nach `main` steht aus,
+   nach Kevins Go): Richtlinie je Prozedur an einer Stelle (`dienst/richtlinie.go`, E2),
+   Adapter holen das Token vor jedem Aufruf (R2, App-Pin `318ce54`), ein Typ je Dienst
+   und die Speicher-Entscheidungen als reine Funktionen (E10), „Diagnose-Erlaubnis“
+   und SE4 (E13), Vorgaben für B3 in anforderungen.md Kap. 4.6 (A2, A4).
    App-Schritte 4 und 5 und alles Weitere: App-Repo `docs/stand.md`. Offene
    Review-Punkte stehen in `.review/state.md` („Offen“).
-5. Für den B3-Entwurf aus Lauf 4: A2 (Mitgliedschaft: Server-Liste oder signiertes
-   Log), A4 (Umschläge an Kontext binden, Keyset-Typen prüfen), A5 (Speicher und
-   Dienste aufteilen; Anfang in B2b). A3 (Formate festschreiben) kommt in B2b.
+5. Für B3: die Vorgaben B3-1 bis B3-4 in anforderungen.md Kap. 4.6 (aus Lauf 4 A2, A4).
 
 ## Befehle
 ```bash
