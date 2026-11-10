@@ -50,7 +50,8 @@ import java.net.URISyntaxException
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.time.Instant
-import java.time.temporal.ChronoUnit
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 import kotlin.system.exitProcess
 
 private const val HILFE = """Befehle:
@@ -64,6 +65,7 @@ private const val HILFE = """Befehle:
   sichern <datei>   Inhalt der Datei als Datensicherung hochladen (verschlüsselt)
   wiederherstellen <datei>
                     neueste Datensicherung holen und in die Datei schreiben
+  fassungen         Fassungen der Datensicherung auf dem Server auflisten (R-4)
   sicherung-loeschen
                     Datensicherung des Kontos mit allen Fassungen löschen
   schluessel-loeschen
@@ -140,6 +142,7 @@ private suspend fun ausfuehren(args: List<String>) {
         rest == listOf("schluessel") -> werkzeug.schluessel()
         rest.size == 2 && rest[0] == "sichern" -> werkzeug.sichern(File(rest[1]))
         rest.size == 2 && rest[0] == "wiederherstellen" -> werkzeug.wiederherstellen(File(rest[1]))
+        rest == listOf("fassungen") -> werkzeug.fassungen()
         rest == listOf("sicherung-loeschen") -> werkzeug.sicherungLoeschen()
         rest == listOf("schluessel-loeschen") -> werkzeug.schluesselLoeschen()
         rest == listOf("cloud-loeschen") -> werkzeug.cloudLoeschen()
@@ -283,6 +286,13 @@ private class Werkzeug(
         }
     }
 
+    suspend fun fassungen() {
+        val liste = ServerSicherungsAblage(verbindung, ablage.sitzung(name).token).fassungen()
+        if (liste.isEmpty()) return println("Das Konto hat keine Datensicherung.")
+        println("Fassungen auf dem Server, die neueste zuerst:")
+        liste.forEach { println("  Version ${it.version}  ${ZEIT.format(it.gespeichert)}  ${it.bytes} Bytes") }
+    }
+
     suspend fun sicherungLoeschen() {
         // Braucht keine Schlüssel; der gemerkte Zähler bleibt (siehe Sicherungsablauf.loeschen).
         val s = ablage.sitzung(name)
@@ -345,8 +355,14 @@ private class Werkzeug(
  */
 internal fun testDiagnose(jetzt: Instant): List<String> = listOf(
     """{"art":"kopf","format":"${Diagnose.FORMAT}","app":"testclient","variante":"testclient","android":0,"modell":"testclient","schema":$SCHEMA_VERSION,"anlass":"knopf"}""",
-    """{"zeit":"${jetzt.truncatedTo(ChronoUnit.MILLIS)}","stufe":"INFO","bereich":"testclient","ereignis":"diagnose_test"}""",
+    """{"zeit":"${ZEIT.format(jetzt)}","stufe":"INFO","bereich":"testclient","ereignis":"diagnose_test"}""",
 )
+
+/**
+ * RFC 3339 in UTC mit immer drei Nachkommastellen (docs/formate.md); abgeschnitten,
+ * nicht gerundet. Instant.toString ließe bei genau .000 die Nachkommastellen weg.
+ */
+private val ZEIT = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'").withZone(ZoneOffset.UTC)
 
 /** Der Test-Client sichert Dateien unverändert; ihr Format ist Schema-Version 1. */
 private const val SCHEMA_VERSION = 1

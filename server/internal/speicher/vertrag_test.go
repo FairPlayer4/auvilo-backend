@@ -757,6 +757,52 @@ func pruefeVertrag(t *testing.T, neu func(t *testing.T) Speicher) {
 		})
 	}
 
+	// KRITISCH: Freischalten und Sperren überschneiden sich (E18, Review-Lauf 8):
+	// Danach ist das Gerät gesperrt, egal in welcher Reihenfolge. Ein
+	// Freischalten, das den alten Stand zurückschreibt, höbe die Sperre auf.
+	// Die zweite Hälfte der Aufrufe startet sicher erst nach dem Sperren, damit
+	// auch der Arbeitsspeicher (eine Sperre über alles) den Fall sieht.
+	t.Run("Sperren gewinnt gegen gleichzeitiges Freischalten", func(t *testing.T) {
+		var erfolge atomic.Int32
+		for runde := range gleichzeitigRunden {
+			s := neu(t)
+			e := anmelden(t, s, "kennung-a", "geraet-1", "hash-0", 0)
+			var wg sync.WaitGroup
+			var sperrFehler error
+			gesperrt := make(chan struct{})
+			for i := range gleichzeitigAufrufe {
+				wg.Go(func() {
+					if i > gleichzeitigAufrufe/2 {
+						<-gesperrt
+					}
+					switch err := s.GeraetFreischalten(ctx, e.KontoID, "geraet-1"); {
+					case err == nil:
+						erfolge.Add(1)
+					case !errors.Is(err, ErrGeraetGesperrt):
+						t.Logf("Runde %d, Aufruf %d: %v", runde, i, err)
+					}
+				})
+				if i == gleichzeitigAufrufe/2 {
+					wg.Go(func() {
+						defer close(gesperrt)
+						sperrFehler = s.GeraetSperren(ctx, e.KontoID, "geraet-1", t0)
+					})
+				}
+			}
+			wg.Wait()
+
+			muss(t, sperrFehler)
+			g, err := s.Geraet(ctx, "geraet-1")
+			muss(t, err)
+			if !g.Gesperrt {
+				t.Fatalf("Runde %d: Gerät nach Sperren und Freischalten nicht gesperrt", runde)
+			}
+		}
+		if erfolge.Load() == 0 {
+			t.Fatal("kein einziges Freischalten gelungen – das Rennen hat nie stattgefunden")
+		}
+	})
+
 	// KRITISCH: Meldet sich ein Google-Konto auf mehreren Geräten zugleich zum
 	// ersten Mal an, entsteht genau ein Konto. Sonst wären die Geräte getrennt
 	// und das zweite Konto verwaist.

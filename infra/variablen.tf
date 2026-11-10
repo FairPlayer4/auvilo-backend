@@ -95,8 +95,8 @@ variable "github_repo_id" {
 # gehört zum Kotlin-Test-Client, der Web-Client zur App: Bei „Mit Google
 # anmelden“ auf Android ist `aud` des ID-Tokens der Web-Client (serverClientId),
 # nicht der Android-Client; deshalb steht der Android-Client hier nicht. Der
-# Desktop-Client fliegt raus, sobald der Test-Client nicht mehr gebraucht wird
-# (Review Lauf 2).
+# Desktop-Client fliegt zu Beginn der Sicherheitsphase raus (Checkliste in
+# docs/b2b-entwurf.md, Punkt 4; Review Lauf 2).
 variable "google_client_ids" {
   description = "OAuth-Client-IDs, deren Google-ID-Tokens der Server annimmt"
   type        = list(string)

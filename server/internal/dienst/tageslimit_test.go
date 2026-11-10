@@ -81,7 +81,7 @@ func TestOhneTageszaehlerGehtNichts(t *testing.T) {
 	// erwarteVorher prüft direkt in der Ablage, dass die Sicherung unverändert ist.
 	erwarteVorher := func(t *testing.T) {
 		t.Helper()
-		f, err := ablage.Holen(context.Background(), kontoID)
+		f, err := ablage.Holen(context.Background(), kontoID, 0)
 		if err != nil || string(f.Chiffrat) != "vorher" {
 			t.Errorf("Sicherung = %q, Fehler %v", f.Chiffrat, err)
 		}

@@ -10,6 +10,7 @@ package datensicherung
 import (
 	"context"
 	"errors"
+	"time"
 )
 
 // MaxChiffrat ist die größte erlaubte Sicherung (docs/b2b-entwurf.md, Messung:
@@ -19,7 +20,8 @@ const MaxChiffrat = 8 << 20 // 8 MiB
 var (
 	// ErrVersionVeraltet: Die erwartete Version passt nicht zur gespeicherten.
 	ErrVersionVeraltet = errors.New("Version der Sicherung veraltet")
-	// ErrNichtGefunden: Für das Konto gibt es keine Sicherung.
+	// ErrNichtGefunden: Für das Konto gibt es keine Sicherung (oder keine Fassung
+	// mit der verlangten Version).
 	ErrNichtGefunden = errors.New("keine Sicherung")
 )
 
@@ -31,6 +33,13 @@ type Fassung struct {
 	Version int64
 }
 
+// FassungsInfo beschreibt eine gespeicherte Fassung ohne ihren Inhalt.
+type FassungsInfo struct {
+	Version     int64
+	Gespeichert time.Time // Uhr der Ablage, nicht des Geräts
+	Bytes       int64
+}
+
 // Ablage speichert eine Sicherung je Konto. Die Konto-ID kommt immer aus der
 // geprüften Sitzung.
 type Ablage interface {
@@ -38,8 +47,13 @@ type Ablage interface {
 	// (0 = es gibt noch keine), und liefert die neue Version. Sonst
 	// ErrVersionVeraltet, ohne etwas zu ändern.
 	Speichern(ctx context.Context, kontoID string, chiffrat []byte, erwartet int64) (int64, error)
-	// Holen liefert die neueste Fassung oder ErrNichtGefunden.
-	Holen(ctx context.Context, kontoID string) (Fassung, error)
+	// Holen liefert die Fassung mit dieser Version (0 = die neueste) oder
+	// ErrNichtGefunden. Auch eine ältere Fassung gibt es nur im eigenen Konto.
+	Holen(ctx context.Context, kontoID string, version int64) (Fassung, error)
+	// Fassungen listet alle noch vorhandenen Fassungen, die neueste zuerst; ohne
+	// Sicherung eine leere Liste. Wie lange ältere Fassungen bleiben, bestimmt
+	// die Ablage (Cloud Storage: Lebenszyklus des Buckets, infra/).
+	Fassungen(ctx context.Context, kontoID string) ([]FassungsInfo, error)
 	// Loeschen entfernt die Sicherung mit allen älteren Fassungen. Gibt es keine,
 	// ist das kein Fehler.
 	Loeschen(ctx context.Context, kontoID string) error

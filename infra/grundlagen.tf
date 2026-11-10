@@ -139,6 +139,23 @@ resource "google_logging_project_sink" "eu" {
   destination            = "logging.googleapis.com/${google_logging_project_bucket_config.eu.id}"
   filter                 = local.log_filter
   unique_writer_identity = true
+
+  # Empfehlung E16: Nach einer Sperre durch den Kill-Switch beantwortet Google
+  # jede Anfrage mit 403, und jede schreibt einen Request-Log-Eintrag. Viele
+  # Geräte, die es weiter versuchen, kosten dann Log-Gebühren, gerade wenn das
+  # Budget schon erreicht ist. 99 % dieser Einträge fallen weg; 1 % bleibt,
+  # damit man sieht, dass Anfragen kommen. Das trifft auch 403-Antworten des
+  # Servers selbst (nicht freigeschaltet, gesperrt); die stehen zusätzlich in
+  # seinen eigenen Logs (stdout), die der Ausschluss nicht berührt.
+  exclusions {
+    name        = "403-stichprobe"
+    description = "99 % der Request-Logs mit Status 403"
+    filter = join(" AND ", [
+      "LOG_ID(\"run.googleapis.com/requests\")",
+      "httpRequest.status=403",
+      "sample(insertId, 0.99)",
+    ])
+  }
 }
 
 # Eine Projekt-Ausnahme gilt für die _Default-Senke: Diese Logs landen nicht

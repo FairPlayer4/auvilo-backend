@@ -1,5 +1,6 @@
 package com.avlreminder.verbindung
 
+import com.avlreminder.protokoll.Datensicherung
 import com.avlreminder.protokoll.DiagnoseNichtFreigeschaltet
 import com.avlreminder.protokoll.DiagnoseTageslimit
 import com.avlreminder.protokoll.DiagnoseZuGross
@@ -19,15 +20,20 @@ import com.avlreminder.schnittstelle.v1.GeraetSperrenRequest
 import com.avlreminder.schnittstelle.v1.GeraetSperrenResponse
 import com.avlreminder.schnittstelle.v1.MitWiederherstellungFreischaltenRequest
 import com.avlreminder.schnittstelle.v1.MitWiederherstellungFreischaltenResponse
+import com.avlreminder.schnittstelle.v1.FassungenAuflistenResponse
+import com.avlreminder.schnittstelle.v1.SicherungHolenRequest
 import com.avlreminder.schnittstelle.v1.SicherungHolenResponse
+import com.avlreminder.schnittstelle.v1.SicherungsFassung
 import com.avlreminder.schnittstelle.v1.SicherungLoeschenResponse
 import com.avlreminder.schnittstelle.v1.SicherungSpeichernRequest
 import com.avlreminder.schnittstelle.v1.SicherungSpeichernResponse
 import com.connectrpc.Code
 import com.google.protobuf.ByteString
 import com.google.protobuf.MessageLite
+import com.google.protobuf.Timestamp
 import com.sun.net.httpserver.HttpServer
 import kotlinx.coroutines.runBlocking
+import okhttp3.OkHttpClient
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -37,8 +43,13 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
+import org.junit.jupiter.params.provider.ValueSource
+import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.net.InetSocketAddress
+import java.time.Instant
+import java.util.concurrent.TimeUnit
+import java.util.zip.GZIPOutputStream
 import kotlin.reflect.KClass
 
 /**
@@ -54,6 +65,12 @@ class AdapterTest {
         data class Fehler(val code: Code) : Antwort
         /** Eine Antwort ohne Connect-Fehler, etwa eine HTML-Seite von einem Proxy. */
         data class Roh(val status: Int, val typ: String, val text: String) : Antwort
+
+        /** Rohe Bytes als Erfolg, wahlweise gzip-gepackt und ohne Längenangabe. */
+        class Bytes(val inhalt: ByteArray, val gzip: Boolean = false, val ohneLaenge: Boolean = false) : Antwort
+
+        /** Antwortet erst nach [ms] Millisekunden. */
+        data class Spaet(val ms: Long) : Antwort
     }
 
     /** Eine Anfrage, wie sie beim Nachbau ankam. */
@@ -68,11 +85,23 @@ class AdapterTest {
         server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
         server.createContext("/") { ex ->
             anfragen += Anfrage(ex.requestURI.path, ex.requestHeaders.getFirst("Authorization"), ex.requestBody.readAllBytes())
-            val (status, typ, inhalt) = when (val a = antwort) {
+            val a = antwort
+            if (a is Antwort.Spaet) Thread.sleep(a.ms)
+            if (a is Antwort.Bytes) {
+                val inhalt = if (a.gzip) gzip(a.inhalt) else a.inhalt
+                ex.responseHeaders.add("Content-Type", "application/proto")
+                if (a.gzip) ex.responseHeaders.add("Content-Encoding", "gzip")
+                // Länge 0 heißt bei HttpServer: chunked, ohne Längenangabe.
+                ex.sendResponseHeaders(200, if (a.ohneLaenge) 0 else inhalt.size.toLong())
+                runCatching { ex.responseBody.use { it.write(inhalt) } } // der Client darf vorher auflegen
+                return@createContext
+            }
+            val (status, typ, inhalt) = when (a) {
                 is Antwort.Ok -> Triple(200, "application/proto", a.nachricht.toByteArray())
                 // Der Status ist für den Client zweitrangig; maßgeblich ist der Code im JSON.
                 is Antwort.Fehler -> Triple(400, "application/json", """{"code":"${a.code.codeName}","message":"nachgebaut"}""".toByteArray())
                 is Antwort.Roh -> Triple(a.status, a.typ, a.text.toByteArray())
+                is Antwort.Bytes, is Antwort.Spaet -> Triple(200, "application/proto", ByteArray(0))
             }
             ex.responseHeaders.add("Content-Type", typ)
             ex.sendResponseHeaders(status, inhalt.size.toLong())
@@ -156,6 +185,44 @@ class AdapterTest {
         assertTrue(e is IOException, "erwartet IOException, bekommen $e")
     }
 
+    // KRITISCH: Die größte erlaubte Sicherung kommt an, auch gzip-gepackt und
+    // ohne Längenangabe; die Obergrenze für Antworten (E9) darf sie nie abschneiden.
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("groessteSicherung")
+    fun `die größte Sicherung kommt an`(fall: GrossFall) {
+        val chiffrat = ByteArray(Datensicherung.MAX_CHIFFRAT) { (it % 251).toByte() }
+        val nachricht = SicherungHolenResponse.newBuilder().setChiffrat(ByteString.copyFrom(chiffrat)).setVersion(4).build()
+        antwort = Antwort.Bytes(nachricht.toByteArray(), fall.gzip, fall.ohneLaenge)
+        val s = runBlocking { ServerSicherungsAblage(verbindung(), TOKEN).holen() }!!
+        assertArrayEquals(chiffrat, s.chiffrat)
+        assertEquals(4, s.version)
+    }
+
+    // KRITISCH: Eine zu große Antwort bricht ab, statt den Speicher der App zu
+    // füllen (E9) – auch eine kleine gzip-Antwort, die entpackt zu groß wird.
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("zuGross")
+    fun `eine zu große Antwort bricht ab`(fall: GrossFall) {
+        antwort = Antwort.Bytes(ByteArray(fall.groesse), fall.gzip, fall.ohneLaenge)
+        val e = runCatching { runBlocking { ServerSicherungsAblage(verbindung(), TOKEN).holen() } }.exceptionOrNull()
+        assertTrue(e is AntwortZuGross, "erwartet AntwortZuGross, bekommen $e")
+    }
+
+    data class GrossFall(val name: String, val gzip: Boolean, val ohneLaenge: Boolean, val groesse: Int = 0) {
+        override fun toString() = name
+    }
+
+    // Eigene Zeitlimits bleiben erhalten, und ein Server, der zu lange schweigt,
+    // heißt für die App „kein Netz“ (IOException), nicht „Server gestört“.
+    @Test
+    fun `ein Server, der zu lange schweigt, endet als IOException`() {
+        antwort = Antwort.Spaet(2_000)
+        val kurz = OkHttpClient.Builder().readTimeout(200, TimeUnit.MILLISECONDS).build()
+        val v = Verbindung("http://127.0.0.1:${server.address.port}", kurz)
+        val e = runCatching { runBlocking { ServerSicherungsAblage(v, TOKEN).holen() } }.exceptionOrNull()
+        assertTrue(e is IOException && e !is AntwortZuGross, "erwartet IOException, bekommen $e")
+    }
+
     data class Aufruf(val name: String, val aufruf: suspend (Verbindung) -> Any?) {
         override fun toString() = name
     }
@@ -181,6 +248,57 @@ class AdapterTest {
         assertEquals(9, s.version)
         assertEquals("/avlreminder.v1.DatensicherungDienst/SicherungHolen", anfragen.single().pfad)
         assertEquals("Bearer $TOKEN", anfragen.single().autorisierung)
+        assertEquals(0, SicherungHolenRequest.parseFrom(anfragen.single().inhalt).version, "ohne Version: die neueste")
+    }
+
+    // R-4: Eine ältere Fassung kommt über ihre Version.
+    @Test
+    fun `holt eine ältere Fassung über ihre Version`() {
+        antwort = Antwort.Ok(SicherungHolenResponse.newBuilder().setChiffrat(ByteString.copyFrom(CHIFFRAT)).setVersion(7).build())
+        val s = runBlocking { ServerSicherungsAblage(verbindung(), TOKEN).holen(7) }!!
+        assertArrayEquals(CHIFFRAT, s.chiffrat)
+        assertEquals(7, s.version)
+        val a = anfragen.single()
+        assertEquals("/avlreminder.v1.DatensicherungDienst/SicherungHolen", a.pfad)
+        assertEquals("Bearer $TOKEN", a.autorisierung)
+        assertEquals(7, SicherungHolenRequest.parseFrom(a.inhalt).version)
+    }
+
+    // KRITISCH: Version 0 hieße beim Server „die neueste“; wer eine bestimmte Fassung
+    // will, bekommt nie stillschweigend eine andere.
+    @ParameterizedTest(name = "Version {0}")
+    @ValueSource(longs = [0, -1])
+    fun `eine Version unter 1 wird gar nicht erst gesendet`(version: Long) {
+        val e = runCatching { runBlocking { ServerSicherungsAblage(verbindung(), TOKEN).holen(version) } }.exceptionOrNull()
+        assertTrue(e is IllegalArgumentException, "Ausnahme: $e")
+        assertTrue(anfragen.isEmpty())
+    }
+
+    @Test
+    fun `listet die Fassungen mit Version, Zeit und Größe`() {
+        val zeit = Timestamp.newBuilder().setSeconds(1_794_000_000).setNanos(123_000_000).build()
+        antwort = Antwort.Ok(
+            FassungenAuflistenResponse.newBuilder()
+                .addFassungen(SicherungsFassung.newBuilder().setVersion(20).setGespeichertAm(zeit).setBytes(300))
+                .addFassungen(SicherungsFassung.newBuilder().setVersion(10).setBytes(200))
+                .build(),
+        )
+        val liste = runBlocking { ServerSicherungsAblage(verbindung(), TOKEN).fassungen() }
+        assertEquals(
+            listOf(
+                com.avlreminder.protokoll.SicherungsFassung(20, Instant.ofEpochSecond(1_794_000_000, 123_000_000), 300),
+                com.avlreminder.protokoll.SicherungsFassung(10, Instant.EPOCH, 200),
+            ),
+            liste,
+        )
+        assertEquals("/avlreminder.v1.DatensicherungDienst/FassungenAuflisten", anfragen.single().pfad)
+        assertEquals("Bearer $TOKEN", anfragen.single().autorisierung)
+    }
+
+    @Test
+    fun `ohne Sicherung ist die Liste leer`() {
+        antwort = Antwort.Ok(FassungenAuflistenResponse.getDefaultInstance())
+        assertEquals(emptyList<Any>(), runBlocking { ServerSicherungsAblage(verbindung(), TOKEN).fassungen() })
     }
 
     @Test
@@ -269,6 +387,8 @@ class AdapterTest {
         @JvmStatic
         fun aufrufe() = listOf(
             Aufruf("Sicherung holen") { ServerSicherungsAblage(it, TOKEN).holen() },
+            Aufruf("Fassung holen") { ServerSicherungsAblage(it, TOKEN).holen(7) },
+            Aufruf("Fassungen auflisten") { ServerSicherungsAblage(it, TOKEN).fassungen() },
             Aufruf("Sicherung speichern") { ServerSicherungsAblage(it, TOKEN).speichern(CHIFFRAT, 1) },
             Aufruf("Schlüssel-Backup holen") { ServerBackupAblage(it, TOKEN).holen() },
             Aufruf("Gerät sperren") { ServerGeraete(it, TOKEN).sperren("geraet-1") },
@@ -297,6 +417,12 @@ class AdapterTest {
         fun fehlerfaelle() = listOf(
             // Datensicherung
             Fall("Sicherung holen: nicht gefunden heißt keine Sicherung", Code.NOT_FOUND, { sicherung(it).holen() }, null),
+            Fall("Fassung holen: nicht gefunden heißt nicht mehr da", Code.NOT_FOUND, { sicherung(it).holen(7) }, null),
+            Fall("Fassung holen: erschöpft heißt Tageslimit", Code.RESOURCE_EXHAUSTED, { sicherung(it).holen(7) }, SicherungTageslimit::class),
+            Fall("Fassung holen: ungültige Anfrage bleibt Serverfehler", Code.INVALID_ARGUMENT, { sicherung(it).holen(7) }, Serverfehler::class),
+            Fall("Fassungen auflisten: erschöpft heißt Tageslimit", Code.RESOURCE_EXHAUSTED, { sicherung(it).fassungen() }, SicherungTageslimit::class),
+            Fall("Fassungen auflisten: nicht gefunden bleibt Serverfehler", Code.NOT_FOUND, { sicherung(it).fassungen() }, Serverfehler::class),
+            Fall("Fassungen auflisten: ungültige Sitzung bleibt Serverfehler", Code.UNAUTHENTICATED, { sicherung(it).fassungen() }, Serverfehler::class),
             Fall("Sicherung holen: ungültige Sitzung bleibt Serverfehler", Code.UNAUTHENTICATED, { sicherung(it).holen() }, Serverfehler::class),
             Fall("Sicherung holen: Überlastung bleibt Serverfehler", Code.UNAVAILABLE, { sicherung(it).holen() }, Serverfehler::class),
             // Entscheidung nach Review-Lauf 8: Holen und Löschen sind je Tag begrenzt.
@@ -349,6 +475,25 @@ class AdapterTest {
         )
 
         private const val HTML_404 = "<html><body>404 Not Found</body></html>"
+
+        @JvmStatic
+        fun groessteSicherung() = listOf(
+            GrossFall("mit Längenangabe", gzip = false, ohneLaenge = false),
+            GrossFall("ohne Längenangabe", gzip = false, ohneLaenge = true),
+            GrossFall("gzip-gepackt", gzip = true, ohneLaenge = false),
+        )
+
+        private const val UEBER_DER_GRENZE = (Verbindung.MAX_ANTWORT + 1).toInt()
+
+        @JvmStatic
+        fun zuGross() = listOf(
+            GrossFall("ein Byte über der Grenze, mit Längenangabe", gzip = false, ohneLaenge = false, UEBER_DER_GRENZE),
+            GrossFall("ein Byte über der Grenze, ohne Längenangabe", gzip = false, ohneLaenge = true, UEBER_DER_GRENZE),
+            GrossFall("gzip-Bombe: wenige KiB gepackt, 64 MiB entpackt", gzip = true, ohneLaenge = false, 64 * 1024 * 1024),
+        )
+
+        private fun gzip(daten: ByteArray): ByteArray =
+            ByteArrayOutputStream().also { aus -> GZIPOutputStream(aus).use { it.write(daten) } }.toByteArray()
 
         @JvmStatic
         fun rohfaelle() = listOf(

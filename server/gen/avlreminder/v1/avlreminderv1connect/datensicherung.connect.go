@@ -39,6 +39,9 @@ const (
 	// DatensicherungDienstSicherungHolenProcedure is the fully-qualified name of the
 	// DatensicherungDienst's SicherungHolen RPC.
 	DatensicherungDienstSicherungHolenProcedure = "/avlreminder.v1.DatensicherungDienst/SicherungHolen"
+	// DatensicherungDienstFassungenAuflistenProcedure is the fully-qualified name of the
+	// DatensicherungDienst's FassungenAuflisten RPC.
+	DatensicherungDienstFassungenAuflistenProcedure = "/avlreminder.v1.DatensicherungDienst/FassungenAuflisten"
 	// DatensicherungDienstSicherungLoeschenProcedure is the fully-qualified name of the
 	// DatensicherungDienst's SicherungLoeschen RPC.
 	DatensicherungDienstSicherungLoeschenProcedure = "/avlreminder.v1.DatensicherungDienst/SicherungLoeschen"
@@ -50,8 +53,13 @@ type DatensicherungDienstClient interface {
 	// erwartete_version ist (0 = es gibt noch keine). So überschreibt ein Gerät
 	// nie unbemerkt eine neuere Sicherung.
 	SicherungSpeichern(context.Context, *connect.Request[v1.SicherungSpeichernRequest]) (*connect.Response[v1.SicherungSpeichernResponse], error)
-	// Liefert die neueste Fassung.
+	// Liefert die neueste Fassung oder, mit version, eine ältere
+	// (Anforderung R-4: Wiederherstellen von vor ein paar Tagen).
 	SicherungHolen(context.Context, *connect.Request[v1.SicherungHolenRequest]) (*connect.Response[v1.SicherungHolenResponse], error)
+	// Listet alle Fassungen, die der Server noch hat, die neueste zuerst. Ohne
+	// Sicherung ist die Liste leer. Ältere Fassungen hält der Server 7 Tage
+	// (höchstens 200); welche er gerade noch hat, zeigt nur diese Liste.
+	FassungenAuflisten(context.Context, *connect.Request[v1.FassungenAuflistenRequest]) (*connect.Response[v1.FassungenAuflistenResponse], error)
 	// Löscht die Sicherung mit allen älteren Fassungen. Gibt es keine, ist das
 	// kein Fehler.
 	SicherungLoeschen(context.Context, *connect.Request[v1.SicherungLoeschenRequest]) (*connect.Response[v1.SicherungLoeschenResponse], error)
@@ -80,6 +88,12 @@ func NewDatensicherungDienstClient(httpClient connect.HTTPClient, baseURL string
 			connect.WithSchema(datensicherungDienstMethods.ByName("SicherungHolen")),
 			connect.WithClientOptions(opts...),
 		),
+		fassungenAuflisten: connect.NewClient[v1.FassungenAuflistenRequest, v1.FassungenAuflistenResponse](
+			httpClient,
+			baseURL+DatensicherungDienstFassungenAuflistenProcedure,
+			connect.WithSchema(datensicherungDienstMethods.ByName("FassungenAuflisten")),
+			connect.WithClientOptions(opts...),
+		),
 		sicherungLoeschen: connect.NewClient[v1.SicherungLoeschenRequest, v1.SicherungLoeschenResponse](
 			httpClient,
 			baseURL+DatensicherungDienstSicherungLoeschenProcedure,
@@ -93,6 +107,7 @@ func NewDatensicherungDienstClient(httpClient connect.HTTPClient, baseURL string
 type datensicherungDienstClient struct {
 	sicherungSpeichern *connect.Client[v1.SicherungSpeichernRequest, v1.SicherungSpeichernResponse]
 	sicherungHolen     *connect.Client[v1.SicherungHolenRequest, v1.SicherungHolenResponse]
+	fassungenAuflisten *connect.Client[v1.FassungenAuflistenRequest, v1.FassungenAuflistenResponse]
 	sicherungLoeschen  *connect.Client[v1.SicherungLoeschenRequest, v1.SicherungLoeschenResponse]
 }
 
@@ -104,6 +119,11 @@ func (c *datensicherungDienstClient) SicherungSpeichern(ctx context.Context, req
 // SicherungHolen calls avlreminder.v1.DatensicherungDienst.SicherungHolen.
 func (c *datensicherungDienstClient) SicherungHolen(ctx context.Context, req *connect.Request[v1.SicherungHolenRequest]) (*connect.Response[v1.SicherungHolenResponse], error) {
 	return c.sicherungHolen.CallUnary(ctx, req)
+}
+
+// FassungenAuflisten calls avlreminder.v1.DatensicherungDienst.FassungenAuflisten.
+func (c *datensicherungDienstClient) FassungenAuflisten(ctx context.Context, req *connect.Request[v1.FassungenAuflistenRequest]) (*connect.Response[v1.FassungenAuflistenResponse], error) {
+	return c.fassungenAuflisten.CallUnary(ctx, req)
 }
 
 // SicherungLoeschen calls avlreminder.v1.DatensicherungDienst.SicherungLoeschen.
@@ -118,8 +138,13 @@ type DatensicherungDienstHandler interface {
 	// erwartete_version ist (0 = es gibt noch keine). So überschreibt ein Gerät
 	// nie unbemerkt eine neuere Sicherung.
 	SicherungSpeichern(context.Context, *connect.Request[v1.SicherungSpeichernRequest]) (*connect.Response[v1.SicherungSpeichernResponse], error)
-	// Liefert die neueste Fassung.
+	// Liefert die neueste Fassung oder, mit version, eine ältere
+	// (Anforderung R-4: Wiederherstellen von vor ein paar Tagen).
 	SicherungHolen(context.Context, *connect.Request[v1.SicherungHolenRequest]) (*connect.Response[v1.SicherungHolenResponse], error)
+	// Listet alle Fassungen, die der Server noch hat, die neueste zuerst. Ohne
+	// Sicherung ist die Liste leer. Ältere Fassungen hält der Server 7 Tage
+	// (höchstens 200); welche er gerade noch hat, zeigt nur diese Liste.
+	FassungenAuflisten(context.Context, *connect.Request[v1.FassungenAuflistenRequest]) (*connect.Response[v1.FassungenAuflistenResponse], error)
 	// Löscht die Sicherung mit allen älteren Fassungen. Gibt es keine, ist das
 	// kein Fehler.
 	SicherungLoeschen(context.Context, *connect.Request[v1.SicherungLoeschenRequest]) (*connect.Response[v1.SicherungLoeschenResponse], error)
@@ -144,6 +169,12 @@ func NewDatensicherungDienstHandler(svc DatensicherungDienstHandler, opts ...con
 		connect.WithSchema(datensicherungDienstMethods.ByName("SicherungHolen")),
 		connect.WithHandlerOptions(opts...),
 	)
+	datensicherungDienstFassungenAuflistenHandler := connect.NewUnaryHandler(
+		DatensicherungDienstFassungenAuflistenProcedure,
+		svc.FassungenAuflisten,
+		connect.WithSchema(datensicherungDienstMethods.ByName("FassungenAuflisten")),
+		connect.WithHandlerOptions(opts...),
+	)
 	datensicherungDienstSicherungLoeschenHandler := connect.NewUnaryHandler(
 		DatensicherungDienstSicherungLoeschenProcedure,
 		svc.SicherungLoeschen,
@@ -156,6 +187,8 @@ func NewDatensicherungDienstHandler(svc DatensicherungDienstHandler, opts ...con
 			datensicherungDienstSicherungSpeichernHandler.ServeHTTP(w, r)
 		case DatensicherungDienstSicherungHolenProcedure:
 			datensicherungDienstSicherungHolenHandler.ServeHTTP(w, r)
+		case DatensicherungDienstFassungenAuflistenProcedure:
+			datensicherungDienstFassungenAuflistenHandler.ServeHTTP(w, r)
 		case DatensicherungDienstSicherungLoeschenProcedure:
 			datensicherungDienstSicherungLoeschenHandler.ServeHTTP(w, r)
 		default:
@@ -173,6 +206,10 @@ func (UnimplementedDatensicherungDienstHandler) SicherungSpeichern(context.Conte
 
 func (UnimplementedDatensicherungDienstHandler) SicherungHolen(context.Context, *connect.Request[v1.SicherungHolenRequest]) (*connect.Response[v1.SicherungHolenResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("avlreminder.v1.DatensicherungDienst.SicherungHolen is not implemented"))
+}
+
+func (UnimplementedDatensicherungDienstHandler) FassungenAuflisten(context.Context, *connect.Request[v1.FassungenAuflistenRequest]) (*connect.Response[v1.FassungenAuflistenResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("avlreminder.v1.DatensicherungDienst.FassungenAuflisten is not implemented"))
 }
 
 func (UnimplementedDatensicherungDienstHandler) SicherungLoeschen(context.Context, *connect.Request[v1.SicherungLoeschenRequest]) (*connect.Response[v1.SicherungLoeschenResponse], error) {

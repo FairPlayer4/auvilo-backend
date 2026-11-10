@@ -21,9 +21,16 @@ resource "google_iam_workload_identity_pool_provider" "github" {
     "attribute.ref"           = "assertion.ref"
   }
 
-  # Nur unser Repo und nur der Branch main dürfen sich anmelden. Geprüft wird
-  # die feste Repo-ID statt des Namens (siehe var.github_repo_id).
-  attribute_condition = "assertion.repository_id == '${var.github_repo_id}' && assertion.ref == 'refs/heads/main'"
+  # Nur unser Repo, nur der Branch main und nur der Deploy-Workflow von main
+  # dürfen sich anmelden (Empfehlung E3: sonst könnte jeder andere Workflow auf
+  # main deployen, etwa einer ohne CI-Prüfung). Geprüft wird die feste Repo-ID
+  # statt des Namens (siehe var.github_repo_id); workflow_ref enthält den Namen,
+  # zusammen mit der ID ist das eindeutig.
+  attribute_condition = join(" && ", [
+    "assertion.repository_id == '${var.github_repo_id}'",
+    "assertion.ref == 'refs/heads/main'",
+    "assertion.workflow_ref == '${var.github_repo}/.github/workflows/deploy.yml@refs/heads/main'",
+  ])
 
   oidc {
     issuer_uri = "https://token.actions.githubusercontent.com"

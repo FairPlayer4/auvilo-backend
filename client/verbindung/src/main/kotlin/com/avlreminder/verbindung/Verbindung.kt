@@ -9,6 +9,7 @@ import com.avlreminder.protokoll.DiagnoseTageslimit
 import com.avlreminder.protokoll.DiagnoseZuGross
 import com.avlreminder.protokoll.GeraeteFreischaltung
 import com.avlreminder.protokoll.GeraetNichtFreigeschaltet
+import com.avlreminder.protokoll.FassungsArchiv
 import com.avlreminder.protokoll.GeholteSicherung
 import com.avlreminder.protokoll.GeholtesBackup
 import com.avlreminder.protokoll.KontoAufDemServer
@@ -16,6 +17,7 @@ import com.avlreminder.protokoll.KontoGeraet
 import com.avlreminder.protokoll.SicherungTageslimit
 import com.avlreminder.protokoll.SicherungZuGross
 import com.avlreminder.protokoll.SicherungsAblage
+import com.avlreminder.protokoll.SicherungsFassung
 import com.avlreminder.protokoll.VersionVeraltet
 import com.avlreminder.schnittstelle.v1.AnmeldeDienstClient
 import com.avlreminder.schnittstelle.v1.BackupHolenRequest
@@ -30,6 +32,7 @@ import com.avlreminder.schnittstelle.v1.GeraeteAuflistenRequest
 import com.avlreminder.schnittstelle.v1.GeraeteDienstClient
 import com.avlreminder.schnittstelle.v1.MitWiederherstellungFreischaltenRequest
 import com.avlreminder.schnittstelle.v1.SchluesselDienstClient
+import com.avlreminder.schnittstelle.v1.FassungenAuflistenRequest
 import com.avlreminder.schnittstelle.v1.SicherungHolenRequest
 import com.avlreminder.schnittstelle.v1.SicherungLoeschenRequest
 import com.avlreminder.schnittstelle.v1.SicherungSpeichernRequest
@@ -43,17 +46,36 @@ import com.connectrpc.impl.ProtocolClient
 import com.connectrpc.okhttp.ConnectOkHttpClient
 import com.connectrpc.protocols.NetworkProtocol
 import com.google.protobuf.ByteString
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
+import okhttp3.Response
+import okhttp3.ResponseBody.Companion.asResponseBody
+import okio.Buffer
+import okio.ForwardingSource
+import okio.buffer
 import java.io.IOException
+import java.time.Instant
+import java.util.concurrent.TimeUnit
 
-/** Die Connect-Clients für einen Server. */
-class Verbindung(server: String, val http: OkHttpClient = OkHttpClient()) {
+/**
+ * Die Connect-Clients für einen Server.
+ *
+ * [basis] liefert Zeitlimits und anderes; die Obergrenze für Antworten
+ * ([MAX_ANTWORT]) kommt immer dazu, auch bei einem eigenen Client.
+ */
+class Verbindung(server: String, basis: OkHttpClient = standardHttp()) {
+    val http: OkHttpClient = basis.newBuilder().addInterceptor(AntwortGrenze(MAX_ANTWORT)).build()
+
     private val client = ProtocolClient(
         ConnectOkHttpClient(http),
         ProtocolClientConfig(
             host = server,
             serializationStrategy = GoogleJavaLiteProtobufStrategy(),
             networkProtocol = NetworkProtocol.CONNECT,
+            // KRITISCH: Connect entpackt nichts selbst (E9). Sonst entpackte es
+            // gzip nach der Obergrenze, und eine kleine Antwort könnte zu vielen
+            // MiB werden. OkHttp entpackt stattdessen vor der Obergrenze.
+            compressionPools = emptyList(),
         ),
     )
     val anmelde = AnmeldeDienstClient(client)
@@ -61,6 +83,61 @@ class Verbindung(server: String, val http: OkHttpClient = OkHttpClient()) {
     val schluessel = SchluesselDienstClient(client)
     val sicherung = DatensicherungDienstClient(client)
     val diagnose = DiagnoseDienstClient(client)
+
+    companion object {
+        /**
+         * Größte Antwort, entpackt: die größte Sicherung ([Datensicherung.MAX_CHIFFRAT])
+         * und 1 MiB für den Rest der Nachricht.
+         */
+        const val MAX_ANTWORT: Long = Datensicherung.MAX_CHIFFRAT + 1024L * 1024
+
+        /**
+         * Zeitlimits für die App (E9). OkHttp hat sonst je 10 s für Verbinden, Lesen
+         * und Schreiben, aber kein Gesamtlimit: Ein Server, der alle paar Sekunden ein
+         * Byte schickt, hielte einen Aufruf ewig offen. Lesen und Schreiben bekommen
+         * 30 s Pause, damit 8 MiB auch über langsames Mobilfunknetz gehen (der Server
+         * hat dafür selbst 30 s je Anfrage); der ganze Aufruf höchstens 2 Minuten.
+         */
+        fun standardHttp(): OkHttpClient = OkHttpClient.Builder()
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .writeTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .callTimeout(2, TimeUnit.MINUTES)
+            .build()
+    }
+}
+
+/** Die Antwort des Servers ist größer als [grenze] Bytes (entpackt); gelesen wurde nur bis dorthin. */
+class AntwortZuGross(val grenze: Long) : IOException("Antwort des Servers größer als $grenze Bytes")
+
+/**
+ * KRITISCH: Begrenzt jede Antwort auf [grenze] Bytes, entpackt gezählt (E9).
+ * Als Interceptor der Anwendung sieht er die Antwort, nachdem OkHttp gzip
+ * entpackt hat. Eine zu große Antwort bricht beim Lesen ab, statt den Speicher
+ * der App zu füllen; mit bekannter Länge schon vorher.
+ */
+internal class AntwortGrenze(private val grenze: Long) : Interceptor {
+    override fun intercept(chain: Interceptor.Chain): Response {
+        val antwort = chain.proceed(chain.request())
+        val inhalt = antwort.body
+        val laenge = inhalt.contentLength()
+        if (laenge > grenze) {
+            antwort.close()
+            throw AntwortZuGross(grenze)
+        }
+        val begrenzt = object : ForwardingSource(inhalt.source()) {
+            private var gelesen = 0L
+            override fun read(sink: Buffer, byteCount: Long): Long {
+                val n = super.read(sink, byteCount)
+                if (n > 0) {
+                    gelesen += n
+                    if (gelesen > grenze) throw AntwortZuGross(grenze)
+                }
+                return n
+            }
+        }
+        return antwort.newBuilder().body(begrenzt.buffer().asResponseBody(inhalt.contentType(), laenge)).build()
+    }
 }
 
 /** Header mit dem Sitzungs-Token. */
@@ -217,10 +294,19 @@ class ServerKonto(verbindung: Verbindung, token: String) : KontoAufDemServer {
  * ein fremdes Gerät überschreiben (veraltet) oder „keine Sicherung“ melden, wo es
  * nur einen Netzfehler gab.
  */
-class ServerSicherungsAblage(private val verbindung: Verbindung, private val token: String) : SicherungsAblage {
-    override suspend fun holen(): GeholteSicherung? =
+class ServerSicherungsAblage(private val verbindung: Verbindung, private val token: String) : SicherungsAblage, FassungsArchiv {
+    override suspend fun holen(): GeholteSicherung? = holenVersion(0)
+
+    override suspend fun holen(version: Long): GeholteSicherung? {
+        // 0 hieße beim Server „die neueste“; wer eine bestimmte will, soll sie bekommen oder keine.
+        require(version > 0) { "Version muss größer als 0 sein" }
+        return holenVersion(version)
+    }
+
+    private suspend fun holenVersion(version: Long): GeholteSicherung? =
         try {
-            val s = verbindung.sicherung.sicherungHolen(SicherungHolenRequest.getDefaultInstance(), mitSitzung(token)).ergebnis()
+            val anfrage = SicherungHolenRequest.newBuilder().setVersion(version).build()
+            val s = verbindung.sicherung.sicherungHolen(anfrage, mitSitzung(token)).ergebnis()
             GeholteSicherung(s.chiffrat.toByteArray(), s.version)
         } catch (e: Serverfehler) {
             when (e.code) {
@@ -228,6 +314,17 @@ class ServerSicherungsAblage(private val verbindung: Verbindung, private val tok
                 Code.RESOURCE_EXHAUSTED -> throw SicherungTageslimit("Abrufe der Sicherung")
                 else -> throw e
             }
+        }
+
+    override suspend fun fassungen(): List<SicherungsFassung> =
+        try {
+            verbindung.sicherung.fassungenAuflisten(FassungenAuflistenRequest.getDefaultInstance(), mitSitzung(token)).ergebnis()
+                .fassungenList.map {
+                    SicherungsFassung(it.version, Instant.ofEpochSecond(it.gespeichertAm.seconds, it.gespeichertAm.nanos.toLong()), it.bytes)
+                }
+        } catch (e: Serverfehler) {
+            if (e.code == Code.RESOURCE_EXHAUSTED) throw SicherungTageslimit("Abrufe der Sicherung")
+            throw e
         }
 
     override suspend fun speichern(chiffrat: ByteArray, erwartet: Long): Long =

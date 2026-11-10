@@ -33,8 +33,8 @@ Vom Entwickler bestätigt am 2026-11-01.
 | Bereich | Pfade | Anforderungen/Doku | Tests | Zuletzt reviewt | Zustand |
 |---|---|---|---|---|---|
 | Kill-Switch | `infra/killswitch/` | anforderungen.md KO3, stand.md | `*_test.go` | 2026-11-05 (Lauf 8, IAM-Sperrweg) | gut; Sperrweg am 2026-11-06 in der Cloud getestet |
-| Infrastruktur | `infra/*.tf`, `infra/*.sh` | anforderungen.md 4.3, 5, 6; gcp-einrichtung.md; stand.md | `infra/tests/` (tofu test), `pruefe-regionen.sh` | 2026-11-05 (Lauf 8, Modul `oeffentlich`, Löschschutz) | gut nach Fixes; Deploy ohne CI-Gate, Textprüfung der Öffnung (E3, E4) |
-| Server: Anmeldung/Sitzung | `server/internal/{geraeteschluessel,anmeldung,sitzung,dienst/dienst.go}`, `proto/` | b1-entwurf.md, proto-Kommentare, anforderungen.md Kap. 11 | `*_test.go` | 2026-11-05 (Lauf 8) | gut; Schlüsselausfall = abgelehnt (E14) |
+| Infrastruktur | `infra/*.tf`, `infra/*.sh` | anforderungen.md 4.3, 5, 6; gcp-einrichtung.md; stand.md | `infra/tests/` (tofu test), `pruefe-regionen.sh` | 2026-11-05 (Lauf 8, Modul `oeffentlich`, Löschschutz) | gut nach Fixes; CI-Gate und Textprüfung der Öffnung seit 2026-11-10 |
+| Server: Anmeldung/Sitzung | `server/internal/{geraeteschluessel,anmeldung,sitzung,dienst/dienst.go}`, `proto/` | b1-entwurf.md, proto-Kommentare, anforderungen.md Kap. 11 | `*_test.go` | 2026-11-05 (Lauf 8) | gut |
 | Server: Speicher/Start | `server/internal/speicher`, `server/cmd/server` | b1-entwurf.md (Daten, Betrieb) | `vertrag_test.go` (auch Emulator), `main_test.go` | 2026-11-05 (Lauf 8) | gut; `Speicher` 10 Methoden (E10, Trend) |
 | Server: Datensicherung | `server/internal/datensicherung`, `dienst/datensicherung.go`, `datensicherung.proto` | b2b-entwurf.md, proto-Kommentare | `vertrag_test.go` (Arbeitsspeicher, fake-gcs), `datensicherung_test.go` | 2026-11-08 (Lauf 9, Tageslimits) | gut nach Fix (72faf01) |
 | CI, Deploy und Container | `.github/`, `server/Dockerfile`, `.golangci.yml`, `proto/buf*.yaml` | anforderungen.md Q4, go-review.md, stand.md | CI-Job `container` | 2026-11-03 (Lauf 6, CI-Fix) | gut; Emulator ohne feste Version (Nit) |
@@ -73,21 +73,19 @@ Das eigentliche Gedächtnis: wiederkehrende Muster, nach denen jeder Lauf geziel
   (`CloudBackup.kt` teilen), R5 (Tests), übrige minor-Funde (Rückfrage hält den Mutex,
   halb gescheitertes Löschen, `cannotActOnServer`, `compareNow`, W-7-Reihenfolge,
   `beforeName`, `takeIfDue`, `RestoreFiles`), Doku kürzen.
-- Lauf 9 (runs/2026-11-08.md): Fragen 1 und 4 und R3 umgesetzt am 2026-11-09 (Server noch
-  nicht deployt); R2 bis B3 zurückgestellt; R5 (Cloud-Fälle in App `geraetetest.md`)
+- Lauf 9 (runs/2026-11-08.md): Fragen 1 und 4 und R3 umgesetzt und deployt am 2026-11-09; R2 bis B3 zurückgestellt; R5 (Cloud-Fälle in App `geraetetest.md`)
   kommt mit der Überarbeitung der Gerätetests.
 - Lauf 8 (runs/2026-11-05.md), Stand am 2026-11-09 im Code geprüft: erledigt E1, E5, E12;
   weitgehend E6; teilweise E7 (App-Regeln im Test-Client), E8 (Fehlerarten im Adapter);
-  offen E2/E10 (Drift), E3 (Deploy ohne CI-Gate), E4 (Textprüfung der Öffnung), E9
-  (Antwortgröße, Zeitlimits), E11 (A2), E13 (Begriffe), E14–E16, E17 (stand.md, mit dem
-  Kürzungsplan aus Lauf 10), E18 (Tests). Kevin will sie jetzt angehen.
+  erledigt am 2026-11-10 (Phase B) E3, E4, E9, E14, E16, E18. Offen E2/E10 (Drift), E11
+  (A2), E13 (Begriffe), E15 (Plätze je Konto, U2), E17 (stand.md, mit dem Kürzungsplan
+  aus Lauf 10).
 - Lauf 6 (runs/2026-11-03-2.md): E4 (30 s bei 8 MiB nicht gemessen), E5 (Skript-Check
   Cloud-Run-Regeln, Leerlauf 0 €), E6 (CLAUDE.md nennt formate.md, b1-entwurf.md nicht).
 - Lauf 5 (runs/2026-11-03.md): Testlücken Server (Streaming im Interceptor, Sperr-Rennen
   in `SitzungErneuern`, Speicherfehler im Gerätedienst) – seit Lauf 2.
 - Lauf 4 (runs/2026-11-01-4.md): A2–A5 im B3-Entwurf.
-- Lauf 1–3: Drossel beim Laden der Google-Schlüssel, Desktop-Client-ID entfernen
-  (`infra/variablen.tf`), WARN „Trennen beginnt“, E7 Lauf 1 (Herkunft der Budget-Meldung,
+- Lauf 1–3: Drossel beim Laden der Google-Schlüssel, WARN „Trennen beginnt“, E7 Lauf 1 (Herkunft der Budget-Meldung,
   optional).
 - Nicht in der Cloud getestet: Trennen ab 150 %, Geräte- und Tageslimits.
 

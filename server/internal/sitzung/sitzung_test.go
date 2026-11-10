@@ -235,6 +235,8 @@ func TestVorDemLesen(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	konto, _ := sp.Geraet(ctx, "geraet-1")
+
 	tests := []struct {
 		name     string
 		lesen    SitzungLesen
@@ -255,8 +257,16 @@ func TestVorDemLesen(t *testing.T) {
 				erreicht = true
 				return connect.NewResponse(&emptypb.Empty{}), nil
 			})
+			// Was der Handler hinter VorDemLesen direkt im Kontext sieht, noch
+			// vor dem Interceptor (E18): die Freischaltprüfung für Diagnosen
+			// braucht es.
+			var gesehen Identitaet
+			direkt := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				gesehen, _ = IdentitaetAus(r.Context())
+				dienst.ServeHTTP(w, r)
+			})
 			i := NeuerInterceptor(tt.lesen, []string{offen}, func() time.Time { return jetzt })
-			srv := httptest.NewServer(i.VorDemLesen(dienst))
+			srv := httptest.NewServer(i.VorDemLesen(direkt))
 			t.Cleanup(srv.Close)
 
 			client := connect.NewClient[emptypb.Empty, emptypb.Empty](http.DefaultClient, srv.URL+offen)
@@ -271,6 +281,9 @@ func TestVorDemLesen(t *testing.T) {
 			}
 			if erreicht != (tt.wantCode == 0) {
 				t.Errorf("Dienst erreicht = %v, erwartet %v", erreicht, tt.wantCode == 0)
+			}
+			if tt.wantCode == 0 && gesehen != (Identitaet{KontoID: konto.KontoID, GeraetID: "geraet-1"}) {
+				t.Errorf("Identität im Kontext = %+v, erwartet Konto %s, Gerät geraet-1", gesehen, konto.KontoID)
 			}
 		})
 	}
