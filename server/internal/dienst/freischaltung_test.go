@@ -432,7 +432,7 @@ func TestNurFreigeschaltetesGeraet(t *testing.T) {
 	if err := sp.GeraetSperren(ctx, kontoB, "annas", start); err != nil {
 		t.Fatal(err)
 	}
-	d := &dienste{k: Konfiguration{Speicher: sp}}
+	d := freischaltPruefer{geraete: sp}
 
 	faelle := []struct {
 		name    string

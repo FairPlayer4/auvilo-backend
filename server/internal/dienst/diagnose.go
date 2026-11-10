@@ -30,7 +30,7 @@ const kontingentDiagnose = "diagnose"
 // 08 = deflate). Mehr prüft der Server nicht; den Inhalt liest er nie.
 var gzipKopf = []byte{0x1f, 0x8b, 0x08}
 
-var _ avlreminderv1connect.DiagnoseDienstHandler = (*dienste)(nil)
+var _ avlreminderv1connect.DiagnoseDienstHandler = (*diagnoseDienst)(nil)
 
 // nurDiagnoseErlaubt lehnt Konten ohne Diagnose-Erlaubnis ab, bevor jemand den Inhalt
 // der Anfrage liest (nach sitzung.Interceptor.VorDemLesen, das die Identität in
@@ -66,13 +66,13 @@ func keineDiagnoseErlaubnis() error {
 //   - Die Konto-ID kommt aus der Sitzung, nie aus der Anfrage.
 //   - Erst alle Prüfungen, dann zählen, dann ablegen: Eine abgelehnte Sendung
 //     verbraucht nichts vom Tageslimit.
-func (d *dienste) DiagnoseSenden(ctx context.Context, req *connect.Request[v1.DiagnoseSendenRequest]) (*connect.Response[v1.DiagnoseSendenResponse], error) {
+func (d *diagnoseDienst) DiagnoseSenden(ctx context.Context, req *connect.Request[v1.DiagnoseSendenRequest]) (*connect.Response[v1.DiagnoseSendenResponse], error) {
 	id, err := identitaet(ctx)
 	if err != nil {
 		return nil, err
 	}
 	// Zweite Prüfung: nurFreigeschaltet hat das schon vor dem Lesen getan.
-	if !d.k.DiagnoseErlaubt(id.KontoID) {
+	if !d.erlaubt(id.KontoID) {
 		slog.WarnContext(ctx, "Diagnose von Konto ohne Diagnose-Erlaubnis", "geraet", id.GeraetID)
 		return nil, keineDiagnoseErlaubnis()
 	}
@@ -84,8 +84,8 @@ func (d *dienste) DiagnoseSenden(ctx context.Context, req *connect.Request[v1.Di
 		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("Diagnose leer oder nicht gzip-komprimiert"))
 	}
 
-	jetzt := d.k.Jetzt()
-	err = d.k.Kontingente.Verbrauche(ctx, kontingentDiagnose, id.KontoID, jetzt, DiagnosenJeTag)
+	jetzt := d.jetzt()
+	err = d.kontingente.Verbrauche(ctx, kontingentDiagnose, id.KontoID, jetzt, DiagnosenJeTag)
 	if errors.Is(err, kontingent.ErrErschoepft) {
 		slog.WarnContext(ctx, "Tageslimit für Diagnosen erreicht", "geraet", id.GeraetID)
 		return nil, connect.NewError(connect.CodeResourceExhausted, errors.New("Tageslimit für Diagnosen erreicht – morgen wieder"))
@@ -93,7 +93,7 @@ func (d *dienste) DiagnoseSenden(ctx context.Context, req *connect.Request[v1.Di
 	if err != nil {
 		return nil, speicherFehler(ctx, err)
 	}
-	if _, err := d.k.Diagnosen.Ablegen(ctx, id.KontoID, jetzt, nutzlast); err != nil {
+	if _, err := d.ablage.Ablegen(ctx, id.KontoID, jetzt, nutzlast); err != nil {
 		return nil, speicherFehler(ctx, err)
 	}
 	// Nur Gerät und Größe ins Log, nie die Diagnose selbst.

@@ -56,8 +56,8 @@ const (
 
 // verbrauche zählt einen Vorgang im Tageszähler; text sagt, welches Limit
 // erreicht ist (resource_exhausted).
-func (d *dienste) verbrauche(ctx context.Context, art, id string, max int, text string) error {
-	err := d.k.Kontingente.Verbrauche(ctx, art, id, d.k.Jetzt(), max)
+func (d *tageslimit) verbrauche(ctx context.Context, art, id string, max int, text string) error {
+	err := d.zaehler.Verbrauche(ctx, art, id, d.jetzt(), max)
 	if errors.Is(err, kontingent.ErrErschoepft) {
 		slog.WarnContext(ctx, "Tageslimit erreicht", "art", art)
 		return connect.NewError(connect.CodeResourceExhausted, errors.New(text))
@@ -68,7 +68,7 @@ func (d *dienste) verbrauche(ctx context.Context, art, id string, max int, text 
 	return nil
 }
 
-var _ avlreminderv1connect.DatensicherungDienstHandler = (*dienste)(nil)
+var _ avlreminderv1connect.DatensicherungDienstHandler = (*datensicherungDienst)(nil)
 
 // begrenze lässt höchstens max Anfragen gleichzeitig durch. Weitere bekommen
 // sofort "unavailable" (später wiederholen), statt zu warten: Wartende Anfragen
@@ -97,7 +97,7 @@ func begrenze(max int, h http.Handler) http.Handler {
 //   - Erst prüfen, dann zählen, dann speichern: Eine abgelehnte Anfrage
 //     verbraucht nichts vom Tageslimit; ein Konflikt (veraltete Version) schon,
 //     denn ob die Version passt, zeigt erst das Speichern.
-func (d *dienste) SicherungSpeichern(ctx context.Context, req *connect.Request[v1.SicherungSpeichernRequest]) (*connect.Response[v1.SicherungSpeichernResponse], error) {
+func (d *datensicherungDienst) SicherungSpeichern(ctx context.Context, req *connect.Request[v1.SicherungSpeichernRequest]) (*connect.Response[v1.SicherungSpeichernResponse], error) {
 	id, err := identitaet(ctx)
 	if err != nil {
 		return nil, err
@@ -111,10 +111,10 @@ func (d *dienste) SicherungSpeichern(ctx context.Context, req *connect.Request[v
 	if len(chiffrat) > datensicherung.MaxChiffrat {
 		return nil, connect.NewError(connect.CodeResourceExhausted, errors.New("Sicherung größer als 8 MiB"))
 	}
-	if err := d.verbrauche(ctx, kontingentSicherung, id.KontoID, SicherungenJeTag, "Tageslimit für Sicherungen erreicht – morgen wieder"); err != nil {
+	if err := d.limit.verbrauche(ctx, kontingentSicherung, id.KontoID, SicherungenJeTag, "Tageslimit für Sicherungen erreicht – morgen wieder"); err != nil {
 		return nil, err
 	}
-	version, err := d.k.Sicherungen.Speichern(ctx, id.KontoID, chiffrat, erwartet)
+	version, err := d.ablage.Speichern(ctx, id.KontoID, chiffrat, erwartet)
 	if errors.Is(err, datensicherung.ErrVersionVeraltet) {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("Sicherung wurde inzwischen geändert – neu holen"))
 	}
@@ -132,7 +132,7 @@ func (d *dienste) SicherungSpeichern(ctx context.Context, req *connect.Request[v
 // KRITISCH: Gezählt wird vor dem Holen, auch wenn es keine Sicherung gibt:
 // Erst das Zählen begrenzt die ausgehenden Daten. Die Konto-ID kommt aus der
 // Sitzung; eine Version eines anderen Kontos findet die Ablage nicht.
-func (d *dienste) SicherungHolen(ctx context.Context, req *connect.Request[v1.SicherungHolenRequest]) (*connect.Response[v1.SicherungHolenResponse], error) {
+func (d *datensicherungDienst) SicherungHolen(ctx context.Context, req *connect.Request[v1.SicherungHolenRequest]) (*connect.Response[v1.SicherungHolenResponse], error) {
 	id, err := identitaet(ctx)
 	if err != nil {
 		return nil, err
@@ -141,10 +141,10 @@ func (d *dienste) SicherungHolen(ctx context.Context, req *connect.Request[v1.Si
 	if version < 0 {
 		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("Version negativ"))
 	}
-	if err := d.verbrauche(ctx, kontingentAbruf, id.KontoID, AbrufeJeTag, textAbrufLimit); err != nil {
+	if err := d.limit.verbrauche(ctx, kontingentAbruf, id.KontoID, AbrufeJeTag, textAbrufLimit); err != nil {
 		return nil, err
 	}
-	f, err := d.k.Sicherungen.Holen(ctx, id.KontoID, version)
+	f, err := d.ablage.Holen(ctx, id.KontoID, version)
 	if errors.Is(err, datensicherung.ErrNichtGefunden) {
 		return nil, connect.NewError(connect.CodeNotFound, errors.New("keine Sicherung"))
 	}
@@ -158,15 +158,15 @@ func (d *dienste) SicherungHolen(ctx context.Context, req *connect.Request[v1.Si
 // FassungenAuflisten listet die Fassungen des eigenen Kontos, die neueste zuerst
 // (R-4). Zählt wie ein Abruf: Die Liste ist klein, aber jeder Aufruf liest im
 // Bucket.
-func (d *dienste) FassungenAuflisten(ctx context.Context, _ *connect.Request[v1.FassungenAuflistenRequest]) (*connect.Response[v1.FassungenAuflistenResponse], error) {
+func (d *datensicherungDienst) FassungenAuflisten(ctx context.Context, _ *connect.Request[v1.FassungenAuflistenRequest]) (*connect.Response[v1.FassungenAuflistenResponse], error) {
 	id, err := identitaet(ctx)
 	if err != nil {
 		return nil, err
 	}
-	if err := d.verbrauche(ctx, kontingentAbruf, id.KontoID, AbrufeJeTag, textAbrufLimit); err != nil {
+	if err := d.limit.verbrauche(ctx, kontingentAbruf, id.KontoID, AbrufeJeTag, textAbrufLimit); err != nil {
 		return nil, err
 	}
-	liste, err := d.k.Sicherungen.Fassungen(ctx, id.KontoID)
+	liste, err := d.ablage.Fassungen(ctx, id.KontoID)
 	if err != nil {
 		return nil, speicherFehler(ctx, err)
 	}
@@ -183,15 +183,15 @@ func (d *dienste) FassungenAuflisten(ctx context.Context, _ *connect.Request[v1.
 //
 // KRITISCH: Nur ein freigeschaltetes Gerät (E-B2b-13). Erst prüfen, dann
 // zählen: Eine Ablehnung verbraucht nichts vom Tageslimit.
-func (d *dienste) SicherungLoeschen(ctx context.Context, _ *connect.Request[v1.SicherungLoeschenRequest]) (*connect.Response[v1.SicherungLoeschenResponse], error) {
+func (d *datensicherungDienst) SicherungLoeschen(ctx context.Context, _ *connect.Request[v1.SicherungLoeschenRequest]) (*connect.Response[v1.SicherungLoeschenResponse], error) {
 	id, err := identitaet(ctx)
 	if err != nil {
 		return nil, err
 	}
-	if err := d.verbrauche(ctx, kontingentLoeschen, id.KontoID, LoeschungenJeTag, "Tageslimit für das Löschen der Sicherung erreicht – morgen wieder"); err != nil {
+	if err := d.limit.verbrauche(ctx, kontingentLoeschen, id.KontoID, LoeschungenJeTag, "Tageslimit für das Löschen der Sicherung erreicht – morgen wieder"); err != nil {
 		return nil, err
 	}
-	if err := d.k.Sicherungen.Loeschen(ctx, id.KontoID); err != nil {
+	if err := d.ablage.Loeschen(ctx, id.KontoID); err != nil {
 		return nil, speicherFehler(ctx, err)
 	}
 	slog.InfoContext(ctx, "Sicherung gelöscht", "geraet", id.GeraetID)

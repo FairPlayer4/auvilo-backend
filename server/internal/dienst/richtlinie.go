@@ -72,7 +72,7 @@ func offeneProzeduren() []string {
 
 // richtlinienInterceptor setzt die Richtlinien durch. Er läuft nach dem
 // Sitzungs-Interceptor, die Identität liegt also schon im Kontext.
-type richtlinienInterceptor struct{ d *dienste }
+type richtlinienInterceptor struct{ frei freischaltPruefer }
 
 // pruefe lehnt ab, was die Richtlinie der Prozedur nicht erfüllt.
 //
@@ -90,7 +90,7 @@ func (ri richtlinienInterceptor) pruefe(ctx context.Context, prozedur string) er
 	if err != nil {
 		return err
 	}
-	return ri.d.nurFreigeschaltetesGeraet(ctx, id)
+	return ri.frei.nurFreigeschaltetesGeraet(ctx, id)
 }
 
 func (ri richtlinienInterceptor) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
