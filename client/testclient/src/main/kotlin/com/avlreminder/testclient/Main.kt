@@ -50,7 +50,8 @@ import java.net.URISyntaxException
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.time.Instant
-import java.time.temporal.ChronoUnit
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 import kotlin.system.exitProcess
 
 private const val HILFE = """Befehle:
@@ -345,8 +346,14 @@ private class Werkzeug(
  */
 internal fun testDiagnose(jetzt: Instant): List<String> = listOf(
     """{"art":"kopf","format":"${Diagnose.FORMAT}","app":"testclient","variante":"testclient","android":0,"modell":"testclient","schema":$SCHEMA_VERSION,"anlass":"knopf"}""",
-    """{"zeit":"${jetzt.truncatedTo(ChronoUnit.MILLIS)}","stufe":"INFO","bereich":"testclient","ereignis":"diagnose_test"}""",
+    """{"zeit":"${ZEIT.format(jetzt)}","stufe":"INFO","bereich":"testclient","ereignis":"diagnose_test"}""",
 )
+
+/**
+ * RFC 3339 in UTC mit immer drei Nachkommastellen (docs/formate.md); abgeschnitten,
+ * nicht gerundet. Instant.toString ließe bei genau .000 die Nachkommastellen weg.
+ */
+private val ZEIT = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'").withZone(ZoneOffset.UTC)
 
 /** Der Test-Client sichert Dateien unverändert; ihr Format ist Schema-Version 1. */
 private const val SCHEMA_VERSION = 1
