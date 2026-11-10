@@ -154,8 +154,17 @@ fun mitSitzung(token: String): Headers = mapOf("Authorization" to listOf("Bearer
 fun <T> ResponseMessage<T>.ergebnis(): T =
     when (this) {
         is ResponseMessage.Success -> message
-        is ResponseMessage.Failure -> throw netzfehler(cause) ?: Serverfehler(cause, vomDienst = istConnectFehler(headers))
+        is ResponseMessage.Failure -> throw netzfehler(cause) ?: serverfehler(cause, vomDienst = istConnectFehler(headers))
     }
+
+/**
+ * KRITISCH: unauthenticated vom Dienst selbst heißt bei Aufrufen mit Sitzung: Die
+ * Sitzung gilt nicht mehr (Gerät gesperrt, Sitzungen auf dem Server gelöscht). Das ist
+ * kein Serverfehler, nach dem die App „später erneut versuchen“ sagt, sondern
+ * [SitzungAbgelehnt]: Erneuern klärt, ob das Gerät gesperrt ist ([Anmeldung.mitSitzung]).
+ */
+private fun serverfehler(cause: ConnectException, vomDienst: Boolean): Serverfehler =
+    if (vomDienst && cause.code == Code.UNAUTHENTICATED) SitzungAbgelehnt(cause) else Serverfehler(cause, vomDienst)
 
 /** Die [IOException] in [e], wenn der Aufruf den Server nicht erreicht hat. */
 private fun netzfehler(e: ConnectException): IOException? =
@@ -176,13 +185,20 @@ private fun istConnectFehler(headers: Headers): Boolean =
  * Ein Fehler beim Aufruf. [vomDienst] = false: Die Antwort kam nicht vom
  * Dienst (kein Connect-Fehler), der Code ist nur aus dem HTTP-Status geraten.
  */
-class Serverfehler(val ursache: ConnectException, val vomDienst: Boolean = true) :
+open class Serverfehler(val ursache: ConnectException, val vomDienst: Boolean = true) :
     Exception("Server: ${ursache.code.codeName} - ${ursache.message}", ursache) {
     val code: Code get() = ursache.code
 
     /** permission_denied, gesagt vom Dienst selbst (nicht von einer Sperre davor). */
     internal val keineErlaubnis: Boolean get() = vomDienst && code == Code.PERMISSION_DENIED
 }
+
+/**
+ * Der Dienst hat die Sitzung abgelehnt (unauthenticated). Beim Anmelden und Erneuern
+ * wird daraus [AnmeldungAbgelehnt]; bei allen anderen Aufrufen hilft vielleicht ein
+ * Erneuern mit dem Geräteschlüssel ([Anmeldung.mitSitzung]).
+ */
+class SitzungAbgelehnt(ursache: ConnectException) : Serverfehler(ursache, vomDienst = true)
 
 /**
  * permission_denied heißt bei den ändernden Aufrufen: Dieses Gerät ist noch

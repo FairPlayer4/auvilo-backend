@@ -214,7 +214,13 @@ class Sicherungsablauf(
      * lässt, älter ist als gemerkt ([AeltereSicherung]), eine Schema-Version über
      * [hoechsteSchemaVersion] hat, [bestaetigen] wirft oder der Mensch ablehnt (dann
      * merkt es sich nur den Zähler als gesehen). Den Stand merkt sich das Gerät erst,
-     * wenn [anwenden] ohne Fehler durchgelaufen ist; danach sichert es selbst weiter.
+     * wenn [anwenden] ohne Fehler durchgelaufen ist.
+     *
+     * KRITISCH: Stammt die Sicherung von einem anderen Gerät, merkt es sich die Version 0
+     * (App-Entwurf W-7). Die nächste Sicherung trifft dann auf die Fassung des anderen
+     * Geräts und fragt, bevor sie sie ersetzt (E-B2b-6). Sonst überschriebe etwa ein
+     * frisches Testgerät ungefragt die Sicherung, aus der es gerade eingespielt wurde.
+     * Die eigene Sicherung eingespielt, sichert es ohne Rückfrage weiter.
      */
     suspend fun wiederherstellen(
         hoechsteSchemaVersion: Int,
@@ -237,7 +243,8 @@ class Sicherungsablauf(
             return Wiederhergestellt.Abgelehnt
         }
         anwenden(sicherung)
-        stand.speichern(GemerkteSicherung(sicherung.kopf.zaehler, geholt.version))
+        val version = if (sicherung.kopf.geraetId == geraetId) geholt.version else 0
+        stand.speichern(GemerkteSicherung(sicherung.kopf.zaehler, version))
         return Wiederhergestellt.Ja(sicherung.kopf)
     }
 
