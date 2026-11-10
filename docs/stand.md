@@ -284,6 +284,13 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
    gemeinsames Testmodul gibt es nicht (lohnt erst, wenn die Regeln wachsen).
    Deployt am 2026-11-09 per PR #18 (Revision `server-00016-r4r`, startet ohne Warnungen,
    öffentlich); in der Cloud noch nicht mit der App getestet.
+   **Phase B am 2026-11-10** (in develop, Server noch nicht deployt): Deploy erst nach
+   grüner CI auf main (E3, WIF-Bedingung auf `deploy.yml`), `pruefe-oeffnung.sh` (E4),
+   Grenze für Antworten und Zeitlimits in `verbindung` (E9), Störung beim Laden der
+   Google-Schlüssel heißt `unavailable` (E14), 403-Logs als Stichprobe (E16), Tests aus
+   E18, R-4 (`FassungenAuflisten`, `SicherungHolen.version`). Noch nicht angewendet:
+   `tofu apply` (WIF-Bedingung, Log-Ausschluss). Die Desktop-Client-ID bleibt bis zur
+   Sicherheitsphase (Test-Client; Checkliste in b2b-entwurf.md).
    App-Schritte 4 und 5 und alles Weitere: App-Repo `docs/stand.md`. Offene
    Review-Punkte stehen in `.review/state.md` („Offen“).
 5. Für den B3-Entwurf aus Lauf 4: A2 (Mitgliedschaft: Server-Liste oder signiertes
