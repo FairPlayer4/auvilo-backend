@@ -2,10 +2,10 @@ syntax = "proto3";
 
 package avlreminder.v1;
 
+import "google/protobuf/timestamp.proto";
+
 option java_multiple_files = true;
 option java_package = "com.avlreminder.schnittstelle.v1";
-
-import "google/protobuf/timestamp.proto";
 
 // Ablage für die verschlüsselte Datensicherung eines Kontos (Etappe B2b).
 // Alle Aufrufe brauchen eine Sitzung und wirken nur auf das eigene Konto.
