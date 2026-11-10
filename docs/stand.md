@@ -51,8 +51,12 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
 - Kill-Switch in der Cloud: Meldung 3 €/20 € → nichts; 22 €/20 € → Testdienst
   gesperrt (Log als WARNING in `logs-eu`), eigene Funktion nicht gesperrt.
   Testdienst danach gelöscht.
-- **Nicht** in der Cloud getestet: Trennen vom Rechnungskonto (ab 150 %). Nur
-  Unit-Tests; ein echter Test würde das Projekt abschalten.
+- Trennen vom Rechnungskonto (ab 150 %) am 2026-11-10 in einem Wegwerfprojekt
+  getestet (gleicher Code, gleiche Rechte, eigene OpenTofu-Konfiguration, danach
+  gelöscht): Meldung 30 €/20 € → nach etwa 40 s getrennt, Log `abrechnungGetrennt: true`.
+  Beobachtet: Direkt nach dem Anlegen lehnte Cloud Run die Zustellungen gut eine Minute
+  lang ab (Aufrufrecht noch nicht wirksam); Eventarc stellte erneut zu. Betrifft nur
+  einen Neuaufbau des Projekts.
 - **Bekannte Grenze:** Ab 100 % sperrt der Kill-Switch nur Cloud-Run-**Dienste** in
   `var.region`. Cloud-Run-Jobs und Dienste in anderen Regionen bleiben offen; dafür
   greift erst das Trennen ab 150 %. Kommen solche dazu, den Kill-Switch erweitern.
@@ -291,6 +295,12 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
    E18, R-4 (`FassungenAuflisten`, `SicherungHolen.version`). Noch nicht angewendet:
    `tofu apply` (WIF-Bedingung, Log-Ausschluss). Die Desktop-Client-ID bleibt bis zur
    Sicherheitsphase (Test-Client; Checkliste in b2b-entwurf.md).
+   Am selben Abend angewendet und per PR #19 deployt (erster Deploy nach grüner CI auf
+   main, Revision `server-00017-5n2`). **In der Cloud getestet** mit Kevins zweitem
+   Google-Konto (Geräte `zweit-1` bis `zweit-11`, Dateien ohne Inhalte): `fassungen`
+   zeigt beide Sicherungen mit Version, Zeit und Größe; Tageslimits greifen genau bei
+   48 Sicherungen, 50 Abrufen (Auflisten zählt mit, danach auch Holen gesperrt), 20
+   Löschungen und 10 neuen Geräten; Warnungen im Log nur mit Art, ohne Inhalte.
    App-Schritte 4 und 5 und alles Weitere: App-Repo `docs/stand.md`. Offene
    Review-Punkte stehen in `.review/state.md` („Offen“).
 5. Für den B3-Entwurf aus Lauf 4: A2 (Mitgliedschaft: Server-Liste oder signiertes

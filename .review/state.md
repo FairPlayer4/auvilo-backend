@@ -87,7 +87,6 @@ Das eigentliche Gedächtnis: wiederkehrende Muster, nach denen jeder Lauf geziel
 - Lauf 4 (runs/2026-11-01-4.md): A2–A5 im B3-Entwurf.
 - Lauf 1–3: Drossel beim Laden der Google-Schlüssel, WARN „Trennen beginnt“, E7 Lauf 1 (Herkunft der Budget-Meldung,
   optional).
-- Nicht in der Cloud getestet: Trennen ab 150 %, Geräte- und Tageslimits.
 
 ## Offene Fragen an den Entwickler
 Keine (Lauf 9 und 10 am 2026-11-09 beantwortet).
