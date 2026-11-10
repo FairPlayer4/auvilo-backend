@@ -1,18 +1,21 @@
 # Baut das Server-Image und setzt es im Cloud-Run-Dienst "server" ein.
 #
-# Läuft nur auf main: Workload Identity Federation (infra/github.tf) lässt nur
-# Tokens von main zu. Ein Schlüssel für GCP liegt nirgends in GitHub.
+# Läuft nur nach grüner CI auf main (Empfehlung E3): CI meldet sich fertig,
+# dieser Workflow prüft das Ergebnis und baut genau den geprüften Commit.
+# Workload Identity Federation (infra/github.tf) lässt nur Tokens dieses
+# Workflows auf main zu. Ein Schlüssel für GCP liegt nirgends in GitHub.
 # Das Konto "deploy" darf nur Images ins Repo "container" schreiben und den
 # Dienst "server" ändern (infra/server.tf).
 name: Deploy
 
 on:
-  push:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
     branches: [main]
-    paths:
-      - "server/**"
-      - ".github/workflows/deploy.yml"
-  workflow_dispatch: # von Hand starten, z. B. nach dem ersten tofu apply
+  # Von Hand, z. B. nach dem ersten tofu apply. Ohne CI-Prüfung: nur bewusst
+  # nutzen, wenn die CI auf diesem Stand von main grün war.
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -33,30 +36,58 @@ env:
 jobs:
   deploy:
     name: Server bauen und deployen
+    # KRITISCH: Nur nach grüner CI eines Pushs auf main. Ein PR-Lauf (auch von
+    # einem Fork) und ein roter oder abgebrochener Lauf deployen nicht.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'main')
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      # Der von der CI geprüfte Commit (bei workflow_dispatch der Stand von main).
+      COMMIT: ${{ github.event.workflow_run.head_sha || github.sha }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ env.COMMIT }}
+          fetch-depth: 2 # für den Vergleich mit dem Vorgänger
           persist-credentials: false
 
-      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+      # Wie früher der Pfadfilter: Nur wenn sich am Server oder an diesem
+      # Workflow etwas geändert hat. Merge-Commits vergleicht git mit dem ersten
+      # Elternteil, also dem vorherigen Stand von main.
+      - name: Geändert?
+        id: aenderung
+        run: |
+          if [ "${GITHUB_EVENT_NAME}" = workflow_dispatch ]             || ! git diff --quiet HEAD^1 HEAD -- server .github/workflows/deploy.yml; then
+            echo "deployen=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Server unverändert, kein Deploy."
+          fi
+
+      - if: steps.aenderung.outputs.deployen == 'true'
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
         with:
           workload_identity_provider: ${{ env.WIF_PROVIDER }}
           service_account: ${{ env.DEPLOY_KONTO }}
 
-      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+      - if: steps.aenderung.outputs.deployen == 'true'
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
 
       - name: Image bauen und hochladen
+        if: steps.aenderung.outputs.deployen == 'true'
         working-directory: server
         run: |
           gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
-          docker build -t "${IMAGE}:${GITHUB_SHA}" .
-          docker push "${IMAGE}:${GITHUB_SHA}"
+          docker build -t "${IMAGE}:${COMMIT}" .
+          docker push "${IMAGE}:${COMMIT}"
 
       # Per Digest statt Tag: Cloud Run startet genau das gebaute Image, auch
       # wenn der Tag später auf etwas anderes zeigen sollte.
       - name: Dienst aktualisieren
+        if: steps.aenderung.outputs.deployen == 'true'
         run: |
-          digest=$(gcloud artifacts docker images describe "${IMAGE}:${GITHUB_SHA}" --format='value(image_summary.digest)')
+          digest=$(gcloud artifacts docker images describe "${IMAGE}:${COMMIT}" --format='value(image_summary.digest)')
           gcloud run services update server --region "${REGION}" --image "${IMAGE}@${digest}" --quiet

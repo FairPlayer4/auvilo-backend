@@ -223,5 +223,8 @@ jobs:
       # Anforderung D1 (nur EU): Ersatz für die Standortrichtlinie einer Organisation.
       - name: Keine fest eingetragenen Standorte
         run: ./pruefe-regionen.sh
+      # Empfehlung E4: öffentlich nur über module/oeffentlich (Kill-Switch).
+      - name: Öffnung nur über das Modul
+        run: ./pruefe-oeffnung.sh && ./tests/pruefe-oeffnung_test.sh
       - name: Tests (simulierte Provider, kein GCP-Zugang)
         run: tofu test
