@@ -1,6 +1,7 @@
 # Stand und nächste Schritte
 
-Stand: 2026-11-06. Bei jedem größeren Schritt aktualisieren.
+Stand: 2026-11-10. Bei jedem größeren Schritt aktualisieren; Erledigtes gehört in git
+und die Review-Berichte, nicht hierher.
 
 ## In GCP (Projekt `avlreminder-exp-1ef2`, Region `europe-west1`)
 Etappe **B0** ist angelegt (OpenTofu, `infra/`):
@@ -43,6 +44,14 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
   schreiben und nur den Dienst `server` ändern.
 - Repo `funktionen` für das Kill-Switch-Image (E5); Kill-Switch mit eigenem Zeitlimit
   fürs Sperren vor dem Trennen (E8) neu deployt.
+Etappe **B2b** ist angelegt (2026-11-03 bis 11-10):
+- Bucket `…-datensicherung` (`infra/datensicherung.tf`: versioniert, ältere Fassungen
+  7 Tage und höchstens 200, ohne Soft Delete, nur das Server-Konto schreibt),
+  Bucket `…-diagnose` (`infra/diagnose.tf`, 14 Tage, Server darf nur anlegen),
+  Firestore-TTL der Tageszähler, `GOMEMLIMIT=192MiB` am Server.
+- Egress-Alarm (`infra/alarm.tf`: Mail bei mehr als 1 GiB in 23 Stunden) und
+  Absenz-Alarm („Kill-Switch wird nicht mehr aufgerufen“, 23,5 h).
+- Deploy nur nach grüner CI auf `main` (WIF-Bedingung auf `deploy.yml`, seit 2026-11-10).
 - Zustand von OpenTofu: Bucket `avlreminder-exp-1ef2-tfstate` (europe-west1,
   versioniert), angelegt per `gcloud`
 
@@ -109,210 +118,31 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
   Reste, die Google selbst anlegt (z. B. Bucket `gcf-v2-sources-…`, Standard-Dienstkonten),
   und der Log-Bucket `logs-eu` bleibt nach dem Löschen 7 Tage reserviert.
 
-## Review
-- Lauf 1 am 2026-11-01: [.review/runs/2026-11-01.md](../.review/runs/2026-11-01.md).
-  Fixes und die Empfehlungen E1, E2, E3, E6 sind in develop und in GCP angewendet.
-- Kill-Switch nach dem Verkleinern der Rechte erneut in der Cloud getestet
-  (Testdienst mit Standardkonto nach ca. 10 s gesperrt, danach gelöscht).
+## Etappen
+Einzelheiten stehen in den Entwürfen, in git und in den Review-Berichten
+(`.review/runs/`); hier nur der Stand.
+
+| Etappe | Inhalt | Stand |
+|---|---|---|
+| B1 | Go-Server auf Cloud Run, Google-Login ([b1-entwurf.md](b1-entwurf.md)) | fertig, in der Cloud getestet (2026-11-01) |
+| B2 | Schlüsselmodell, Schlüssel-Backup, Kotlin-Client ([b2-entwurf.md](b2-entwurf.md)) | fertig, in der Cloud getestet (2026-11-02) |
+| B2b | Daten-Backup einer Person: Datensicherung in Cloud Storage, Freischaltung neuer Geräte (E-B2b-13), Tageslimits, Fassungen (R-4), Diagnose-Log ([b2b-entwurf.md](b2b-entwurf.md), [diagnose-entwurf.md](diagnose-entwurf.md)) | Server und Client fertig, zuletzt in der Cloud getestet am 2026-11-10 (Limits, Fassungen, Trennen ab 150 %); App-Einbindung: App-Repo `docs/stand.md` |
+| B3 | Teilen zwischen Personen | nicht begonnen; Vorgaben in [anforderungen.md](anforderungen.md) Kap. 4.6; davor die Sicherheitsphase |
+
+Letzte Deploys: PR #19 am 2026-11-10 (Phase B, Revision `server-00017-5n2`). Phase C
+war nur Client. Phase D (2026-11-10, Richtlinie je Prozedur, ein Typ je Dienst,
+Speicher-Entscheidungen, Begriffe) liegt in `develop`, **noch nicht deployt**.
 
 ## Offen
-1. Etappe **B1** (begonnen 2026-11-01): Go-Server auf Cloud Run, Google-Login.
-   Entwurf: [b1-entwurf.md](b1-entwurf.md), bestätigt. **Lokal fertig:** Schnittstelle
-   (`proto/`), Server (`server/`) mit Tests gegen Speicher im Arbeitsspeicher und
-   Firestore-Emulator, Werkzeug `testanmeldung`, CI (Go-Module als Matrix = E4, buf).
-   Am 2026-11-01 lokal von Ende zu Ende getestet: echte Google-Anmeldung im Browser,
-   Erneuern, Auflisten, eigenes Gerät sperren (danach Sitzung ungültig, Erneuern
-   abgelehnt).
-   Infrastruktur am 2026-11-01 angelegt (siehe oben), erster Deploy aus GitHub
-   Actions am selben Tag. **In der Cloud getestet** (Gerät `cloud`): echte
-   Google-Anmeldung, Erneuern, Auflisten, eigenes Gerät sperren (danach Sitzung
-   ungültig, Erneuern abgelehnt). Logs enthalten Geräte-ID und Grund, kein Token.
-   Damit ist B1 abgeschlossen.
-2. Etappe **B2** (begonnen 2026-11-01): Schlüsselmodell und Schlüssel-Backup.
-   Entwurf: [b2-entwurf.md](b2-entwurf.md), bestätigt. **Lokal fertig:**
-   Kotlin-Client `client/` (Gradle) mit Modul `protokoll` (Tink: Personen-, Tresor-
-   und Wiederherstellungsschlüssel, Backup, Umschlag, Signatur) und Test-Client
-   `testclient`; gemeinsame Testvektoren mit Go (`proto/testvektoren`); Server-Dienst
-   `SchluesselDienst` (Firestore-Sammlung `backups`, Version per Transaktion);
-   CI-Job „Kotlin – client“, Dependabot für Gradle.
-   Am 2026-11-01 lokal von Ende zu Ende getestet (echte Google-Anmeldung): Gerät
-   `pc` richtet neue Schlüssel ein; Gerät `tablet` bricht nach drei falschen
-   Eingaben ab, ohne etwas zu speichern; Gerät `handy` übernimmt mit dem richtigen
-   Wiederherstellungsschlüssel das Backup (gleicher Fingerabdruck wie `pc`).
-   Review-Lauf 4 am 2026-11-01: [.review/runs/2026-11-01-4.md](../.review/runs/2026-11-01-4.md),
-   Fixes in develop. Am 2026-11-02 umgesetzt: Einrichtung liegt in `protokoll` (A1),
-   Wiederherstellungsschlüssel wird vor dem Hochladen gezeigt und bestätigt.
-   Deploy am 2026-11-02 (PR #6). **In der Cloud getestet** am 2026-11-02 (echte
-   Google-Anmeldung): `cloud-pc` richtet neue Schlüssel ein (erst nach „ja“);
-   `cloud-tablet` bricht nach drei falschen Eingaben ab; `cloud-handy` übernimmt mit
-   dem Wiederherstellungsschlüssel das Backup (auch mit Kleinbuchstaben und fehlendem
-   Bindestrich), gleicher Fingerabdruck wie `cloud-pc`; `cloud-pc` erneut meldet
-   „schon eingerichtet“ ohne Rückfrage. Damit ist B2 abgeschlossen.
-   Am 2026-11-02 `testanmeldung` (Go) entfernt (A6); der Kotlin-Test-Client kann
-   alles, was es konnte.
-3. Kleinere Empfehlungen aus dem Review: E7 optional; weitere aus Lauf 2 in
-   `.review/state.md`.
-4. Etappe **B2b** (vor B3): Daten-Backup für eine Person, danach Einbindung in die
-   App. Entwurf: [b2b-entwurf.md](b2b-entwurf.md), bestätigt am 2026-11-02.
-   **Erledigt (2026-11-02):** Schritte 1–3 der Reihenfolge – `docs/formate.md` mit
-   festen Testvektoren, Gradle-Prüfsummen, `Datensicherung` und `Sicherungsablauf`
-   in `protokoll`, `DatensicherungDienst` im Server mit Ablage in Cloud Storage
-   (getestet gegen `fake-gcs-server`, auch in der CI). Der Server braucht jetzt
-   `SICHERUNG_BUCKET`; vor dem nächsten Deploy muss der Bucket per OpenTofu stehen.
-   **Für den Infrastruktur-Schritt:** Soft Delete des Buckets auf 0 Tage (sonst
-   bleiben gelöschte Sicherungen 7 Tage liegen, DSGVO); Zeitlimit von Cloud Run
-   und Server (30 s) für 8 MiB über langsames Mobilfunknetz prüfen.
-   **Am 2026-11-03 (Schritt 4):** Modul `client/verbindung`
-   (Connect-Clients und Adapter, aus `testclient` herausgelöst) mit
-   `ServerSicherungsAblage`; Adapter-Tests gegen einen Connect-Nachbau (Fehlercodes
-   je Methode). Server: `BackupLoeschen` für das Schlüssel-Backup. Test-Client:
-   `sichern`, `wiederherstellen`, `sicherung-loeschen`, `schluessel-loeschen`.
-   **Lokal von Ende zu Ende getestet** am 2026-11-03 (echte Google-Anmeldung,
-   Firestore-Emulator, fake-gcs): `b2b-pc` richtet Schlüssel ein und sichert zweimal
-   (zwei Fassungen im Bucket); `b2b-handy` übernimmt das Backup (gleicher
-   Fingerabdruck), stellt die Sicherung byte-gleich wieder her und sichert selbst.
-   `b2b-pc` mit veraltetem Stand fragt nach („stammt von Gerät …“): „nein“ lässt die
-   Sicherung des Handys stehen, „ja“ überschreibt mit höherem Zähler.
-   `sicherung-loeschen` entfernt alle Fassungen, danach legt ein Gerät mit altem
-   Stand sauber neu an; `schluessel-loeschen` entfernt das Backup (zweimal ohne
-   Fehler). Im Server-Log nur Gerät, Version und Größe.
-   **Review Lauf 5 am 2026-11-03** (`.review/runs/2026-11-03.md`), Fragen wie
-   vorgeschlagen entschieden (anforderungen.md Kap. 11): Sitzung vor den
-   Sicherungsplätzen geprüft, gesehene Zähler gemerkt, `Sicherungsablauf.loeschen`
-   behält den Zähler, Kill-Switch-Mail nur bei echtem Eingriff (aktiv seit
-   `tofu apply` in Schritt 5), Grenzen und „Vor echten Daten“ ergänzt.
-   **Schritt 5 (Infrastruktur), Konfiguration am 2026-11-03:** Bucket
-   `…-datensicherung` (`infra/datensicherung.tf`: Versionierung, ältere Fassungen
-   7 Tage/höchstens 200 (am 2026-11-04 von 100 erhöht), ohne Soft Delete, nur Server-Konto mit `objectUser`),
-   `SICHERUNG_BUCKET` und `GOMEMLIMIT=192MiB` am Server (Parallelität bleibt 80,
-   Begründung in `server.tf`), Build-Konto liest nur Quellen und `gcf-v2-*` und
-   schreibt nur ins Repo `funktionen`, Absenz-Alarm „Kill-Switch wird nicht mehr
-   aufgerufen“ (23,5 h), `pruefe-regionen.sh` prüft Listen, neue tofu-Tests.
-   Image-Scan (SE3): kein eigener Scanner (anforderungen.md Kap. 11).
-   Am selben Tag angewendet (`tofu apply`, 7 neu, 2 geändert, 3 entfernt; Kill-Switch
-   mit dem engeren Build-Konto neu gebaut) und per PR #8 deployt.
-   **In der Cloud getestet** am 2026-11-03 (Geräte `cloud-pc`, `cloud-handy`,
-   Sitzung per `erneuern`, Dateien ohne echte Inhalte): `cloud-pc` sichert zweimal
-   (125 B und 2 MB, zwei Fassungen im Bucket); `cloud-handy` stellt byte-gleich
-   wieder her und sichert selbst; `cloud-pc` fragt dann nach („nein“ lässt die
-   Sicherung stehen, „ja“ überschreibt mit Zähler 4); 9 MB lehnt der Client vor dem
-   Hochladen ab; `sicherung-loeschen` entfernt alle Fassungen, danach „keine
-   Datensicherung“ und Neuanlage. Ohne Sitzung antwortet der Dienst
-   `unauthenticated`. Server-Log nur Gerät, Bytes, Version.
-   **Schritt 6 (Review Lauf 6) am 2026-11-03** (`.review/runs/2026-11-03-2.md`).
-   Am 2026-11-04 entschieden und umgesetzt: App sichert höchstens stündlich plus
-   manuell, ältere Fassungen höchstens 200; Kill-Switch warnt (Mail), wenn ab 100 %
-   kein Dienst gefunden wird. Beides wirkt erst nach `tofu apply` (Bucket-Regel und
-   Neubau des Kill-Switch aus dem lokalen Stand).
-   Pfeffer: Offline-Kopie zu Beginn der Sicherheitsphase (Ablauf in
-   [gcp-einrichtung.md](gcp-einrichtung.md)), tofu-Test für den Schutz.
-   Diagnose-Log aus der App: Entwurf [diagnose-entwurf.md](diagnose-entwurf.md)
-   (bestätigt am 2026-11-04). Server, `infra/diagnose.tf` (Bucket `…-diagnose`,
-   14 Tage, Server darf nur anlegen; Firestore-TTL der Tageszähler) und
-   `werkzeuge/diagnose-holen.sh` am 2026-11-04 umgesetzt; Infrastruktur am selben
-   Tag angewendet (3 neu, 1 geändert). Test-Client: `diagnose-senden` (feste
-   Test-Diagnose; nennt bei „nicht freigeschaltet“ die Konto-ID), Packen und Senden
-   in `protokoll` (`Diagnose`), Adapter in `verbindung`. **Am 2026-11-05 in der Cloud
-   getestet:** deployt (PR #9), Kevins Konto freigeschaltet, `diagnose-senden` legt
-   die Sendung ab, `werkzeuge/diagnose-holen.sh` holt und entpackt sie, das
-   Server-Log nennt nur Gerät und Größe.
-   **Upload-Limit** am 2026-11-05: 48 Sicherungen je Konto und Tag (E-B2b-12),
-   Server und Kotlin (`SicherungTageslimit`); Deploy über PR nach `main`.
-   **Vor echten Daten** am 2026-11-05: Kill-Switch sperrt ohne actAs, Löschschutz
-   in OpenTofu (am 2026-11-05 angewendet).
-   **Neue Geräte erst nach Freischaltung** (E-B2b-13) am 2026-11-05: Server
-   (Merkmal am Gerät, Prüfung in allen ändernden Diensten, `GeraetFreischalten`,
-   `MitWiederherstellungFreischalten`), Ableitung in `protokoll` mit gemeinsamen
-   Testvektoren, Adapter, Test-Client (`freischalten <id>`, Anzeige in `geraete`).
-   Deploy über PR nach `main`. Alte Testgeräte sind danach nicht freigeschaltet:
-   mit neuem Gerätenamen anmelden.
-   **Fragen 1–5 aus Review-Lauf 8** am 2026-11-06 entschieden und lokal umgesetzt
-   (anforderungen.md Kap. 11): Diagnosen nur von freigeschalteten Geräten; erstes
-   Backup eines nicht freigeschalteten Geräts nur ohne vertrautes Gerät im Konto;
-   Tageslimits für Holen (50) und Löschen (20) der Sicherung und für Sitzungen
-   (200 je Gerät); Interceptor prüft „gesperrt“, Sperren löscht Sitzungen in
-   Stapeln; höchstens 10 offene Geräte je Konto. Server, Schnittstelle (nur
-   Kommentare), Adapter und Test-Client. Deploy über PR #12 am 2026-11-06.
-   **In der Cloud getestet** am 2026-11-07 (Geräte `r-pc`, `r-handy`): `r-pc`
-   wird freigeschaltet, weil das Konto kein freigeschaltetes Gerät hatte, löscht
-   das alte Schlüssel-Backup, sperrt die alten `cloud-*`-Geräte und sendet eine
-   Diagnose. `r-handy` ist nicht freigeschaltet: Sein erstes Backup lehnt der
-   Server ab, ebenso seine Diagnose; Geräte auflisten geht. Nachdem `r-pc` es
-   gesperrt hat, lehnt der Server seine noch laufende Sitzung beim nächsten
-   Aufruf ab (3 s später, `unauthenticated`). Log nur mit Geräte-IDs.
-   Nicht in der Cloud getestet (nur Tests): Gerätelimit und Tageslimits.
-   Die alte Testsicherung liegt noch im Bucket (`sicherung-loeschen` braucht
-   lokale Schlüssel; geht beim Zurücksetzen vor dem ersten weiteren Nutzer weg).
-   Egress-Alarm (`infra/alarm.tf`: Mail, wenn der Server in 23 Stunden mehr als
-   1 GiB sendet, ca. 0,40 $/Monat) am 2026-11-06 angewendet (2 neu, 1 geändert,
-   1 entfernt); dabei wurde auch der Kill-Switch mit den Fixes aus Lauf 8 neu gebaut.
-   **Eigenbetrieb** seit 2026-11-07: Die App darf mit Kevins echten Daten gegen die
-   Cloud sichern, Claude darf die Schlüssel dafür kennen; zurückgesetzt wird vor dem
-   ersten weiteren Nutzer (b2b-entwurf.md, Checkliste; `CLAUDE.md`).
-   **Schritt 7 (App-Einbindung):** Entwurf im App-Repo bestätigt am 2026-11-07
-   (`../avlreminder/docs/backup-entwurf.md`, fünf Schritte); App und `core` bauen dafür
-   jetzt für Java 21. Vorab legt Kevin die OAuth-Clients (Web und Android) an; die
-   Web-Client-ID kommt in `google_client_ids` (`tofu apply`, nur Umgebungsvariable).
-   Teil 1 im Backend am 2026-11-07: Anmelden, Erneuern und „gültige Sitzung“
-   (`Anmeldung`, Geräteschlüssel und Sitzungsablage als Schnittstellen) liegen in
-   `verbindung`, getestet gegen den Connect-Nachbau; der Test-Client nutzt sie.
-   Module haben die Gruppe `com.avlreminder.client` für den Composite Build.
-   Teil 1 in der App am 2026-11-07 (Composite Build, CI mit Deploy-Key, grün). Teil 2
-   (Anmelden und Einrichten in der App) gebaut; dafür im Backend `SitzungsAblage` und die
-   Rückfragen der `Einrichtung` auf `suspend` umgestellt. Die Web-Client-ID der App steht
-   in `google_client_ids`, angewendet am 2026-11-08 (`tofu apply`, 0 neu, 1 geändert:
-   Umgebungsvariable `GOOGLE_CLIENT_IDS`, Revision `server-00013-fp2`, gleiches Image).
-   Kevins Konto am 2026-11-08 geräumt (Test-Client, Gerät `r-pc`): Datensicherung und
-   Schlüssel-Backup gelöscht, alle sechs Geräte gesperrt; `sicherung-loeschen` braucht
-   dafür keine lokalen Schlüssel mehr (`Sicherungsablauf.loeschen` ohne Tresor). `ServerGeraete.sperren` liegt jetzt in `verbindung` (die App setzt damit ihr Cloud-Konto zurück).
-   **Nonce mit Zufall (2026-11-08):** Erneutes Anmelden desselben Geräts innerhalb
-   einer Stunde scheiterte („ID-Token zu alt“), weil Google bei fester Nonce das
-   gecachte Token lieferte. Jetzt schickt jede Anmeldung 16 Zufallsbytes mit
-   (`nonce_zufall`, `Anmeldung.versuch()`); der Server verlangt sie. Deployt per
-   PR #17 (Revision `server-00014-qdr`). Den Go-Code aus
-   `proto/` erzeugt jetzt `werkzeuge/buf.sh` in Docker, weil Smart App Control
-   die lokalen Plugins zeitweise blockiert (entwicklungsumgebung.md).
-   Gerätetest von Schritt 2 bestanden (2026-11-08 19:39). Schritt 3 der App (von Hand
-   sichern, Backend-Logger, *Diagnose senden*) gebaut, Pin `e114120`, noch nicht
-   installiert. Am 2026-11-08 installiert und getestet; Kevins Konto-ID steht jetzt in
-   `diagnose_konten` (Revision `server-00015-q9f`), der Pfeffer ist offline in Kevins
-   Passwortmanager gesichert und geprüft. `verbindung` meldet einen Aufruf ohne Antwort
-   jetzt als `IOException` statt als Serverfehler „unknown“. Die Diagnosen der App
-   vom 2026-11-08 sind geholt (`werkzeuge/diagnose-holen.sh`, liegen in `.diagnose/`).
-   **Phase A am 2026-11-09:** `CloudLoeschen` in `protokoll` (erst andere Geräte sperren,
-   dann löschen, zuletzt dieses Gerät; Test-Client `cloud-loeschen`), `Einrichtung` verwirft
-   ein abgelehntes erstes Backup; Server: Version vor „geschützt“, ein nicht
-   freigeschaltetes Gerät ist nach dem ersten Backup freigeschaltet, höchstens 10 neue
-   Geräte je Konto und Tag (`kontingent` „neues_geraet“). Beide Testattrappen (App
-   `FakeServer`, `FalscheAblage`) bilden die Regel fürs erste Schlüssel-Backup nach; ein
-   gemeinsames Testmodul gibt es nicht (lohnt erst, wenn die Regeln wachsen).
-   Deployt am 2026-11-09 per PR #18 (Revision `server-00016-r4r`, startet ohne Warnungen,
-   öffentlich); in der Cloud noch nicht mit der App getestet.
-   **Phase B am 2026-11-10** (in develop, Server noch nicht deployt): Deploy erst nach
-   grüner CI auf main (E3, WIF-Bedingung auf `deploy.yml`), `pruefe-oeffnung.sh` (E4),
-   Grenze für Antworten und Zeitlimits in `verbindung` (E9), Störung beim Laden der
-   Google-Schlüssel heißt `unavailable` (E14), 403-Logs als Stichprobe (E16), Tests aus
-   E18, R-4 (`FassungenAuflisten`, `SicherungHolen.version`). Noch nicht angewendet:
-   `tofu apply` (WIF-Bedingung, Log-Ausschluss). Die Desktop-Client-ID bleibt bis zur
-   Sicherheitsphase (Test-Client; Checkliste in b2b-entwurf.md).
-   Am selben Abend angewendet und per PR #19 deployt (erster Deploy nach grüner CI auf
-   main, Revision `server-00017-5n2`). **In der Cloud getestet** mit Kevins zweitem
-   Google-Konto (Geräte `zweit-1` bis `zweit-11`, Dateien ohne Inhalte): `fassungen`
-   zeigt beide Sicherungen mit Version, Zeit und Größe; Tageslimits greifen genau bei
-   48 Sicherungen, 50 Abrufen (Auflisten zählt mit, danach auch Holen gesperrt), 20
-   Löschungen und 10 neuen Geräten; Warnungen im Log nur mit Art, ohne Inhalte.
-   **Phase C am 2026-11-10** (nur Client, kein Deploy nötig): W-7 im
-   `Sicherungsablauf` (nach fremder Fassung Version 0), `SitzungAbgelehnt` und
-   `Anmeldung.mitSitzung` (abgelehnte Sitzung einmal erneuern). In der App ist
-   `CloudBackup.kt` geteilt (Pin `83009b7`).
-   **Phase D am 2026-11-10** (Server-Änderung, Deploy per PR nach `main` steht aus,
-   nach Kevins Go): Richtlinie je Prozedur an einer Stelle (`dienst/richtlinie.go`, E2),
-   Adapter holen das Token vor jedem Aufruf (R2, App-Pin `318ce54`), ein Typ je Dienst
-   und die Speicher-Entscheidungen als reine Funktionen (E10), „Diagnose-Erlaubnis“
-   und SE4 (E13), Vorgaben für B3 in anforderungen.md Kap. 4.6 (A2, A4).
-   App-Schritte 4 und 5 und alles Weitere: App-Repo `docs/stand.md`. Offene
-   Review-Punkte stehen in `.review/state.md` („Offen“).
-5. Für B3: die Vorgaben B3-1 bis B3-4 in anforderungen.md Kap. 4.6 (aus Lauf 4 A2, A4).
+1. **Deploy Phase D** per PR nach `main` (CI auf `develop` grün, dann Kevins Go).
+2. **Eigenbetrieb** seit 2026-11-07: Die App sichert Kevins echte Daten in der Cloud;
+   Claude darf die Schlüssel dafür kennen. Vor dem ersten weiteren Nutzer beginnt die
+   Sicherheitsphase (Checkliste „Vor dem ersten weiteren Nutzer“ in b2b-entwurf.md;
+   `CLAUDE.md`). Die Desktop-Client-ID des Test-Clients bleibt bis dahin.
+3. **App-Einbindung** (Schritte 1–5, Wiederherstellen R-1…R-6): App-Repo
+   `docs/stand.md`; dort auch die Gerätetests.
+4. **Review-Punkte:** `.review/state.md`, Abschnitt „Offen“.
+5. **B3:** Vorgaben B3-1 bis B3-4 (anforderungen.md Kap. 4.6).
 
 ## Befehle
 ```bash
