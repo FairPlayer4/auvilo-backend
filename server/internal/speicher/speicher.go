@@ -13,6 +13,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"slices"
 	"time"
 )
 
@@ -224,4 +225,50 @@ func neueKontoID() string {
 	// rand.Read liefert seit Go 1.24 nie einen Fehler (bricht notfalls ab).
 	_, _ = rand.Read(b)
 	return hex.EncodeToString(b)
+}
+
+// Entscheidungen, die Arbeitsspeicher und Firestore gleich treffen (E10): Sie
+// stehen hier einmal als reine Funktionen; die Ablagen lesen nur die Daten und
+// schreiben das Ergebnis.
+
+// darfFreischalten entscheidet GeraetFreischalten für das gelesene Gerät
+// (gefunden = es gibt ein Gerät mit der ID).
+//
+// KRITISCH: Nur im eigenen Konto (sonst ErrNichtGefunden, wie unbekannt), und
+// ein gesperrtes Gerät wird nie wieder freigeschaltet.
+func darfFreischalten(g Geraet, gefunden bool, kontoID string) error {
+	if !gefunden || g.KontoID != kontoID {
+		return ErrNichtGefunden
+	}
+	if g.Gesperrt {
+		return ErrGeraetGesperrt
+	}
+	return nil
+}
+
+// darfBackupSpeichern entscheidet BackupSpeichern: aktuell ist die gespeicherte
+// Version (0 = keins), geraete sind die Geräte des Kontos (nur mit
+// ungeschuetztFuer nötig).
+//
+// KRITISCH: Erst die Version, dann der Schutz (siehe Speicher.BackupSpeichern).
+// Mit ungeschuetztFuer nur, wenn das Konto kein freigeschaltetes Gerät hat und
+// das Gerät zum Konto gehört und nicht gesperrt ist.
+func darfBackupSpeichern(aktuell, erwartet int64, geraete []Geraet, ungeschuetztFuer string) error {
+	if aktuell != erwartet {
+		return ErrVersionVeraltet
+	}
+	if ungeschuetztFuer == "" {
+		return nil
+	}
+	if gibtFreigeschaltetes(geraete) {
+		return ErrKontoGeschuetzt
+	}
+	i := slices.IndexFunc(geraete, func(g Geraet) bool { return g.ID == ungeschuetztFuer })
+	if i < 0 {
+		return ErrNichtGefunden
+	}
+	if geraete[i].Gesperrt {
+		return ErrGeraetGesperrt
+	}
+	return nil
 }

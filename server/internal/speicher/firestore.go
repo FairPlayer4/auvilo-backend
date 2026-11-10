@@ -3,7 +3,6 @@ package speicher
 import (
 	"context"
 	"fmt"
-	"slices"
 	"time"
 
 	"cloud.google.com/go/firestore"
@@ -389,11 +388,8 @@ func (f *Firestore) GeraetFreischalten(ctx context.Context, kontoID, geraetID st
 		if err != nil {
 			return err
 		}
-		if g.KontoID != kontoID {
-			return ErrNichtGefunden
-		}
-		if g.Gesperrt {
-			return ErrGeraetGesperrt
+		if err := darfFreischalten(g, true, kontoID); err != nil {
+			return err
 		}
 		return tx.Update(ref, []firestore.Update{{Path: "freigeschaltet", Value: true}})
 	})
@@ -428,24 +424,15 @@ func (f *Firestore) BackupSpeichern(ctx context.Context, kontoID string, chiffra
 		case !nichtGefunden(err):
 			return err
 		}
-		if aktuell != erwartet {
-			return ErrVersionVeraltet
-		}
-		if ungeschuetztFuer != "" {
-			geraete, err := f.geraeteIn(tx, kontoID)
-			if err != nil {
+		var geraete []Geraet
+		if aktuell == erwartet && ungeschuetztFuer != "" {
+			// Nur lesen, wenn es gebraucht wird (Firestore: erst alle Lesezugriffe).
+			if geraete, err = f.geraeteIn(tx, kontoID); err != nil {
 				return err
 			}
-			if gibtFreigeschaltetes(geraete) {
-				return ErrKontoGeschuetzt
-			}
-			i := slices.IndexFunc(geraete, func(g Geraet) bool { return g.ID == ungeschuetztFuer })
-			if i < 0 {
-				return ErrNichtGefunden
-			}
-			if geraete[i].Gesperrt {
-				return ErrGeraetGesperrt
-			}
+		}
+		if err := darfBackupSpeichern(aktuell, erwartet, geraete, ungeschuetztFuer); err != nil {
+			return err
 		}
 		neu = erwartet + 1
 		if err := tx.Set(ref, backupDok{
