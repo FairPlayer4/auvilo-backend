@@ -19,7 +19,7 @@ interface DiagnoseAblage {
  * mit demselben Code (diagnose.proto).
  */
 class DiagnoseNichtFreigeschaltet :
-    Exception("Dieses Konto ist für Diagnosen oder dieses Gerät ist noch nicht freigeschaltet - nichts gesendet")
+    Exception("Dieses Konto hat keine Diagnose-Erlaubnis oder dieses Gerät ist noch nicht freigeschaltet - nichts gesendet")
 
 /** Für heute ist das Limit erreicht (10 Sendungen je Konto und Tag, UTC; diagnose.proto). */
 class DiagnoseTageslimit : Exception("Tageslimit für Diagnosen erreicht - morgen wieder")

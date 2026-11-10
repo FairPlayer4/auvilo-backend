@@ -42,23 +42,23 @@ func nurDiagnoseErlaubt(erlaubt func(kontoID string) bool, h http.Handler) http.
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		id, ok := sitzung.IdentitaetAus(r.Context())
 		if !ok || id.KontoID == "" || !erlaubt(id.KontoID) {
-			slog.WarnContext(r.Context(), "Diagnose von nicht freigeschaltetem Konto", "geraet", id.GeraetID)
-			_ = fehler.Write(w, r, nichtFreigeschaltet())
+			slog.WarnContext(r.Context(), "Diagnose von Konto ohne Diagnose-Erlaubnis", "geraet", id.GeraetID)
+			_ = fehler.Write(w, r, keineDiagnoseErlaubnis())
 			return
 		}
 		h.ServeHTTP(w, r)
 	})
 }
 
-func nichtFreigeschaltet() error {
-	return connect.NewError(connect.CodePermissionDenied, errors.New("Konto ist für Diagnosen nicht freigeschaltet"))
+func keineDiagnoseErlaubnis() error {
+	return connect.NewError(connect.CodePermissionDenied, errors.New("Konto hat keine Diagnose-Erlaubnis"))
 }
 
 // DiagnoseSenden legt eine Diagnose des eigenen Kontos ab
 // (docs/diagnose-entwurf.md).
 //
 // KRITISCH:
-//   - Nur freigeschaltete Konten (E-D-3): Diagnosen sind unverschlüsselt; es
+//   - Nur Konten mit Diagnose-Erlaubnis (E-D-3): Diagnosen sind unverschlüsselt; es
 //     sollen keine von Personen entstehen, die nicht eingewilligt haben.
 //   - Nur freigeschaltete Geräte (E-B2b-13, Entscheidung nach Review-Lauf 8):
 //     Claude liest Diagnosen. Ein fremdes Gerät mit dem Google-Login des
@@ -73,8 +73,8 @@ func (d *dienste) DiagnoseSenden(ctx context.Context, req *connect.Request[v1.Di
 	}
 	// Zweite Prüfung: nurFreigeschaltet hat das schon vor dem Lesen getan.
 	if !d.k.DiagnoseErlaubt(id.KontoID) {
-		slog.WarnContext(ctx, "Diagnose von nicht freigeschaltetem Konto", "geraet", id.GeraetID)
-		return nil, nichtFreigeschaltet()
+		slog.WarnContext(ctx, "Diagnose von Konto ohne Diagnose-Erlaubnis", "geraet", id.GeraetID)
+		return nil, keineDiagnoseErlaubnis()
 	}
 	nutzlast := req.Msg.GetNutzlast()
 	if len(nutzlast) > diagnose.MaxNutzlast {

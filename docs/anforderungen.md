@@ -209,6 +209,28 @@ aber nicht **was**. Wird in der Datenschutzerklärung so benannt.
 - SE2 Secrets im Secret Manager; kein Schlüsselmaterial im Repo.
 - SE3 Dependabot, `govulncheck`, Container-Image-Scan (erfüllt durch distroless,
   `govulncheck` und Dependabot, siehe Kap. 11).
+- SE4 **Krypto im Client, Prüfen auch im Server** (geschärft 2026-11-10, E13): Inhalte
+  ver- und entschlüsseln nur die Clients; der Server kennt keinen Schlüssel zu Inhalten.
+  Er prüft aber Signaturen, die über Zugang entscheiden (Anmelden mit dem
+  Geräteschlüssel, Freischalten mit dem aus dem Wiederherstellungsschlüssel
+  abgeleiteten Schlüssel). Begriffe: Ein Gerät ist *freigeschaltet* (E-B2b-13), ein
+  Konto hat eine *Diagnose-Erlaubnis* (E-D-3).
+
+### 4.6 Vorgaben für B3 (Review-Lauf 9, A2 und A4; festgehalten 2026-11-10)
+- B3-1 **Die Geräteliste des Servers ist nur eine Zugangssperre.** Maßgeblich für die
+  Clients ist das signierte Log der Geräte (wer wen hinzugefügt oder entfernt hat).
+  Ein Client vertraut der Liste vom Server nicht, sondern prüft das Log; weicht die
+  Liste davon ab, meldet er das (Diagnose-Ereignis und Hinweis), statt ihr zu folgen.
+  Ein manipulierter Server kann so Geräte aussperren, aber keines unbemerkt
+  hinzufügen.
+- B3-2 **Umschläge sind an ihren Zusammenhang gebunden:** Freigabe-ID und Version
+  gehen als zusätzliche Daten (AAD) in die Verschlüsselung ein, damit ein Server
+  einen Umschlag nicht an eine andere Freigabe oder eine ältere Fassung hängen kann.
+- B3-3 **Der Absender signiert jeden Umschlag** (Ed25519 seines Personenschlüssels);
+  der Empfänger prüft die Signatur gegen das Log aus B3-1, bevor er entschlüsselt.
+- B3-4 **`ausGeheimenBytes` prüft den Keyset-Typ:** Ein Keyset der falschen Art
+  (z. B. ein Signaturschlüssel, wo ein Tresorschlüssel erwartet wird) wird
+  abgelehnt, bevor es benutzt wird.
 
 ## 5. Architektur [E]
 
@@ -226,8 +248,9 @@ aber nicht **was**. Wird in der Datenschutzerklärung so benannt.
 | CI/CD | GitHub Actions → Artifact Registry → Cloud Run, Workload Identity Federation | keine Schlüsseldateien |
 
 - **Warum Go passt**: Da der Server keine Inhalte versteht, gibt es kaum Code, den
-  man mit der App teilen müsste. Die Signaturprüfung (Ed25519) ist in der
-  Go-Standardbibliothek. Go ist die am besten unterstützte Sprache auf GCP
+  man mit der App teilen müsste. Was er prüft (Ed25519-Signaturen für Anmelden und
+  Freischalten, SE4), kann die Go-Standardbibliothek. Die Signaturen zwischen
+  Personen (B3-1, B3-3) prüfen dagegen nur die Clients. Go ist die am besten unterstützte Sprache auf GCP
   (Client-Bibliotheken, Cloud Run, Functions).
 - **Preis dafür**: zwei Sprachen. Die Grenze ist die Schnittstelle; Verträglichkeit
   sichern Tests, die der Kotlin-Test-Client gegen den Go-Server fährt.
@@ -399,7 +422,7 @@ tragen die Tests die Spezifikation. Anleitung zum Review: [go-review.md](go-revi
 | 2026-11-07 | App-Einbindung (B2b Schritt 7): Entwurf im App-Repo (`../avlreminder/docs/backup-entwurf.md`, A-1 bis A-14) bestätigt. Im Eigenbetrieb **keine eigene App-Variante**: Das Backup kommt in den normalen Build hinter den Schalter (App-Anf. 7.28 PS8), damit Kevins echte Daten gesichert werden; Variante und interner Test-Track kommen mit dem ersten Tester (präzisiert E-B2b-11). Composite Build mit festem Commit dieses Repos, in der App-CI per Deploy-Key; Anmelden und Erneuern wandern aus dem Test-Client nach `verbindung`. Für die App braucht der Server die Web-Client-ID in `google_client_ids` |
 | 2026-11-08 | Nonce der Google-Anmeldung mit 16 Zufallsbytes je Anmeldung (`AnmeldenRequest.nonce_zufall`, Nonce = SHA-256(Geräteschlüssel ‖ Zufall)); ohne oder mit anderer Länge lehnt der Server ab. Anlass: Mit der festen Nonce gab Google beim erneuten Anmelden desselben Geräts das zwischengespeicherte ID-Token zurück, das der Server als zu alt ablehnte (Test in der App). Die 5 Minuten Höchstalter bleiben. Alte Clients können sich nicht mehr anmelden; im Eigenbetrieb nur Kevins App und der Test-Client |
 | 2026-11-08 | Wiederherstellungsschlüssel: Die App bietet automatisch an, ihn im Passwortdienst des Handys zu sichern (Credential Manager), und holt ihn beim Wiederherstellen von dort (App-Anf. 7.33). Präzisiert ID4: Papier oder Passwortdienst. Der Server erfährt den Schlüssel weiterhin nie |
-| 2026-11-04 | Diagnose-Log aus der App ([diagnose-entwurf.md](diagnose-entwurf.md)): unverschlüsselt, ohne Inhalte (nur feste Ereignisse, typisierte Felder, Stapel ohne Meldungstext), nur auf Knopfdruck, nur freigeschaltete Konten, eigener Bucket in der EU, 14 Tage; Claude darf diese Logs lesen |
+| 2026-11-04 | Diagnose-Log aus der App ([diagnose-entwurf.md](diagnose-entwurf.md)): unverschlüsselt, ohne Inhalte (nur feste Ereignisse, typisierte Felder, Stapel ohne Meldungstext), nur auf Knopfdruck, nur Konten mit Diagnose-Erlaubnis, eigener Bucket in der EU, 14 Tage; Claude darf diese Logs lesen |
 | 2026-11-09 | Nach Review-Lauf 9 (Frage 1): Beim Hochladen des Schlüssel-Backups prüft der Server **zuerst die erwartete Version**, dann „geschützt“. Nimmt er das erste Backup eines nicht freigeschalteten Geräts an (`nurUngeschuetzt`), schaltet er es **in derselben Transaktion frei** (wie E-B2b-13 es sagt). Lehnt er mit `GeraetNichtFreigeschaltet` ab, verwirft `Einrichtung` das offene Backup und sagt, dass der angezeigte Schlüssel nicht gilt. Die Testattrappe der App bildet diese Serverregel nach |
 | 2026-11-09 | Nach Review-Lauf 9 (Frage 2): Lehnt der Mensch das Wiederherstellen einer **fremden** Fassung ab, ruht das automatische Sichern weiter (die Rückfrage gilt als „Dieses Gerät übernimmt die Sicherung?“), bis er von Hand sichert, wiederherstellt oder löscht. Bei der eigenen Fassung ruht es nicht (seit `c6aa2c5`) |
 | 2026-11-09 | Nach Review-Lauf 9 (Frage 3): Der Worker kann die Rückfrage „übernehmen?“ nicht beantworten lassen; **unbeantwortet gilt wie „nein“** (E-B2b-6, App A-10) |
@@ -408,3 +431,4 @@ tragen die Tests die Spezifikation. Anleitung zum Review: [go-review.md](go-revi
 | 2026-11-09 | Nach Review-Lauf 9 (R2–R4): Adapter mit festem Token (R2) bis B3 zurückgestellt; der Knopf „Mit Wiederherstellungsschlüssel freischalten“ (R3) kommt zusammen mit der Serverregel vom selben Tag (Frage 1); R4 (lokale Cloud-Schlüssel verwerfen) ist durch *Dieses Gerät abmelden* in der App erledigt und steht in der Checkliste „Vor dem ersten weiteren Nutzer“ |
 | 2026-11-10 | R-4 (App-Repo `docs/wiederherstellen-entwurf.md`): `DatensicherungDienst` listet die Fassungen (`FassungenAuflisten`: Version, Zeitpunkt, Größe) und holt eine ältere über ihre Version (`SicherungHolen.version`, 0 = die neueste). Auflisten zählt mit Holen zusammen (50 je Tag). Im Client als eigene Schnittstelle `FassungsArchiv` neben `SicherungsAblage`, damit der Sicherungsablauf und die Fakes der App unverändert bleiben; die App nutzt sie später |
 | 2026-11-10 | Phase C (Review-Lauf 10 R3, Lauf 8 E8): **W-7 im `Sicherungsablauf`**: Nach dem Wiederherstellen der Fassung eines anderen Geräts merkt sich das Gerät Version 0, die nächste Sicherung fragt vor dem Ersetzen (vorher setzte das nur die App). **Abgelehnte Sitzung**: `unauthenticated` vom Dienst bei Aufrufen mit Sitzung wird `SitzungAbgelehnt`; `Anmeldung.mitSitzung` erneuert dann einmal, und erst das Erneuern sagt „gesperrt“ oder „neu anmelden“. Ein `Fehlergrund` als Connect-Error-Detail (E8, mittelfristig) bleibt zurückgestellt: Jeder Code hat je Aufruf nur eine Bedeutung, die Adapter bilden ihn je Aufruf ab |
+| 2026-11-10 | Phase D (Review-Lauf 8 E2, Lauf 9 R2/A2/A4, E10/E13): **Richtlinie je Prozedur** an einer Stelle im Server (`offen`, `nurSitzung`, `freigeschaltet`, `eigeneRegel`; unbekannte Prozeduren abgelehnt, Test über alle Prozeduren der Deskriptoren). **Adapter holen das Token vor jedem Aufruf** (R2, löst die Zurückstellung vom 2026-11-09 ab). Diagnose: „Diagnose-Erlaubnis“ statt „freigeschaltetes Konto“; Regel „Krypto nur im Client“ als SE4 geschärft. Vorgaben für B3 als Kap. 4.6 (A2, A4) |

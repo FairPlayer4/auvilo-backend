@@ -141,7 +141,7 @@ func (i *Interceptor) WrapStreamingHandler(next connect.StreamingHandlerFunc) co
 // Interceptor läuft. Für große Anfragen (Datensicherung, bis 8 MiB) heißt das:
 // Ohne diese Vorprüfung könnte jeder ohne Anmeldung Speicher und die wenigen
 // Plätze für gleichzeitige Sicherungen belegen. h bekommt die Identität im
-// Kontext (IdentitaetAus), etwa um die Freischaltung für Diagnosen ebenfalls vor
+// Kontext (IdentitaetAus), etwa um die Diagnose-Erlaubnis ebenfalls vor
 // dem Lesen zu prüfen. Der Interceptor prüft danach trotzdem noch einmal.
 //
 // KRITISCH: Ohne gültige Sitzung kommt keine Anfrage zu h durch; es gibt hier

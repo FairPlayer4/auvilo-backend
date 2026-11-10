@@ -319,7 +319,7 @@ private class Werkzeug(
         } catch (_: DiagnoseNichtFreigeschaltet) {
             // Konto-IDs sind Pseudonyme, keine Geheimnisse (CLAUDE.md).
             throw Bedienfehler(
-                "Konto ${s.kontoId} ist für Diagnosen nicht freigeschaltet (in infra/werte.auto.tfvars bei diagnose_konten eintragen und tofu apply), " +
+                "Konto ${s.kontoId} hat keine Diagnose-Erlaubnis (in infra/werte.auto.tfvars bei diagnose_konten eintragen und tofu apply), " +
                     "oder dieses Gerät ist noch nicht freigeschaltet (von einem freigeschalteten Gerät aus freischalten).",
             )
         }

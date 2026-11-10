@@ -66,7 +66,7 @@ type konfiguration struct {
 	projekt         string   // PROJEKT
 	sicherungBucket string   // SICHERUNG_BUCKET: Bucket für die Datensicherungen
 	diagnoseBucket  string   // DIAGNOSE_BUCKET: Bucket für Diagnosen aus der App
-	diagnoseKonten  []string // DIAGNOSE_KONTEN: freigeschaltete Konto-IDs, durch Komma getrennt; leer = niemand
+	diagnoseKonten  []string // DIAGNOSE_KONTEN: Konto-IDs mit Diagnose-Erlaubnis, durch Komma getrennt; leer = niemand
 	clientIDs       []string // GOOGLE_CLIENT_IDS, durch Komma getrennt
 	pfefferSecret   string   // PFEFFER_SECRET: Secret-Manager-Version (Betrieb)
 	pfeffer         []byte   // PFEFFER: base64 (nur lokal)

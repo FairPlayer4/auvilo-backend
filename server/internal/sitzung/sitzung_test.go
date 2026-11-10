@@ -258,7 +258,7 @@ func TestVorDemLesen(t *testing.T) {
 				return connect.NewResponse(&emptypb.Empty{}), nil
 			})
 			// Was der Handler hinter VorDemLesen direkt im Kontext sieht, noch
-			// vor dem Interceptor (E18): die Freischaltprüfung für Diagnosen
+			// vor dem Interceptor (E18): die Prüfung der Diagnose-Erlaubnis
 			// braucht es.
 			var gesehen Identitaet
 			direkt := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
