@@ -31,6 +31,11 @@ var (
 	ErrNonce      = errors.New("Nonce passt nicht zum Geräteschlüssel")
 	ErrZufall     = errors.New("Zufallsanteil der Nonce hat nicht 16 Bytes")
 	ErrSignatur   = errors.New("Signatur des Geräts ungültig")
+
+	// ErrSchluesselNichtLadbar: Die Schlüssel von Google ließen sich nicht
+	// laden (Netz, Google gestört). Das ist keine abgelehnte Anmeldung; der
+	// Server meldet "unavailable", und die App versucht es später (E14).
+	ErrSchluesselNichtLadbar = errors.New("Google-Schlüssel nicht ladbar")
 )
 
 const (
@@ -56,9 +61,45 @@ type Pruefer struct {
 	jetzt     func() time.Time
 }
 
+// SchluesselVon lädt die Schlüssel bei Bedarf von url (im Betrieb
+// GoogleSchluessel) über den HTTP-Client in ctx (oidc.ClientContext) und
+// speichert sie zwischen. Anders als oidc.NewRemoteKeySet allein erkennt
+// Pruefe damit, wenn das Laden scheitert (ErrSchluesselNichtLadbar).
+func SchluesselVon(ctx context.Context, url string) oidc.KeySet {
+	return schluesselHuelle{innen: oidc.NewRemoteKeySet(ctx, url)}
+}
+
+// schluesselHuelle merkt sich je Aufruf von Pruefe, ob das Laden der
+// Schlüssel gescheitert ist. Nötig, weil der Verifier von go-oidc den Fehler
+// nur als Text weitergibt („failed to verify signature: %v“).
+type schluesselHuelle struct {
+	innen oidc.KeySet
+}
+
+// ladeMerker steht im Kontext eines Aufrufs von Pruefe.
+type ladeMerker struct {
+	fehler error
+}
+
+type ladeMerkerSchluessel struct{}
+
+func (h schluesselHuelle) VerifySignature(ctx context.Context, jwt string) ([]byte, error) {
+	nutzlast, err := h.innen.VerifySignature(ctx, jwt)
+	// KRITISCH: RemoteKeySet verpackt nur einen Fehler beim Laden (Netz,
+	// Status, kaputte Antwort, abgebrochener Kontext) mit %w („fetching keys
+	// %w“); eine falsche Signatur und ein kaputtes Token sind einfache Fehler.
+	// Die Tests in TestSchluesselVon halten das gegen echte Antworten fest.
+	if err != nil && errors.Unwrap(err) != nil {
+		if m, ok := ctx.Value(ladeMerkerSchluessel{}).(*ladeMerker); ok {
+			m.fehler = err
+		}
+	}
+	return nutzlast, err
+}
+
 // NeuerPruefer legt einen Pruefer an.
 //   - schluessel: Quelle der Google-Schlüssel; im Betrieb
-//     oidc.NewRemoteKeySet(ctx, GoogleSchluessel), in Tests feste Schlüssel.
+//     SchluesselVon(ctx, GoogleSchluessel), in Tests feste Schlüssel.
 //   - clientIDs: unsere OAuth-Client-IDs; nur Tokens für diese gelten.
 //   - jetzt: Uhr (in Tests fest), nil = time.Now.
 func NeuerPruefer(schluessel oidc.KeySet, clientIDs []string, jetzt func() time.Time) (*Pruefer, error) {
@@ -109,8 +150,12 @@ func (p *Pruefer) Pruefe(ctx context.Context, a Anfrage) (Ergebnis, error) {
 		return Ergebnis{}, err
 	}
 
-	token, err := p.verifier.Verify(ctx, a.IDToken)
+	merker := &ladeMerker{}
+	token, err := p.verifier.Verify(context.WithValue(ctx, ladeMerkerSchluessel{}, merker), a.IDToken)
 	if err != nil {
+		if merker.fehler != nil {
+			return Ergebnis{}, errors.Join(ErrSchluesselNichtLadbar, merker.fehler)
+		}
 		return Ergebnis{}, errors.Join(ErrToken, err)
 	}
 	if token.Subject == "" {

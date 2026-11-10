@@ -627,3 +627,39 @@ func TestHoechstensZehnNeueGeraeteJeKontoUndTag(t *testing.T) {
 		})
 	}
 }
+
+// fehlerPruefer lehnt jede Anmeldung mit fehler ab.
+type fehlerPruefer struct{ fehler error }
+
+func (p fehlerPruefer) Pruefe(context.Context, anmeldung.Anfrage) (anmeldung.Ergebnis, error) {
+	return anmeldung.Ergebnis{}, p.fehler
+}
+
+// KRITISCH: Sind die Google-Schlüssel nicht ladbar, meldet Anmelden
+// "unavailable" (später erneut), nicht "abgelehnt" (E14). Jeder andere
+// Prüffehler bleibt eine abgelehnte Anmeldung. Ein Gerät wird in keinem Fall
+// angelegt.
+func TestAnmeldenUnterscheidetGoogleStoerungVonAblehnung(t *testing.T) {
+	faelle := []struct {
+		name   string
+		fehler error
+		code   connect.Code
+	}{
+		{"Google-Schlüssel nicht ladbar heißt später erneut", errors.Join(anmeldung.ErrSchluesselNichtLadbar, errors.New("503")), connect.CodeUnavailable},
+		{"ungültiges Token heißt abgelehnt", errors.Join(anmeldung.ErrToken, errors.New("Signatur")), connect.CodeUnauthenticated},
+		{"falsche Nonce heißt abgelehnt", anmeldung.ErrNonce, connect.CodeUnauthenticated},
+	}
+	for _, fall := range faelle {
+		t.Run(fall.name, func(t *testing.T) {
+			ts := neuerTestServerMit(t, datensicherung.NeuerArbeitsspeicher(), 0, func(k *Konfiguration) {
+				k.Pruefer = fehlerPruefer{fall.fehler}
+			})
+			g := testhilfe.NeuesGeraet(t)
+			_, err := ts.anmelde.Anmelden(context.Background(), connect.NewRequest(ts.anmeldeAnfrage(t, "google-kevin", g)))
+			erwarteCode(t, err, fall.code)
+			if _, err := ts.speicher.Geraet(context.Background(), g.ID()); !errors.Is(err, speicher.ErrNichtGefunden) {
+				t.Errorf("Gerät angelegt (Fehler %v)", err)
+			}
+		})
+	}
+}

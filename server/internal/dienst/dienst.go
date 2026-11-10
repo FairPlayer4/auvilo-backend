@@ -168,6 +168,12 @@ func (d *dienste) Anmelden(ctx context.Context, req *connect.Request[v1.Anmelden
 		Signatur:          req.Msg.GetSignatur(),
 		NonceZufall:       req.Msg.GetNonceZufall(),
 	})
+	if errors.Is(err, anmeldung.ErrSchluesselNichtLadbar) {
+		// KRITISCH: Kein „abgelehnt“: Die App würde sonst die Anmeldung für
+		// gescheitert halten, obwohl nur Google gerade nicht erreichbar ist (E14).
+		slog.ErrorContext(ctx, "Google-Schlüssel nicht ladbar", "grund", err.Error())
+		return nil, connect.NewError(connect.CodeUnavailable, errors.New("Anmeldung gerade nicht prüfbar – bitte später erneut"))
+	}
 	if err != nil {
 		slog.WarnContext(ctx, "Anmeldung abgelehnt", "grund", err.Error())
 		return nil, errAnmeldungAbgelehnt()

@@ -10,7 +10,10 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -291,5 +294,70 @@ func TestKennung(t *testing.T) {
 	}
 	if strings.Contains(Kennung(pfeffer, googleSub), googleSub) {
 		t.Error("Kennung enthält die Google-Konto-ID im Klartext")
+	}
+}
+
+// KRITISCH: Scheitert das Laden der Google-Schlüssel, ist das keine
+// abgelehnte Anmeldung (E14): Pruefe meldet ErrSchluesselNichtLadbar, und der
+// Server antwortet "unavailable". Geprüft gegen einen nachgebauten
+// Schlüssel-Endpunkt mit echtem oidc.RemoteKeySet, damit eine neue Version
+// von go-oidc, die Fehler anders verpackt, hier auffällt.
+func TestSchluesselVon(t *testing.T) {
+	u := neueUmgebung(t)
+	jwks, err := json.Marshal(jose.JSONWebKeySet{Keys: []jose.JSONWebKey{
+		{Key: &u.google.PublicKey, KeyID: "k1", Algorithm: "RS256", Use: "sig"},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	gueltig := u.anfrage(t, u.ansprueche())
+	fremd := u.anfrage(t, u.ansprueche())
+	fremd.IDToken = signiereToken(t, u.fremd, u.ansprueche())
+	fremd.Signatur = signiere(t, u.geraet, geraeteschluessel.AnmeldeNachricht(fremd.IDToken))
+
+	faelle := []struct {
+		name     string
+		status   int    // Antwort des Endpunkts; 0 = nicht erreichbar
+		inhalt   []byte // bei Status 200
+		anfrage  Anfrage
+		wantErr  error // nil: Anmeldung gelingt
+		nichtErr error // dieser Fehler darf es nicht sein
+	}{
+		{"Google antwortet 503", http.StatusServiceUnavailable, nil, gueltig, ErrSchluesselNichtLadbar, ErrToken},
+		{"Google liefert kaputtes JSON", http.StatusOK, []byte("{kaputt"), gueltig, ErrSchluesselNichtLadbar, ErrToken},
+		{"Google nicht erreichbar", 0, nil, gueltig, ErrSchluesselNichtLadbar, ErrToken},
+		{"Schlüssel geladen, Token gültig", http.StatusOK, jwks, gueltig, nil, nil},
+		{"Schlüssel geladen, Token mit fremdem Schlüssel abgelehnt", http.StatusOK, jwks, fremd, ErrToken, ErrSchluesselNichtLadbar},
+	}
+	for _, fall := range faelle {
+		t.Run(fall.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(fall.status)
+				_, _ = w.Write(fall.inhalt)
+			}))
+			if fall.status == 0 {
+				srv.Close() // Port zu: Verbindung abgelehnt
+			} else {
+				defer srv.Close()
+			}
+			ctx := oidc.ClientContext(context.Background(), &http.Client{Timeout: 5 * time.Second})
+			p, err := NeuerPruefer(SchluesselVon(ctx, srv.URL), []string{unsereID}, func() time.Time { return jetzt })
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = p.Pruefe(context.Background(), fall.anfrage)
+			if fall.wantErr == nil {
+				if err != nil {
+					t.Fatalf("Anmeldung abgelehnt: %v", err)
+				}
+				return
+			}
+			if !errors.Is(err, fall.wantErr) {
+				t.Fatalf("Fehler = %v, erwartet %v", err, fall.wantErr)
+			}
+			if errors.Is(err, fall.nichtErr) {
+				t.Errorf("Fehler %v enthält auch %v", err, fall.nichtErr)
+			}
+		})
 	}
 }
