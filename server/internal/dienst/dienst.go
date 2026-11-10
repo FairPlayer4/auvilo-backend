@@ -74,7 +74,7 @@ type Konfiguration struct {
 }
 
 // NeuerHandler liefert den HTTP-Handler mit allen Diensten. Vor jedem Aufruf
-// läuft der Sitzungs-Interceptor; offen sind nur Anmelden und SitzungErneuern.
+// laufen der Sitzungs-Interceptor und die Richtlinie der Prozedur (richtlinie.go).
 func NeuerHandler(k Konfiguration) (http.Handler, error) {
 	if k.Pruefer == nil || k.Speicher == nil || k.Sicherungen == nil || k.Diagnosen == nil || k.Kontingente == nil {
 		return nil, errors.New("Prüfer, Speicher, Sicherungen, Diagnosen und Kontingente sind Pflicht")
@@ -93,12 +93,10 @@ func NeuerHandler(k Konfiguration) (http.Handler, error) {
 	}
 	d := &dienste{k: k}
 
-	interceptor := sitzung.NeuerInterceptor(k.Speicher, []string{
-		avlreminderv1connect.AnmeldeDienstAnmeldenProcedure,
-		avlreminderv1connect.AnmeldeDienstSitzungErneuernProcedure,
-	}, k.Jetzt)
+	// Erst die Sitzung, dann die Richtlinie der Prozedur (richtlinie.go).
+	interceptor := sitzung.NeuerInterceptor(k.Speicher, offeneProzeduren(), k.Jetzt)
 	optionen := []connect.HandlerOption{
-		connect.WithInterceptors(interceptor),
+		connect.WithInterceptors(interceptor, richtlinienInterceptor{d}),
 		connect.WithReadMaxBytes(MaxAnfrage),
 		connect.WithRecover(beiPanik),
 	}
@@ -123,7 +121,7 @@ func NeuerHandler(k Konfiguration) (http.Handler, error) {
 	// Speicher schieben, ohne je ans Tageslimit zu stoßen.
 	pfad, diagnosen := avlreminderv1connect.NewDiagnoseDienstHandler(d,
 		append(optionen, connect.WithReadMaxBytes(MaxDiagnoseanfrage))...)
-	mux.Handle(pfad, interceptor.VorDemLesen(nurFreigeschaltet(k.DiagnoseErlaubt, diagnosen)))
+	mux.Handle(pfad, interceptor.VorDemLesen(nurDiagnoseErlaubt(k.DiagnoseErlaubt, diagnosen)))
 	return mux, nil
 }
 

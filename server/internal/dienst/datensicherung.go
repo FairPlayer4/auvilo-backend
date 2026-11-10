@@ -102,9 +102,6 @@ func (d *dienste) SicherungSpeichern(ctx context.Context, req *connect.Request[v
 	if err != nil {
 		return nil, err
 	}
-	if err := d.nurFreigeschaltetesGeraet(ctx, id); err != nil {
-		return nil, err
-	}
 	chiffrat, erwartet := req.Msg.GetChiffrat(), req.Msg.GetErwarteteVersion()
 	if len(chiffrat) == 0 || erwartet < 0 {
 		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("Sicherung leer oder Version negativ"))
@@ -189,9 +186,6 @@ func (d *dienste) FassungenAuflisten(ctx context.Context, _ *connect.Request[v1.
 func (d *dienste) SicherungLoeschen(ctx context.Context, _ *connect.Request[v1.SicherungLoeschenRequest]) (*connect.Response[v1.SicherungLoeschenResponse], error) {
 	id, err := identitaet(ctx)
 	if err != nil {
-		return nil, err
-	}
-	if err := d.nurFreigeschaltetesGeraet(ctx, id); err != nil {
 		return nil, err
 	}
 	if err := d.verbrauche(ctx, kontingentLoeschen, id.KontoID, LoeschungenJeTag, "Tageslimit für das Löschen der Sicherung erreicht – morgen wieder"); err != nil {

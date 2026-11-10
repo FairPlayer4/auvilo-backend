@@ -25,7 +25,8 @@ func errNichtFreigeschaltet() error {
 }
 
 // nurFreigeschaltetesGeraet lehnt ab, wenn das anfragende Gerät nicht
-// freigeschaltet ist. Aufruf in jedem Dienst, der etwas ändert oder löscht.
+// freigeschaltet ist. Aufruf über die Richtlinie "freigeschaltet" (richtlinie.go)
+// und in Diensten mit eigener Regel.
 //
 // KRITISCH: Das Merkmal kommt aus dem Speicher, nicht aus der Sitzung. So
 // wirkt ein Freischalten sofort, ohne neue Sitzung.
@@ -65,9 +66,6 @@ func (d *dienste) istFreigeschaltet(ctx context.Context, id sitzung.Identitaet) 
 func (d *dienste) GeraetFreischalten(ctx context.Context, req *connect.Request[v1.GeraetFreischaltenRequest]) (*connect.Response[v1.GeraetFreischaltenResponse], error) {
 	id, err := identitaet(ctx)
 	if err != nil {
-		return nil, err
-	}
-	if err := d.nurFreigeschaltetesGeraet(ctx, id); err != nil {
 		return nil, err
 	}
 	ziel := req.Msg.GetGeraetId()

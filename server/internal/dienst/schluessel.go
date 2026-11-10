@@ -96,9 +96,6 @@ func (d *dienste) BackupLoeschen(ctx context.Context, _ *connect.Request[v1.Back
 	if err != nil {
 		return nil, err
 	}
-	if err := d.nurFreigeschaltetesGeraet(ctx, id); err != nil {
-		return nil, err
-	}
 	if err := d.k.Speicher.BackupLoeschen(ctx, id.KontoID); err != nil {
 		return nil, speicherFehler(ctx, err)
 	}

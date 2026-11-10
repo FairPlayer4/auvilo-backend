@@ -32,12 +32,12 @@ var gzipKopf = []byte{0x1f, 0x8b, 0x08}
 
 var _ avlreminderv1connect.DiagnoseDienstHandler = (*dienste)(nil)
 
-// nurFreigeschaltet lehnt Konten ohne Freischaltung ab, bevor jemand den Inhalt
+// nurDiagnoseErlaubt lehnt Konten ohne Diagnose-Erlaubnis ab, bevor jemand den Inhalt
 // der Anfrage liest (nach sitzung.Interceptor.VorDemLesen, das die Identität in
 // den Kontext legt).
 //
 // KRITISCH: Ohne Identität im Kontext kommt niemand durch.
-func nurFreigeschaltet(erlaubt func(kontoID string) bool, h http.Handler) http.Handler {
+func nurDiagnoseErlaubt(erlaubt func(kontoID string) bool, h http.Handler) http.Handler {
 	fehler := connect.NewErrorWriter()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		id, ok := sitzung.IdentitaetAus(r.Context())
@@ -75,9 +75,6 @@ func (d *dienste) DiagnoseSenden(ctx context.Context, req *connect.Request[v1.Di
 	if !d.k.DiagnoseErlaubt(id.KontoID) {
 		slog.WarnContext(ctx, "Diagnose von nicht freigeschaltetem Konto", "geraet", id.GeraetID)
 		return nil, nichtFreigeschaltet()
-	}
-	if err := d.nurFreigeschaltetesGeraet(ctx, id); err != nil {
-		return nil, err
 	}
 	nutzlast := req.Msg.GetNutzlast()
 	if len(nutzlast) > diagnose.MaxNutzlast {
