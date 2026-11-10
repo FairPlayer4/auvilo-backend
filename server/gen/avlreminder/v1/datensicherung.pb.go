@@ -9,6 +9,7 @@ package avlreminderv1
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -122,7 +123,9 @@ func (x *SicherungSpeichernResponse) GetVersion() int64 {
 }
 
 type SicherungHolenRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Version aus FassungenAuflisten; 0 (oder weggelassen) = die neueste.
+	Version       int64 `protobuf:"varint,1,opt,name=version,proto3" json:"version,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -155,6 +158,13 @@ func (x *SicherungHolenRequest) ProtoReflect() protoreflect.Message {
 // Deprecated: Use SicherungHolenRequest.ProtoReflect.Descriptor instead.
 func (*SicherungHolenRequest) Descriptor() ([]byte, []int) {
 	return file_avlreminder_v1_datensicherung_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *SicherungHolenRequest) GetVersion() int64 {
+	if x != nil {
+		return x.Version
+	}
+	return 0
 }
 
 type SicherungHolenResponse struct {
@@ -209,6 +219,150 @@ func (x *SicherungHolenResponse) GetVersion() int64 {
 	return 0
 }
 
+type FassungenAuflistenRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FassungenAuflistenRequest) Reset() {
+	*x = FassungenAuflistenRequest{}
+	mi := &file_avlreminder_v1_datensicherung_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FassungenAuflistenRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FassungenAuflistenRequest) ProtoMessage() {}
+
+func (x *FassungenAuflistenRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_avlreminder_v1_datensicherung_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FassungenAuflistenRequest.ProtoReflect.Descriptor instead.
+func (*FassungenAuflistenRequest) Descriptor() ([]byte, []int) {
+	return file_avlreminder_v1_datensicherung_proto_rawDescGZIP(), []int{4}
+}
+
+type FassungenAuflistenResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Die neueste zuerst; leer, wenn es keine Sicherung gibt.
+	Fassungen     []*SicherungsFassung `protobuf:"bytes,1,rep,name=fassungen,proto3" json:"fassungen,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FassungenAuflistenResponse) Reset() {
+	*x = FassungenAuflistenResponse{}
+	mi := &file_avlreminder_v1_datensicherung_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FassungenAuflistenResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FassungenAuflistenResponse) ProtoMessage() {}
+
+func (x *FassungenAuflistenResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_avlreminder_v1_datensicherung_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FassungenAuflistenResponse.ProtoReflect.Descriptor instead.
+func (*FassungenAuflistenResponse) Descriptor() ([]byte, []int) {
+	return file_avlreminder_v1_datensicherung_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *FassungenAuflistenResponse) GetFassungen() []*SicherungsFassung {
+	if x != nil {
+		return x.Fassungen
+	}
+	return nil
+}
+
+// Eine gespeicherte Fassung, ohne Inhalt.
+type SicherungsFassung struct {
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Version int64                  `protobuf:"varint,1,opt,name=version,proto3" json:"version,omitempty"`
+	// Wann der Server sie gespeichert hat (Uhr des Servers).
+	GespeichertAm *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=gespeichert_am,json=gespeichertAm,proto3" json:"gespeichert_am,omitempty"`
+	// Größe des Chiffrats in Bytes.
+	Bytes         int64 `protobuf:"varint,3,opt,name=bytes,proto3" json:"bytes,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SicherungsFassung) Reset() {
+	*x = SicherungsFassung{}
+	mi := &file_avlreminder_v1_datensicherung_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SicherungsFassung) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SicherungsFassung) ProtoMessage() {}
+
+func (x *SicherungsFassung) ProtoReflect() protoreflect.Message {
+	mi := &file_avlreminder_v1_datensicherung_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SicherungsFassung.ProtoReflect.Descriptor instead.
+func (*SicherungsFassung) Descriptor() ([]byte, []int) {
+	return file_avlreminder_v1_datensicherung_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *SicherungsFassung) GetVersion() int64 {
+	if x != nil {
+		return x.Version
+	}
+	return 0
+}
+
+func (x *SicherungsFassung) GetGespeichertAm() *timestamppb.Timestamp {
+	if x != nil {
+		return x.GespeichertAm
+	}
+	return nil
+}
+
+func (x *SicherungsFassung) GetBytes() int64 {
+	if x != nil {
+		return x.Bytes
+	}
+	return 0
+}
+
 type SicherungLoeschenRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -217,7 +371,7 @@ type SicherungLoeschenRequest struct {
 
 func (x *SicherungLoeschenRequest) Reset() {
 	*x = SicherungLoeschenRequest{}
-	mi := &file_avlreminder_v1_datensicherung_proto_msgTypes[4]
+	mi := &file_avlreminder_v1_datensicherung_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -229,7 +383,7 @@ func (x *SicherungLoeschenRequest) String() string {
 func (*SicherungLoeschenRequest) ProtoMessage() {}
 
 func (x *SicherungLoeschenRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_avlreminder_v1_datensicherung_proto_msgTypes[4]
+	mi := &file_avlreminder_v1_datensicherung_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -242,7 +396,7 @@ func (x *SicherungLoeschenRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SicherungLoeschenRequest.ProtoReflect.Descriptor instead.
 func (*SicherungLoeschenRequest) Descriptor() ([]byte, []int) {
-	return file_avlreminder_v1_datensicherung_proto_rawDescGZIP(), []int{4}
+	return file_avlreminder_v1_datensicherung_proto_rawDescGZIP(), []int{7}
 }
 
 type SicherungLoeschenResponse struct {
@@ -253,7 +407,7 @@ type SicherungLoeschenResponse struct {
 
 func (x *SicherungLoeschenResponse) Reset() {
 	*x = SicherungLoeschenResponse{}
-	mi := &file_avlreminder_v1_datensicherung_proto_msgTypes[5]
+	mi := &file_avlreminder_v1_datensicherung_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -265,7 +419,7 @@ func (x *SicherungLoeschenResponse) String() string {
 func (*SicherungLoeschenResponse) ProtoMessage() {}
 
 func (x *SicherungLoeschenResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_avlreminder_v1_datensicherung_proto_msgTypes[5]
+	mi := &file_avlreminder_v1_datensicherung_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -278,28 +432,37 @@ func (x *SicherungLoeschenResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SicherungLoeschenResponse.ProtoReflect.Descriptor instead.
 func (*SicherungLoeschenResponse) Descriptor() ([]byte, []int) {
-	return file_avlreminder_v1_datensicherung_proto_rawDescGZIP(), []int{5}
+	return file_avlreminder_v1_datensicherung_proto_rawDescGZIP(), []int{8}
 }
 
 var File_avlreminder_v1_datensicherung_proto protoreflect.FileDescriptor
 
 const file_avlreminder_v1_datensicherung_proto_rawDesc = "" +
 	"\n" +
-	"#avlreminder/v1/datensicherung.proto\x12\x0eavlreminder.v1\"d\n" +
+	"#avlreminder/v1/datensicherung.proto\x12\x0eavlreminder.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"d\n" +
 	"\x19SicherungSpeichernRequest\x12\x1a\n" +
 	"\bchiffrat\x18\x01 \x01(\fR\bchiffrat\x12+\n" +
 	"\x11erwartete_version\x18\x02 \x01(\x03R\x10erwarteteVersion\"6\n" +
 	"\x1aSicherungSpeichernResponse\x12\x18\n" +
-	"\aversion\x18\x01 \x01(\x03R\aversion\"\x17\n" +
-	"\x15SicherungHolenRequest\"N\n" +
+	"\aversion\x18\x01 \x01(\x03R\aversion\"1\n" +
+	"\x15SicherungHolenRequest\x12\x18\n" +
+	"\aversion\x18\x01 \x01(\x03R\aversion\"N\n" +
 	"\x16SicherungHolenResponse\x12\x1a\n" +
 	"\bchiffrat\x18\x01 \x01(\fR\bchiffrat\x12\x18\n" +
-	"\aversion\x18\x02 \x01(\x03R\aversion\"\x1a\n" +
+	"\aversion\x18\x02 \x01(\x03R\aversion\"\x1b\n" +
+	"\x19FassungenAuflistenRequest\"]\n" +
+	"\x1aFassungenAuflistenResponse\x12?\n" +
+	"\tfassungen\x18\x01 \x03(\v2!.avlreminder.v1.SicherungsFassungR\tfassungen\"\x86\x01\n" +
+	"\x11SicherungsFassung\x12\x18\n" +
+	"\aversion\x18\x01 \x01(\x03R\aversion\x12A\n" +
+	"\x0egespeichert_am\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\rgespeichertAm\x12\x14\n" +
+	"\x05bytes\x18\x03 \x01(\x03R\x05bytes\"\x1a\n" +
 	"\x18SicherungLoeschenRequest\"\x1b\n" +
-	"\x19SicherungLoeschenResponse2\xce\x02\n" +
+	"\x19SicherungLoeschenResponse2\xbb\x03\n" +
 	"\x14DatensicherungDienst\x12k\n" +
 	"\x12SicherungSpeichern\x12).avlreminder.v1.SicherungSpeichernRequest\x1a*.avlreminder.v1.SicherungSpeichernResponse\x12_\n" +
-	"\x0eSicherungHolen\x12%.avlreminder.v1.SicherungHolenRequest\x1a&.avlreminder.v1.SicherungHolenResponse\x12h\n" +
+	"\x0eSicherungHolen\x12%.avlreminder.v1.SicherungHolenRequest\x1a&.avlreminder.v1.SicherungHolenResponse\x12k\n" +
+	"\x12FassungenAuflisten\x12).avlreminder.v1.FassungenAuflistenRequest\x1a*.avlreminder.v1.FassungenAuflistenResponse\x12h\n" +
 	"\x11SicherungLoeschen\x12(.avlreminder.v1.SicherungLoeschenRequest\x1a).avlreminder.v1.SicherungLoeschenResponseB\xd6\x01\n" +
 	"\x12com.avlreminder.v1B\x13DatensicherungProtoP\x01ZRgithub.com/FairPlayer4/avlreminder-backend/server/gen/avlreminder/v1;avlreminderv1\xa2\x02\x03AXX\xaa\x02\x0eAvlreminder.V1\xca\x02\x0eAvlreminder\\V1\xe2\x02\x1aAvlreminder\\V1\\GPBMetadata\xea\x02\x0fAvlreminder::V1b\x06proto3"
 
@@ -315,27 +478,35 @@ func file_avlreminder_v1_datensicherung_proto_rawDescGZIP() []byte {
 	return file_avlreminder_v1_datensicherung_proto_rawDescData
 }
 
-var file_avlreminder_v1_datensicherung_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_avlreminder_v1_datensicherung_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_avlreminder_v1_datensicherung_proto_goTypes = []any{
 	(*SicherungSpeichernRequest)(nil),  // 0: avlreminder.v1.SicherungSpeichernRequest
 	(*SicherungSpeichernResponse)(nil), // 1: avlreminder.v1.SicherungSpeichernResponse
 	(*SicherungHolenRequest)(nil),      // 2: avlreminder.v1.SicherungHolenRequest
 	(*SicherungHolenResponse)(nil),     // 3: avlreminder.v1.SicherungHolenResponse
-	(*SicherungLoeschenRequest)(nil),   // 4: avlreminder.v1.SicherungLoeschenRequest
-	(*SicherungLoeschenResponse)(nil),  // 5: avlreminder.v1.SicherungLoeschenResponse
+	(*FassungenAuflistenRequest)(nil),  // 4: avlreminder.v1.FassungenAuflistenRequest
+	(*FassungenAuflistenResponse)(nil), // 5: avlreminder.v1.FassungenAuflistenResponse
+	(*SicherungsFassung)(nil),          // 6: avlreminder.v1.SicherungsFassung
+	(*SicherungLoeschenRequest)(nil),   // 7: avlreminder.v1.SicherungLoeschenRequest
+	(*SicherungLoeschenResponse)(nil),  // 8: avlreminder.v1.SicherungLoeschenResponse
+	(*timestamppb.Timestamp)(nil),      // 9: google.protobuf.Timestamp
 }
 var file_avlreminder_v1_datensicherung_proto_depIdxs = []int32{
-	0, // 0: avlreminder.v1.DatensicherungDienst.SicherungSpeichern:input_type -> avlreminder.v1.SicherungSpeichernRequest
-	2, // 1: avlreminder.v1.DatensicherungDienst.SicherungHolen:input_type -> avlreminder.v1.SicherungHolenRequest
-	4, // 2: avlreminder.v1.DatensicherungDienst.SicherungLoeschen:input_type -> avlreminder.v1.SicherungLoeschenRequest
-	1, // 3: avlreminder.v1.DatensicherungDienst.SicherungSpeichern:output_type -> avlreminder.v1.SicherungSpeichernResponse
-	3, // 4: avlreminder.v1.DatensicherungDienst.SicherungHolen:output_type -> avlreminder.v1.SicherungHolenResponse
-	5, // 5: avlreminder.v1.DatensicherungDienst.SicherungLoeschen:output_type -> avlreminder.v1.SicherungLoeschenResponse
-	3, // [3:6] is the sub-list for method output_type
-	0, // [0:3] is the sub-list for method input_type
-	0, // [0:0] is the sub-list for extension type_name
-	0, // [0:0] is the sub-list for extension extendee
-	0, // [0:0] is the sub-list for field type_name
+	6, // 0: avlreminder.v1.FassungenAuflistenResponse.fassungen:type_name -> avlreminder.v1.SicherungsFassung
+	9, // 1: avlreminder.v1.SicherungsFassung.gespeichert_am:type_name -> google.protobuf.Timestamp
+	0, // 2: avlreminder.v1.DatensicherungDienst.SicherungSpeichern:input_type -> avlreminder.v1.SicherungSpeichernRequest
+	2, // 3: avlreminder.v1.DatensicherungDienst.SicherungHolen:input_type -> avlreminder.v1.SicherungHolenRequest
+	4, // 4: avlreminder.v1.DatensicherungDienst.FassungenAuflisten:input_type -> avlreminder.v1.FassungenAuflistenRequest
+	7, // 5: avlreminder.v1.DatensicherungDienst.SicherungLoeschen:input_type -> avlreminder.v1.SicherungLoeschenRequest
+	1, // 6: avlreminder.v1.DatensicherungDienst.SicherungSpeichern:output_type -> avlreminder.v1.SicherungSpeichernResponse
+	3, // 7: avlreminder.v1.DatensicherungDienst.SicherungHolen:output_type -> avlreminder.v1.SicherungHolenResponse
+	5, // 8: avlreminder.v1.DatensicherungDienst.FassungenAuflisten:output_type -> avlreminder.v1.FassungenAuflistenResponse
+	8, // 9: avlreminder.v1.DatensicherungDienst.SicherungLoeschen:output_type -> avlreminder.v1.SicherungLoeschenResponse
+	6, // [6:10] is the sub-list for method output_type
+	2, // [2:6] is the sub-list for method input_type
+	2, // [2:2] is the sub-list for extension type_name
+	2, // [2:2] is the sub-list for extension extendee
+	0, // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_avlreminder_v1_datensicherung_proto_init() }
@@ -349,7 +520,7 @@ func file_avlreminder_v1_datensicherung_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_avlreminder_v1_datensicherung_proto_rawDesc), len(file_avlreminder_v1_datensicherung_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   6,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

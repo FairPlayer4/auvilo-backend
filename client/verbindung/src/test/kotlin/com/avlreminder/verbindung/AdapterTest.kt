@@ -20,13 +20,17 @@ import com.avlreminder.schnittstelle.v1.GeraetSperrenRequest
 import com.avlreminder.schnittstelle.v1.GeraetSperrenResponse
 import com.avlreminder.schnittstelle.v1.MitWiederherstellungFreischaltenRequest
 import com.avlreminder.schnittstelle.v1.MitWiederherstellungFreischaltenResponse
+import com.avlreminder.schnittstelle.v1.FassungenAuflistenResponse
+import com.avlreminder.schnittstelle.v1.SicherungHolenRequest
 import com.avlreminder.schnittstelle.v1.SicherungHolenResponse
+import com.avlreminder.schnittstelle.v1.SicherungsFassung
 import com.avlreminder.schnittstelle.v1.SicherungLoeschenResponse
 import com.avlreminder.schnittstelle.v1.SicherungSpeichernRequest
 import com.avlreminder.schnittstelle.v1.SicherungSpeichernResponse
 import com.connectrpc.Code
 import com.google.protobuf.ByteString
 import com.google.protobuf.MessageLite
+import com.google.protobuf.Timestamp
 import com.sun.net.httpserver.HttpServer
 import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
@@ -39,9 +43,11 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
+import org.junit.jupiter.params.provider.ValueSource
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.net.InetSocketAddress
+import java.time.Instant
 import java.util.concurrent.TimeUnit
 import java.util.zip.GZIPOutputStream
 import kotlin.reflect.KClass
@@ -242,6 +248,57 @@ class AdapterTest {
         assertEquals(9, s.version)
         assertEquals("/avlreminder.v1.DatensicherungDienst/SicherungHolen", anfragen.single().pfad)
         assertEquals("Bearer $TOKEN", anfragen.single().autorisierung)
+        assertEquals(0, SicherungHolenRequest.parseFrom(anfragen.single().inhalt).version, "ohne Version: die neueste")
+    }
+
+    // R-4: Eine ältere Fassung kommt über ihre Version.
+    @Test
+    fun `holt eine ältere Fassung über ihre Version`() {
+        antwort = Antwort.Ok(SicherungHolenResponse.newBuilder().setChiffrat(ByteString.copyFrom(CHIFFRAT)).setVersion(7).build())
+        val s = runBlocking { ServerSicherungsAblage(verbindung(), TOKEN).holen(7) }!!
+        assertArrayEquals(CHIFFRAT, s.chiffrat)
+        assertEquals(7, s.version)
+        val a = anfragen.single()
+        assertEquals("/avlreminder.v1.DatensicherungDienst/SicherungHolen", a.pfad)
+        assertEquals("Bearer $TOKEN", a.autorisierung)
+        assertEquals(7, SicherungHolenRequest.parseFrom(a.inhalt).version)
+    }
+
+    // KRITISCH: Version 0 hieße beim Server „die neueste“; wer eine bestimmte Fassung
+    // will, bekommt nie stillschweigend eine andere.
+    @ParameterizedTest(name = "Version {0}")
+    @ValueSource(longs = [0, -1])
+    fun `eine Version unter 1 wird gar nicht erst gesendet`(version: Long) {
+        val e = runCatching { runBlocking { ServerSicherungsAblage(verbindung(), TOKEN).holen(version) } }.exceptionOrNull()
+        assertTrue(e is IllegalArgumentException, "Ausnahme: $e")
+        assertTrue(anfragen.isEmpty())
+    }
+
+    @Test
+    fun `listet die Fassungen mit Version, Zeit und Größe`() {
+        val zeit = Timestamp.newBuilder().setSeconds(1_794_000_000).setNanos(123_000_000).build()
+        antwort = Antwort.Ok(
+            FassungenAuflistenResponse.newBuilder()
+                .addFassungen(SicherungsFassung.newBuilder().setVersion(20).setGespeichertAm(zeit).setBytes(300))
+                .addFassungen(SicherungsFassung.newBuilder().setVersion(10).setBytes(200))
+                .build(),
+        )
+        val liste = runBlocking { ServerSicherungsAblage(verbindung(), TOKEN).fassungen() }
+        assertEquals(
+            listOf(
+                com.avlreminder.protokoll.SicherungsFassung(20, Instant.ofEpochSecond(1_794_000_000, 123_000_000), 300),
+                com.avlreminder.protokoll.SicherungsFassung(10, Instant.EPOCH, 200),
+            ),
+            liste,
+        )
+        assertEquals("/avlreminder.v1.DatensicherungDienst/FassungenAuflisten", anfragen.single().pfad)
+        assertEquals("Bearer $TOKEN", anfragen.single().autorisierung)
+    }
+
+    @Test
+    fun `ohne Sicherung ist die Liste leer`() {
+        antwort = Antwort.Ok(FassungenAuflistenResponse.getDefaultInstance())
+        assertEquals(emptyList<Any>(), runBlocking { ServerSicherungsAblage(verbindung(), TOKEN).fassungen() })
     }
 
     @Test
@@ -330,6 +387,8 @@ class AdapterTest {
         @JvmStatic
         fun aufrufe() = listOf(
             Aufruf("Sicherung holen") { ServerSicherungsAblage(it, TOKEN).holen() },
+            Aufruf("Fassung holen") { ServerSicherungsAblage(it, TOKEN).holen(7) },
+            Aufruf("Fassungen auflisten") { ServerSicherungsAblage(it, TOKEN).fassungen() },
             Aufruf("Sicherung speichern") { ServerSicherungsAblage(it, TOKEN).speichern(CHIFFRAT, 1) },
             Aufruf("Schlüssel-Backup holen") { ServerBackupAblage(it, TOKEN).holen() },
             Aufruf("Gerät sperren") { ServerGeraete(it, TOKEN).sperren("geraet-1") },
@@ -358,6 +417,12 @@ class AdapterTest {
         fun fehlerfaelle() = listOf(
             // Datensicherung
             Fall("Sicherung holen: nicht gefunden heißt keine Sicherung", Code.NOT_FOUND, { sicherung(it).holen() }, null),
+            Fall("Fassung holen: nicht gefunden heißt nicht mehr da", Code.NOT_FOUND, { sicherung(it).holen(7) }, null),
+            Fall("Fassung holen: erschöpft heißt Tageslimit", Code.RESOURCE_EXHAUSTED, { sicherung(it).holen(7) }, SicherungTageslimit::class),
+            Fall("Fassung holen: ungültige Anfrage bleibt Serverfehler", Code.INVALID_ARGUMENT, { sicherung(it).holen(7) }, Serverfehler::class),
+            Fall("Fassungen auflisten: erschöpft heißt Tageslimit", Code.RESOURCE_EXHAUSTED, { sicherung(it).fassungen() }, SicherungTageslimit::class),
+            Fall("Fassungen auflisten: nicht gefunden bleibt Serverfehler", Code.NOT_FOUND, { sicherung(it).fassungen() }, Serverfehler::class),
+            Fall("Fassungen auflisten: ungültige Sitzung bleibt Serverfehler", Code.UNAUTHENTICATED, { sicherung(it).fassungen() }, Serverfehler::class),
             Fall("Sicherung holen: ungültige Sitzung bleibt Serverfehler", Code.UNAUTHENTICATED, { sicherung(it).holen() }, Serverfehler::class),
             Fall("Sicherung holen: Überlastung bleibt Serverfehler", Code.UNAVAILABLE, { sicherung(it).holen() }, Serverfehler::class),
             // Entscheidung nach Review-Lauf 8: Holen und Löschen sind je Tag begrenzt.

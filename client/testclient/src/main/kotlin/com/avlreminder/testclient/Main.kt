@@ -65,6 +65,7 @@ private const val HILFE = """Befehle:
   sichern <datei>   Inhalt der Datei als Datensicherung hochladen (verschlüsselt)
   wiederherstellen <datei>
                     neueste Datensicherung holen und in die Datei schreiben
+  fassungen         Fassungen der Datensicherung auf dem Server auflisten (R-4)
   sicherung-loeschen
                     Datensicherung des Kontos mit allen Fassungen löschen
   schluessel-loeschen
@@ -141,6 +142,7 @@ private suspend fun ausfuehren(args: List<String>) {
         rest == listOf("schluessel") -> werkzeug.schluessel()
         rest.size == 2 && rest[0] == "sichern" -> werkzeug.sichern(File(rest[1]))
         rest.size == 2 && rest[0] == "wiederherstellen" -> werkzeug.wiederherstellen(File(rest[1]))
+        rest == listOf("fassungen") -> werkzeug.fassungen()
         rest == listOf("sicherung-loeschen") -> werkzeug.sicherungLoeschen()
         rest == listOf("schluessel-loeschen") -> werkzeug.schluesselLoeschen()
         rest == listOf("cloud-loeschen") -> werkzeug.cloudLoeschen()
@@ -282,6 +284,13 @@ private class Werkzeug(
             Wiederhergestellt.KeineSicherung -> println("Das Konto hat keine Datensicherung.")
             Wiederhergestellt.Abgelehnt -> println("Nichts geändert.")
         }
+    }
+
+    suspend fun fassungen() {
+        val liste = ServerSicherungsAblage(verbindung, ablage.sitzung(name).token).fassungen()
+        if (liste.isEmpty()) return println("Das Konto hat keine Datensicherung.")
+        println("Fassungen auf dem Server, die neueste zuerst:")
+        liste.forEach { println("  Version ${it.version}  ${ZEIT.format(it.gespeichert)}  ${it.bytes} Bytes") }
     }
 
     suspend fun sicherungLoeschen() {

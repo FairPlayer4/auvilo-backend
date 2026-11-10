@@ -14,6 +14,7 @@ import (
 	v1 "github.com/FairPlayer4/avlreminder-backend/server/gen/avlreminder/v1"
 	"github.com/FairPlayer4/avlreminder-backend/server/gen/avlreminder/v1/avlreminderv1connect"
 	"github.com/FairPlayer4/avlreminder-backend/server/internal/datensicherung"
+	"github.com/FairPlayer4/avlreminder-backend/server/internal/kontingent"
 	"github.com/FairPlayer4/avlreminder-backend/server/internal/testhilfe"
 )
 
@@ -31,6 +32,22 @@ func (ts *testServer) sicherungHolen(token string) (*v1.SicherungHolenResponse, 
 		return nil, err
 	}
 	return res.Msg, nil
+}
+
+func (ts *testServer) sicherungHolenVersion(token string, version int64) (*v1.SicherungHolenResponse, error) {
+	res, err := ts.sicherer.SicherungHolen(context.Background(), mitSitzung(&v1.SicherungHolenRequest{Version: version}, token))
+	if err != nil {
+		return nil, err
+	}
+	return res.Msg, nil
+}
+
+func (ts *testServer) fassungenAuflisten(token string) ([]*v1.SicherungsFassung, error) {
+	res, err := ts.sicherer.FassungenAuflisten(context.Background(), mitSitzung(&v1.FassungenAuflistenRequest{}, token))
+	if err != nil {
+		return nil, err
+	}
+	return res.Msg.GetFassungen(), nil
 }
 
 func (ts *testServer) sicherungLoeschen(token string) error {
@@ -126,6 +143,95 @@ func TestSicherungHolenOhneSicherungMeldetNichtGefunden(t *testing.T) {
 	token := ts.anmelden(t, "google-kevin", testhilfe.NeuesGeraet(t)).Sitzung.Token
 	_, err := ts.sicherungHolen(token)
 	erwarteCode(t, err, connect.CodeNotFound)
+}
+
+// Anforderung R-4: Ein Gerät sieht, welche Fassungen der Server noch hat, und
+// holt eine ältere, um eine Sicherung von vor ein paar Tagen wiederherzustellen.
+func TestAeltereFassungenAuflistenUndHolen(t *testing.T) {
+	z := &zaehlerAttrappe{echt: kontingent.NeuerArbeitsspeicher()}
+	ts := neuerTestServerMit(t, datensicherung.NeuerArbeitsspeicher(), 0, mitZaehler(z))
+	token := ts.anmelden(t, "google-kevin", testhilfe.NeuesGeraet(t)).Sitzung.Token
+
+	t.Run("ohne Sicherung ist die Liste leer", func(t *testing.T) {
+		liste, err := ts.fassungenAuflisten(token)
+		if err != nil || len(liste) != 0 {
+			t.Errorf("Fassungen = %v, %v; erwartet keine", liste, err)
+		}
+	})
+
+	inhalte := []string{"erste", "zweite!", "dritte!!"}
+	var versionen []int64
+	var version int64
+	for _, inhalt := range inhalte {
+		res, err := ts.sicherungSpeichern(token, []byte(inhalt), version)
+		if err != nil {
+			t.Fatal(err)
+		}
+		version = res.Version
+		versionen = append(versionen, version)
+	}
+
+	t.Run("listet alle, die neueste zuerst, mit Größe und Zeit", func(t *testing.T) {
+		liste, err := ts.fassungenAuflisten(token)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(liste) != len(inhalte) {
+			t.Fatalf("%d Fassungen, erwartet %d", len(liste), len(inhalte))
+		}
+		for i, f := range liste {
+			j := len(inhalte) - 1 - i
+			if f.GetVersion() != versionen[j] || f.GetBytes() != int64(len(inhalte[j])) {
+				t.Errorf("Fassung %d = Version %d, %d Bytes; erwartet Version %d, %d Bytes", i, f.GetVersion(), f.GetBytes(), versionen[j], len(inhalte[j]))
+			}
+			if f.GetGespeichertAm() == nil || f.GetGespeichertAm().AsTime().IsZero() {
+				t.Errorf("Fassung %d ohne Zeitpunkt", i)
+			}
+		}
+	})
+
+	t.Run("holt jede Fassung über ihre Version", func(t *testing.T) {
+		for i, v := range versionen {
+			s, err := ts.sicherungHolenVersion(token, v)
+			if err != nil {
+				t.Fatalf("Version %d: %v", v, err)
+			}
+			if string(s.Chiffrat) != inhalte[i] || s.Version != v {
+				t.Errorf("Version %d = %q Version %d, erwartet %q", v, s.Chiffrat, s.Version, inhalte[i])
+			}
+		}
+	})
+
+	t.Run("ohne Version kommt die neueste", func(t *testing.T) {
+		ts.erwarteSicherung(t, token, "dritte!!", version)
+	})
+
+	t.Run("eine unbekannte Version heißt nicht gefunden", func(t *testing.T) {
+		_, err := ts.sicherungHolenVersion(token, version+1)
+		erwarteCode(t, err, connect.CodeNotFound)
+	})
+
+	// Erst prüfen, dann zählen (wie beim Speichern).
+	t.Run("eine negative Version wird abgelehnt und nicht gezählt", func(t *testing.T) {
+		vorher := z.anzahl()
+		_, err := ts.sicherungHolenVersion(token, -1)
+		erwarteCode(t, err, connect.CodeInvalidArgument)
+		if n := z.anzahl() - vorher; n != 0 {
+			t.Errorf("%d Aufrufe des Tageszählers, erwartet keinen", n)
+		}
+	})
+
+	t.Run("nach dem Löschen ist die Liste leer", func(t *testing.T) {
+		if err := ts.sicherungLoeschen(token); err != nil {
+			t.Fatal(err)
+		}
+		liste, err := ts.fassungenAuflisten(token)
+		if err != nil || len(liste) != 0 {
+			t.Errorf("Fassungen = %v, %v; erwartet keine", liste, err)
+		}
+		_, err = ts.sicherungHolenVersion(token, versionen[0])
+		erwarteCode(t, err, connect.CodeNotFound)
+	})
 }
 
 func TestSicherungLoeschen(t *testing.T) {
@@ -254,6 +360,25 @@ func TestSicherungHolenUndLoeschenHabenEinTageslimitJeKonto(t *testing.T) {
 			_, err := ts.sicherungHolen(token)
 			return err
 		}, connect.CodeNotFound},
+		{"Fassungen auflisten", abrufeAmTag, func(ts *testServer, token string) error {
+			_, err := ts.fassungenAuflisten(token)
+			return err
+		}, 0},
+		// Holen und Auflisten teilen sich ein Limit (datensicherung.proto); sonst
+		// ließe sich mit Auflisten das Limit fürs Holen nicht ausschöpfen, aber
+		// verdoppeln.
+		{"Holen und Auflisten im Wechsel", abrufeAmTag, func() func(ts *testServer, token string) error {
+			n := 0
+			return func(ts *testServer, token string) error {
+				n++
+				if n%2 == 0 {
+					_, err := ts.fassungenAuflisten(token)
+					return err
+				}
+				_, err := ts.sicherungHolen(token)
+				return err
+			}
+		}(), connect.CodeNotFound},
 		{"Sicherung löschen", loeschungenAmTag, func(ts *testServer, token string) error {
 			return ts.sicherungLoeschen(token)
 		}, 0},
@@ -324,6 +449,16 @@ func TestSicherungGehoertNurZumEigenenKonto(t *testing.T) {
 	t.Run("anderes Konto bekommt Kevins Sicherung nicht", func(t *testing.T) {
 		_, err := ts.sicherungHolen(andere)
 		erwarteCode(t, err, connect.CodeNotFound)
+	})
+	t.Run("anderes Konto bekommt Kevins Sicherung auch nicht über ihre Version", func(t *testing.T) {
+		_, err := ts.sicherungHolenVersion(andere, res.Version)
+		erwarteCode(t, err, connect.CodeNotFound)
+	})
+	t.Run("anderes Konto sieht Kevins Fassungen nicht", func(t *testing.T) {
+		liste, err := ts.fassungenAuflisten(andere)
+		if err != nil || len(liste) != 0 {
+			t.Errorf("Fassungen = %v, %v; erwartet keine", liste, err)
+		}
 	})
 	t.Run("anderes Konto überschreibt Kevins Sicherung nicht, auch nicht mit ihrer Version", func(t *testing.T) {
 		_, err := ts.sicherungSpeichern(andere, []byte("fremd"), res.Version)

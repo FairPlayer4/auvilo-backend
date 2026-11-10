@@ -5,6 +5,8 @@ package avlreminder.v1;
 option java_multiple_files = true;
 option java_package = "com.avlreminder.schnittstelle.v1";
 
+import "google/protobuf/timestamp.proto";
+
 // Ablage für die verschlüsselte Datensicherung eines Kontos (Etappe B2b).
 // Alle Aufrufe brauchen eine Sitzung und wirken nur auf das eigene Konto.
 // Jedes Konto hat genau eine Sicherung; der Server hält zusätzlich ältere
@@ -13,9 +15,9 @@ option java_package = "com.avlreminder.schnittstelle.v1";
 //
 // Jedes Konto darf höchstens 48-mal am Tag (UTC) speichern. Gezählt wird jede
 // Anfrage, die die Prüfungen von Größe und Inhalt besteht, auch ein Konflikt
-// (failed_precondition). Holen höchstens 50-mal, Löschen höchstens 20-mal am
-// Tag, gezählt vor dem Holen (auch ohne Sicherung) bzw. nach der Prüfung der
-// Freischaltung.
+// (failed_precondition). Holen und Auflisten zusammen höchstens 50-mal,
+// Löschen höchstens 20-mal am Tag, gezählt vor dem Holen (auch ohne Sicherung)
+// bzw. nach der Prüfung der Freischaltung.
 //
 // Der Server kann die Sicherung nicht lesen: Sie ist mit dem Tresorschlüssel
 // verschlüsselt (Format: proto/avlreminder/inhalt/v1/datensicherung.proto,
@@ -26,14 +28,16 @@ option java_package = "com.avlreminder.schnittstelle.v1";
 //   permission_denied   SicherungSpeichern, SicherungLoeschen: Das Gerät ist
 //                       nicht freigeschaltet (geraete.proto). Holen darf jedes.
 //   invalid_argument    SicherungSpeichern: chiffrat leer oder erwartete_version
-//                       negativ.
+//                       negativ. SicherungHolen: version negativ.
 //   failed_precondition SicherungSpeichern: erwartete_version passt nicht – ein
 //                       anderes Gerät war schneller. Neu holen, nicht überschreiben.
-//   not_found           SicherungHolen: Für das Konto gibt es keine Sicherung.
+//   not_found           SicherungHolen: Für das Konto gibt es keine Sicherung
+//                       oder keine Fassung mit dieser Version (mehr).
 //   resource_exhausted  SicherungSpeichern: Sicherung größer als 8 MiB ("zu
 //                       groß") oder Tageslimit erreicht ("morgen wieder"). Wer
 //                       höchstens 8 MiB gesendet hat, weiß: Es ist das Limit.
-//                       SicherungHolen, SicherungLoeschen: Tageslimit erreicht.
+//                       SicherungHolen, FassungenAuflisten, SicherungLoeschen:
+//                       Tageslimit erreicht.
 //   unavailable         vorübergehend (auch: gerade zu viele Sicherungen
 //                       gleichzeitig); später wiederholen.
 //   internal            Fehler im Server.
@@ -43,8 +47,14 @@ service DatensicherungDienst {
   // nie unbemerkt eine neuere Sicherung.
   rpc SicherungSpeichern(SicherungSpeichernRequest) returns (SicherungSpeichernResponse);
 
-  // Liefert die neueste Fassung.
+  // Liefert die neueste Fassung oder, mit version, eine ältere
+  // (Anforderung R-4: Wiederherstellen von vor ein paar Tagen).
   rpc SicherungHolen(SicherungHolenRequest) returns (SicherungHolenResponse);
+
+  // Listet alle Fassungen, die der Server noch hat, die neueste zuerst. Ohne
+  // Sicherung ist die Liste leer. Ältere Fassungen hält der Server 7 Tage
+  // (höchstens 200); welche er gerade noch hat, zeigt nur diese Liste.
+  rpc FassungenAuflisten(FassungenAuflistenRequest) returns (FassungenAuflistenResponse);
 
   // Löscht die Sicherung mit allen älteren Fassungen. Gibt es keine, ist das
   // kein Fehler.
@@ -64,11 +74,30 @@ message SicherungSpeichernResponse {
   int64 version = 1;
 }
 
-message SicherungHolenRequest {}
+message SicherungHolenRequest {
+  // Version aus FassungenAuflisten; 0 (oder weggelassen) = die neueste.
+  int64 version = 1;
+}
 
 message SicherungHolenResponse {
   bytes chiffrat = 1;
   int64 version = 2;
+}
+
+message FassungenAuflistenRequest {}
+
+message FassungenAuflistenResponse {
+  // Die neueste zuerst; leer, wenn es keine Sicherung gibt.
+  repeated SicherungsFassung fassungen = 1;
+}
+
+// Eine gespeicherte Fassung, ohne Inhalt.
+message SicherungsFassung {
+  int64 version = 1;
+  // Wann der Server sie gespeichert hat (Uhr des Servers).
+  google.protobuf.Timestamp gespeichert_am = 2;
+  // Größe des Chiffrats in Bytes.
+  int64 bytes = 3;
 }
 
 message SicherungLoeschenRequest {}

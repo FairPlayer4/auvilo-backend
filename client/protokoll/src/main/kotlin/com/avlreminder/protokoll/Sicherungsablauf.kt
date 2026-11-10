@@ -27,6 +27,29 @@ interface SicherungsAblage {
     suspend fun loeschen()
 }
 
+/** Eine Fassung der Sicherung auf dem Server, ohne Inhalt (R-4). */
+data class SicherungsFassung(val version: Long, val gespeichert: Instant, val bytes: Long)
+
+/**
+ * Die älteren Fassungen der Sicherung auf dem Server (R-4: eine Sicherung von vor ein
+ * paar Tagen wiederherstellen). Eigene Schnittstelle neben [SicherungsAblage], weil der
+ * Sicherungsablauf sie nicht braucht. Der Server hält ältere Fassungen 7 Tage
+ * (höchstens 200); welche er noch hat, zeigt nur [fassungen].
+ */
+interface FassungsArchiv {
+    /**
+     * Alle Fassungen, die der Server noch hat, die neueste zuerst; leer ohne Sicherung.
+     * Zählt wie ein Abruf: wirft [SicherungTageslimit], wenn für heute genug geholt wurde.
+     */
+    suspend fun fassungen(): List<SicherungsFassung>
+
+    /**
+     * Die Fassung mit [version] (aus [fassungen], größer als 0), oder null, wenn der
+     * Server sie nicht mehr hat; wirft [SicherungTageslimit] wie [SicherungsAblage.holen].
+     */
+    suspend fun holen(version: Long): GeholteSicherung?
+}
+
 /**
  * Was ein Gerät sich über die Sicherungen merkt (E-B2b-3).
  *

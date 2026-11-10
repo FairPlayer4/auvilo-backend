@@ -9,6 +9,7 @@ import com.avlreminder.protokoll.DiagnoseTageslimit
 import com.avlreminder.protokoll.DiagnoseZuGross
 import com.avlreminder.protokoll.GeraeteFreischaltung
 import com.avlreminder.protokoll.GeraetNichtFreigeschaltet
+import com.avlreminder.protokoll.FassungsArchiv
 import com.avlreminder.protokoll.GeholteSicherung
 import com.avlreminder.protokoll.GeholtesBackup
 import com.avlreminder.protokoll.KontoAufDemServer
@@ -16,6 +17,7 @@ import com.avlreminder.protokoll.KontoGeraet
 import com.avlreminder.protokoll.SicherungTageslimit
 import com.avlreminder.protokoll.SicherungZuGross
 import com.avlreminder.protokoll.SicherungsAblage
+import com.avlreminder.protokoll.SicherungsFassung
 import com.avlreminder.protokoll.VersionVeraltet
 import com.avlreminder.schnittstelle.v1.AnmeldeDienstClient
 import com.avlreminder.schnittstelle.v1.BackupHolenRequest
@@ -30,6 +32,7 @@ import com.avlreminder.schnittstelle.v1.GeraeteAuflistenRequest
 import com.avlreminder.schnittstelle.v1.GeraeteDienstClient
 import com.avlreminder.schnittstelle.v1.MitWiederherstellungFreischaltenRequest
 import com.avlreminder.schnittstelle.v1.SchluesselDienstClient
+import com.avlreminder.schnittstelle.v1.FassungenAuflistenRequest
 import com.avlreminder.schnittstelle.v1.SicherungHolenRequest
 import com.avlreminder.schnittstelle.v1.SicherungLoeschenRequest
 import com.avlreminder.schnittstelle.v1.SicherungSpeichernRequest
@@ -51,6 +54,7 @@ import okio.Buffer
 import okio.ForwardingSource
 import okio.buffer
 import java.io.IOException
+import java.time.Instant
 import java.util.concurrent.TimeUnit
 
 /**
@@ -290,10 +294,19 @@ class ServerKonto(verbindung: Verbindung, token: String) : KontoAufDemServer {
  * ein fremdes Gerät überschreiben (veraltet) oder „keine Sicherung“ melden, wo es
  * nur einen Netzfehler gab.
  */
-class ServerSicherungsAblage(private val verbindung: Verbindung, private val token: String) : SicherungsAblage {
-    override suspend fun holen(): GeholteSicherung? =
+class ServerSicherungsAblage(private val verbindung: Verbindung, private val token: String) : SicherungsAblage, FassungsArchiv {
+    override suspend fun holen(): GeholteSicherung? = holenVersion(0)
+
+    override suspend fun holen(version: Long): GeholteSicherung? {
+        // 0 hieße beim Server „die neueste“; wer eine bestimmte will, soll sie bekommen oder keine.
+        require(version > 0) { "Version muss größer als 0 sein" }
+        return holenVersion(version)
+    }
+
+    private suspend fun holenVersion(version: Long): GeholteSicherung? =
         try {
-            val s = verbindung.sicherung.sicherungHolen(SicherungHolenRequest.getDefaultInstance(), mitSitzung(token)).ergebnis()
+            val anfrage = SicherungHolenRequest.newBuilder().setVersion(version).build()
+            val s = verbindung.sicherung.sicherungHolen(anfrage, mitSitzung(token)).ergebnis()
             GeholteSicherung(s.chiffrat.toByteArray(), s.version)
         } catch (e: Serverfehler) {
             when (e.code) {
@@ -301,6 +314,17 @@ class ServerSicherungsAblage(private val verbindung: Verbindung, private val tok
                 Code.RESOURCE_EXHAUSTED -> throw SicherungTageslimit("Abrufe der Sicherung")
                 else -> throw e
             }
+        }
+
+    override suspend fun fassungen(): List<SicherungsFassung> =
+        try {
+            verbindung.sicherung.fassungenAuflisten(FassungenAuflistenRequest.getDefaultInstance(), mitSitzung(token)).ergebnis()
+                .fassungenList.map {
+                    SicherungsFassung(it.version, Instant.ofEpochSecond(it.gespeichertAm.seconds, it.gespeichertAm.nanos.toLong()), it.bytes)
+                }
+        } catch (e: Serverfehler) {
+            if (e.code == Code.RESOURCE_EXHAUSTED) throw SicherungTageslimit("Abrufe der Sicherung")
+            throw e
         }
 
     override suspend fun speichern(chiffrat: ByteArray, erwartet: Long): Long =

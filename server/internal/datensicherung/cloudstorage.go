@@ -1,11 +1,13 @@
 package datensicherung
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 
 	"cloud.google.com/go/storage"
 	"google.golang.org/api/googleapi"
@@ -68,10 +70,21 @@ func (c *CloudStorage) Speichern(ctx context.Context, kontoID string, chiffrat [
 	return w.Attrs().Generation, nil
 }
 
-func (c *CloudStorage) Holen(ctx context.Context, kontoID string) (Fassung, error) {
+func (c *CloudStorage) Holen(ctx context.Context, kontoID string, version int64) (Fassung, error) {
+	// KRITISCH: Eine negative Generation hieße für die Bibliothek "keine Angabe"
+	// und lieferte die neueste Fassung statt eines Fehlers.
+	if version < 0 {
+		return Fassung{}, ErrNichtGefunden
+	}
 	// Ohne Angabe einer Generation liest Cloud Storage die aktuelle Fassung; der
 	// Reader bleibt bei genau dieser, auch wenn währenddessen jemand speichert.
-	r, err := c.bucket.Object(objektname(kontoID)).NewReader(ctx)
+	// Eine ältere Fassung gibt es nur unter dem Objekt dieses Kontos; die
+	// Generation eines anderen Kontos findet Cloud Storage hier nicht.
+	obj := c.bucket.Object(objektname(kontoID))
+	if version > 0 {
+		obj = obj.Generation(version)
+	}
+	r, err := obj.NewReader(ctx)
 	if errors.Is(err, storage.ErrObjectNotExist) {
 		return Fassung{}, ErrNichtGefunden
 	}
@@ -89,6 +102,31 @@ func (c *CloudStorage) Holen(ctx context.Context, kontoID string) (Fassung, erro
 		return Fassung{}, fmt.Errorf("gespeicherte Sicherung größer als %d Bytes", MaxChiffrat)
 	}
 	return Fassung{Chiffrat: chiffrat, Version: r.Attrs.Generation}, nil
+}
+
+// Fassungen listet alle Generationen des Objekts, auch die älteren.
+func (c *CloudStorage) Fassungen(ctx context.Context, kontoID string) ([]FassungsInfo, error) {
+	name := objektname(kontoID)
+	liste := []FassungsInfo{}
+	it := c.bucket.Objects(ctx, &storage.Query{Prefix: name, Versions: true})
+	for {
+		attrs, err := it.Next()
+		if errors.Is(err, iterator.Done) {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		// KRITISCH: Prefix passt auch auf längere Namen ("…/konto-10" zu
+		// "…/konto-1"); deren Fassungen gehören einem anderen Konto.
+		if attrs.Name != name {
+			continue
+		}
+		// Created ist bei jeder Generation der Zeitpunkt ihres Speicherns.
+		liste = append(liste, FassungsInfo{Version: attrs.Generation, Gespeichert: attrs.Created, Bytes: attrs.Size})
+	}
+	slices.SortFunc(liste, func(a, b FassungsInfo) int { return cmp.Compare(b.Version, a.Version) })
+	return liste, nil
 }
 
 // Loeschen entfernt alle Generationen des Objekts, auch die älteren Fassungen

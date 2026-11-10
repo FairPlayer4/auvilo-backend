@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"connectrpc.com/connect"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	v1 "github.com/FairPlayer4/avlreminder-backend/server/gen/avlreminder/v1"
 	"github.com/FairPlayer4/avlreminder-backend/server/gen/avlreminder/v1/avlreminderv1connect"
@@ -43,6 +44,8 @@ const AbrufeJeTag = 50
 // LoeschungenJeTag gibt an, wie oft ein Konto am Tag (UTC) seine Sicherung
 // löschen darf. Jedes Löschen listet und löscht bis zu 200 Fassungen.
 const LoeschungenJeTag = 20
+
+const textAbrufLimit = "Tageslimit für Abrufe der Sicherung erreicht – morgen wieder"
 
 // Arten im Tageszähler.
 const (
@@ -126,19 +129,25 @@ func (d *dienste) SicherungSpeichern(ctx context.Context, req *connect.Request[v
 	return connect.NewResponse(&v1.SicherungSpeichernResponse{Version: version}), nil
 }
 
-// SicherungHolen liefert die neueste Fassung der Sicherung des eigenen Kontos.
+// SicherungHolen liefert die neueste oder eine ältere Fassung der Sicherung des
+// eigenen Kontos (R-4).
 //
 // KRITISCH: Gezählt wird vor dem Holen, auch wenn es keine Sicherung gibt:
-// Erst das Zählen begrenzt die ausgehenden Daten.
-func (d *dienste) SicherungHolen(ctx context.Context, _ *connect.Request[v1.SicherungHolenRequest]) (*connect.Response[v1.SicherungHolenResponse], error) {
+// Erst das Zählen begrenzt die ausgehenden Daten. Die Konto-ID kommt aus der
+// Sitzung; eine Version eines anderen Kontos findet die Ablage nicht.
+func (d *dienste) SicherungHolen(ctx context.Context, req *connect.Request[v1.SicherungHolenRequest]) (*connect.Response[v1.SicherungHolenResponse], error) {
 	id, err := identitaet(ctx)
 	if err != nil {
 		return nil, err
 	}
-	if err := d.verbrauche(ctx, kontingentAbruf, id.KontoID, AbrufeJeTag, "Tageslimit für Abrufe der Sicherung erreicht – morgen wieder"); err != nil {
+	version := req.Msg.GetVersion()
+	if version < 0 {
+		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("Version negativ"))
+	}
+	if err := d.verbrauche(ctx, kontingentAbruf, id.KontoID, AbrufeJeTag, textAbrufLimit); err != nil {
 		return nil, err
 	}
-	f, err := d.k.Sicherungen.Holen(ctx, id.KontoID)
+	f, err := d.k.Sicherungen.Holen(ctx, id.KontoID, version)
 	if errors.Is(err, datensicherung.ErrNichtGefunden) {
 		return nil, connect.NewError(connect.CodeNotFound, errors.New("keine Sicherung"))
 	}
@@ -147,6 +156,29 @@ func (d *dienste) SicherungHolen(ctx context.Context, _ *connect.Request[v1.Sich
 	}
 	slog.InfoContext(ctx, "Sicherung geholt", "geraet", id.GeraetID, "version", f.Version, "bytes", len(f.Chiffrat))
 	return connect.NewResponse(&v1.SicherungHolenResponse{Chiffrat: f.Chiffrat, Version: f.Version}), nil
+}
+
+// FassungenAuflisten listet die Fassungen des eigenen Kontos, die neueste zuerst
+// (R-4). Zählt wie ein Abruf: Die Liste ist klein, aber jeder Aufruf liest im
+// Bucket.
+func (d *dienste) FassungenAuflisten(ctx context.Context, _ *connect.Request[v1.FassungenAuflistenRequest]) (*connect.Response[v1.FassungenAuflistenResponse], error) {
+	id, err := identitaet(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err := d.verbrauche(ctx, kontingentAbruf, id.KontoID, AbrufeJeTag, textAbrufLimit); err != nil {
+		return nil, err
+	}
+	liste, err := d.k.Sicherungen.Fassungen(ctx, id.KontoID)
+	if err != nil {
+		return nil, speicherFehler(ctx, err)
+	}
+	res := &v1.FassungenAuflistenResponse{}
+	for _, f := range liste {
+		res.Fassungen = append(res.Fassungen, &v1.SicherungsFassung{Version: f.Version, GespeichertAm: timestamppb.New(f.Gespeichert), Bytes: f.Bytes})
+	}
+	slog.InfoContext(ctx, "Fassungen aufgelistet", "geraet", id.GeraetID, "anzahl", len(liste))
+	return connect.NewResponse(res), nil
 }
 
 // SicherungLoeschen löscht die Sicherung des eigenen Kontos mit allen älteren
