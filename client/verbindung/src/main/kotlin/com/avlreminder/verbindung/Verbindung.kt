@@ -43,17 +43,35 @@ import com.connectrpc.impl.ProtocolClient
 import com.connectrpc.okhttp.ConnectOkHttpClient
 import com.connectrpc.protocols.NetworkProtocol
 import com.google.protobuf.ByteString
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
+import okhttp3.Response
+import okhttp3.ResponseBody.Companion.asResponseBody
+import okio.Buffer
+import okio.ForwardingSource
+import okio.buffer
 import java.io.IOException
+import java.util.concurrent.TimeUnit
 
-/** Die Connect-Clients für einen Server. */
-class Verbindung(server: String, val http: OkHttpClient = OkHttpClient()) {
+/**
+ * Die Connect-Clients für einen Server.
+ *
+ * [basis] liefert Zeitlimits und anderes; die Obergrenze für Antworten
+ * ([MAX_ANTWORT]) kommt immer dazu, auch bei einem eigenen Client.
+ */
+class Verbindung(server: String, basis: OkHttpClient = standardHttp()) {
+    val http: OkHttpClient = basis.newBuilder().addInterceptor(AntwortGrenze(MAX_ANTWORT)).build()
+
     private val client = ProtocolClient(
         ConnectOkHttpClient(http),
         ProtocolClientConfig(
             host = server,
             serializationStrategy = GoogleJavaLiteProtobufStrategy(),
             networkProtocol = NetworkProtocol.CONNECT,
+            // KRITISCH: Connect entpackt nichts selbst (E9). Sonst entpackte es
+            // gzip nach der Obergrenze, und eine kleine Antwort könnte zu vielen
+            // MiB werden. OkHttp entpackt stattdessen vor der Obergrenze.
+            compressionPools = emptyList(),
         ),
     )
     val anmelde = AnmeldeDienstClient(client)
@@ -61,6 +79,61 @@ class Verbindung(server: String, val http: OkHttpClient = OkHttpClient()) {
     val schluessel = SchluesselDienstClient(client)
     val sicherung = DatensicherungDienstClient(client)
     val diagnose = DiagnoseDienstClient(client)
+
+    companion object {
+        /**
+         * Größte Antwort, entpackt: die größte Sicherung ([Datensicherung.MAX_CHIFFRAT])
+         * und 1 MiB für den Rest der Nachricht.
+         */
+        const val MAX_ANTWORT: Long = Datensicherung.MAX_CHIFFRAT + 1024L * 1024
+
+        /**
+         * Zeitlimits für die App (E9). OkHttp hat sonst je 10 s für Verbinden, Lesen
+         * und Schreiben, aber kein Gesamtlimit: Ein Server, der alle paar Sekunden ein
+         * Byte schickt, hielte einen Aufruf ewig offen. Lesen und Schreiben bekommen
+         * 30 s Pause, damit 8 MiB auch über langsames Mobilfunknetz gehen (der Server
+         * hat dafür selbst 30 s je Anfrage); der ganze Aufruf höchstens 2 Minuten.
+         */
+        fun standardHttp(): OkHttpClient = OkHttpClient.Builder()
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .writeTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .callTimeout(2, TimeUnit.MINUTES)
+            .build()
+    }
+}
+
+/** Die Antwort des Servers ist größer als [grenze] Bytes (entpackt); gelesen wurde nur bis dorthin. */
+class AntwortZuGross(val grenze: Long) : IOException("Antwort des Servers größer als $grenze Bytes")
+
+/**
+ * KRITISCH: Begrenzt jede Antwort auf [grenze] Bytes, entpackt gezählt (E9).
+ * Als Interceptor der Anwendung sieht er die Antwort, nachdem OkHttp gzip
+ * entpackt hat. Eine zu große Antwort bricht beim Lesen ab, statt den Speicher
+ * der App zu füllen; mit bekannter Länge schon vorher.
+ */
+internal class AntwortGrenze(private val grenze: Long) : Interceptor {
+    override fun intercept(chain: Interceptor.Chain): Response {
+        val antwort = chain.proceed(chain.request())
+        val inhalt = antwort.body
+        val laenge = inhalt.contentLength()
+        if (laenge > grenze) {
+            antwort.close()
+            throw AntwortZuGross(grenze)
+        }
+        val begrenzt = object : ForwardingSource(inhalt.source()) {
+            private var gelesen = 0L
+            override fun read(sink: Buffer, byteCount: Long): Long {
+                val n = super.read(sink, byteCount)
+                if (n > 0) {
+                    gelesen += n
+                    if (gelesen > grenze) throw AntwortZuGross(grenze)
+                }
+                return n
+            }
+        }
+        return antwort.newBuilder().body(begrenzt.buffer().asResponseBody(inhalt.contentType(), laenge)).build()
+    }
 }
 
 /** Header mit dem Sitzungs-Token. */

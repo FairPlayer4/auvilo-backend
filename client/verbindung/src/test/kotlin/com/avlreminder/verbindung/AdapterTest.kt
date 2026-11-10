@@ -1,5 +1,6 @@
 package com.avlreminder.verbindung
 
+import com.avlreminder.protokoll.Datensicherung
 import com.avlreminder.protokoll.DiagnoseNichtFreigeschaltet
 import com.avlreminder.protokoll.DiagnoseTageslimit
 import com.avlreminder.protokoll.DiagnoseZuGross
@@ -28,6 +29,7 @@ import com.google.protobuf.ByteString
 import com.google.protobuf.MessageLite
 import com.sun.net.httpserver.HttpServer
 import kotlinx.coroutines.runBlocking
+import okhttp3.OkHttpClient
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -37,8 +39,11 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
+import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.net.InetSocketAddress
+import java.util.concurrent.TimeUnit
+import java.util.zip.GZIPOutputStream
 import kotlin.reflect.KClass
 
 /**
@@ -54,6 +59,12 @@ class AdapterTest {
         data class Fehler(val code: Code) : Antwort
         /** Eine Antwort ohne Connect-Fehler, etwa eine HTML-Seite von einem Proxy. */
         data class Roh(val status: Int, val typ: String, val text: String) : Antwort
+
+        /** Rohe Bytes als Erfolg, wahlweise gzip-gepackt und ohne Längenangabe. */
+        class Bytes(val inhalt: ByteArray, val gzip: Boolean = false, val ohneLaenge: Boolean = false) : Antwort
+
+        /** Antwortet erst nach [ms] Millisekunden. */
+        data class Spaet(val ms: Long) : Antwort
     }
 
     /** Eine Anfrage, wie sie beim Nachbau ankam. */
@@ -68,11 +79,23 @@ class AdapterTest {
         server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
         server.createContext("/") { ex ->
             anfragen += Anfrage(ex.requestURI.path, ex.requestHeaders.getFirst("Authorization"), ex.requestBody.readAllBytes())
-            val (status, typ, inhalt) = when (val a = antwort) {
+            val a = antwort
+            if (a is Antwort.Spaet) Thread.sleep(a.ms)
+            if (a is Antwort.Bytes) {
+                val inhalt = if (a.gzip) gzip(a.inhalt) else a.inhalt
+                ex.responseHeaders.add("Content-Type", "application/proto")
+                if (a.gzip) ex.responseHeaders.add("Content-Encoding", "gzip")
+                // Länge 0 heißt bei HttpServer: chunked, ohne Längenangabe.
+                ex.sendResponseHeaders(200, if (a.ohneLaenge) 0 else inhalt.size.toLong())
+                runCatching { ex.responseBody.use { it.write(inhalt) } } // der Client darf vorher auflegen
+                return@createContext
+            }
+            val (status, typ, inhalt) = when (a) {
                 is Antwort.Ok -> Triple(200, "application/proto", a.nachricht.toByteArray())
                 // Der Status ist für den Client zweitrangig; maßgeblich ist der Code im JSON.
                 is Antwort.Fehler -> Triple(400, "application/json", """{"code":"${a.code.codeName}","message":"nachgebaut"}""".toByteArray())
                 is Antwort.Roh -> Triple(a.status, a.typ, a.text.toByteArray())
+                is Antwort.Bytes, is Antwort.Spaet -> Triple(200, "application/proto", ByteArray(0))
             }
             ex.responseHeaders.add("Content-Type", typ)
             ex.sendResponseHeaders(status, inhalt.size.toLong())
@@ -154,6 +177,44 @@ class AdapterTest {
         server.stop(0) // der Port ist danach zu: Verbindung abgelehnt
         val e = runCatching { runBlocking { fall.aufruf(verbindung()) } }.exceptionOrNull()
         assertTrue(e is IOException, "erwartet IOException, bekommen $e")
+    }
+
+    // KRITISCH: Die größte erlaubte Sicherung kommt an, auch gzip-gepackt und
+    // ohne Längenangabe; die Obergrenze für Antworten (E9) darf sie nie abschneiden.
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("groessteSicherung")
+    fun `die größte Sicherung kommt an`(fall: GrossFall) {
+        val chiffrat = ByteArray(Datensicherung.MAX_CHIFFRAT) { (it % 251).toByte() }
+        val nachricht = SicherungHolenResponse.newBuilder().setChiffrat(ByteString.copyFrom(chiffrat)).setVersion(4).build()
+        antwort = Antwort.Bytes(nachricht.toByteArray(), fall.gzip, fall.ohneLaenge)
+        val s = runBlocking { ServerSicherungsAblage(verbindung(), TOKEN).holen() }!!
+        assertArrayEquals(chiffrat, s.chiffrat)
+        assertEquals(4, s.version)
+    }
+
+    // KRITISCH: Eine zu große Antwort bricht ab, statt den Speicher der App zu
+    // füllen (E9) – auch eine kleine gzip-Antwort, die entpackt zu groß wird.
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("zuGross")
+    fun `eine zu große Antwort bricht ab`(fall: GrossFall) {
+        antwort = Antwort.Bytes(ByteArray(fall.groesse), fall.gzip, fall.ohneLaenge)
+        val e = runCatching { runBlocking { ServerSicherungsAblage(verbindung(), TOKEN).holen() } }.exceptionOrNull()
+        assertTrue(e is AntwortZuGross, "erwartet AntwortZuGross, bekommen $e")
+    }
+
+    data class GrossFall(val name: String, val gzip: Boolean, val ohneLaenge: Boolean, val groesse: Int = 0) {
+        override fun toString() = name
+    }
+
+    // Eigene Zeitlimits bleiben erhalten, und ein Server, der zu lange schweigt,
+    // heißt für die App „kein Netz“ (IOException), nicht „Server gestört“.
+    @Test
+    fun `ein Server, der zu lange schweigt, endet als IOException`() {
+        antwort = Antwort.Spaet(2_000)
+        val kurz = OkHttpClient.Builder().readTimeout(200, TimeUnit.MILLISECONDS).build()
+        val v = Verbindung("http://127.0.0.1:${server.address.port}", kurz)
+        val e = runCatching { runBlocking { ServerSicherungsAblage(v, TOKEN).holen() } }.exceptionOrNull()
+        assertTrue(e is IOException && e !is AntwortZuGross, "erwartet IOException, bekommen $e")
     }
 
     data class Aufruf(val name: String, val aufruf: suspend (Verbindung) -> Any?) {
@@ -349,6 +410,25 @@ class AdapterTest {
         )
 
         private const val HTML_404 = "<html><body>404 Not Found</body></html>"
+
+        @JvmStatic
+        fun groessteSicherung() = listOf(
+            GrossFall("mit Längenangabe", gzip = false, ohneLaenge = false),
+            GrossFall("ohne Längenangabe", gzip = false, ohneLaenge = true),
+            GrossFall("gzip-gepackt", gzip = true, ohneLaenge = false),
+        )
+
+        private const val UEBER_DER_GRENZE = (Verbindung.MAX_ANTWORT + 1).toInt()
+
+        @JvmStatic
+        fun zuGross() = listOf(
+            GrossFall("ein Byte über der Grenze, mit Längenangabe", gzip = false, ohneLaenge = false, UEBER_DER_GRENZE),
+            GrossFall("ein Byte über der Grenze, ohne Längenangabe", gzip = false, ohneLaenge = true, UEBER_DER_GRENZE),
+            GrossFall("gzip-Bombe: wenige KiB gepackt, 64 MiB entpackt", gzip = true, ohneLaenge = false, 64 * 1024 * 1024),
+        )
+
+        private fun gzip(daten: ByteArray): ByteArray =
+            ByteArrayOutputStream().also { aus -> GZIPOutputStream(aus).use { it.write(daten) } }.toByteArray()
 
         @JvmStatic
         fun rohfaelle() = listOf(
