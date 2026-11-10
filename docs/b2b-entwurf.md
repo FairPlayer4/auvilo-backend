@@ -166,7 +166,10 @@ gleich danach neu sichern. Checkliste:
    die neue Version (Änderung in `infra/server.tf`, tofu-Test anpassen), die alte
    wird zerstört. Danach die Offline-Kopie im Passwortmanager ersetzen (Ablauf in
    [gcp-einrichtung.md](gcp-einrichtung.md)).
-4. **Testclient-Dateien löschen:** `%APPDATA%\avlreminder\testclient`.
+4. **Testclient-Dateien löschen:** `%APPDATA%\avlreminder\testclient`. Den Test-Client
+   abschalten: Desktop-Client-ID aus `google_client_ids` (`infra/variablen.tf`)
+   entfernen, `tofu apply`, und den Desktop-OAuth-Client in der Google-Konsole löschen.
+   Bis dahin braucht er die Cloud-Tests (Limits, Trennen) und das Räumen von Konten.
 5. **App neu einrichten:** Vorher in der App *Dieses Gerät abmelden*: Das verwirft
    die lokalen Cloud-Schlüssel und die Sitzung, die nach dem neuen Pfeffer zu keinem
    Konto mehr passen (sonst endet die Einrichtung in „Schlüssel eines anderen
