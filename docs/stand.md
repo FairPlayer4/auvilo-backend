@@ -301,6 +301,10 @@ Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
    zeigt beide Sicherungen mit Version, Zeit und Größe; Tageslimits greifen genau bei
    48 Sicherungen, 50 Abrufen (Auflisten zählt mit, danach auch Holen gesperrt), 20
    Löschungen und 10 neuen Geräten; Warnungen im Log nur mit Art, ohne Inhalte.
+   **Phase C am 2026-11-10** (nur Client, kein Deploy nötig): W-7 im
+   `Sicherungsablauf` (nach fremder Fassung Version 0), `SitzungAbgelehnt` und
+   `Anmeldung.mitSitzung` (abgelehnte Sitzung einmal erneuern). In der App ist
+   `CloudBackup.kt` geteilt (Pin `83009b7`).
    App-Schritte 4 und 5 und alles Weitere: App-Repo `docs/stand.md`. Offene
    Review-Punkte stehen in `.review/state.md` („Offen“).
 5. Für den B3-Entwurf aus Lauf 4: A2 (Mitgliedschaft: Server-Liste oder signiertes

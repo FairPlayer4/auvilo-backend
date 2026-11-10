@@ -55,12 +55,13 @@ Das eigentliche Gedächtnis: wiederkehrende Muster, nach denen jeder Lauf geziel
   go-review.md und CLAUDE.md; alter Code nie gezielt durchsucht (E1 Lauf 5).
 - **Test kann nicht rot werden / trifft die Grenze nicht** (Lauf 5–7). Bei neuen Tests
   einen Gegenwert wählen.
-- **Schutz nur positiv geprüft** (Lauf 7–10). Lauf 10: W-7 ohne „zu weit“-Fall. Bei
+- **Schutz nur positiv geprüft** (Lauf 7–10). Bei
   Erlaubnis-Tests die Wirkung prüfen, bei Schutz-Tests auch „zusätzlich zu weit“.
 - **Testattrappe bildet Serverregel nicht nach** (Lauf 9, 10): `FalscheAblage`, App
   `FakeServer` (R4 Lauf 10). Gemeinsamer Fake mit Serverregeln empfohlen.
-- **Abläufe außerhalb von `protokoll`** (Lauf 4, 5, 8, 10): Einrichtung, Sitzung und
-  Rückfragen sind umgezogen; offen W-7 und Reset-Folge in der App (R3 Lauf 10).
+- **Abläufe außerhalb von `protokoll`** (Lauf 4, 5, 8, 10): Einrichtung, Sitzung,
+  Rückfragen, Reset-Folge (`CloudLoeschen`) und W-7 sind umgezogen (zuletzt 2026-11-10).
+  Beim nächsten App-Review prüfen, ob neue Regeln wieder in der App entstehen.
 - **Drift: `speicher.Speicher` und `dienst` wachsen** (Lauf 4 → 8: 6 → 10 Methoden,
   Freischaltprüfung opt-in je Handler; E2, E10 Lauf 8). Vor B3 handeln.
 - **stand.md wird Tagebuch** (Lauf 6, 8, 10). Kürzungsplan in runs/2026-11-09.md.
@@ -69,15 +70,15 @@ Das eigentliche Gedächtnis: wiederkehrende Muster, nach denen jeder Lauf geziel
 ## Offen (Details in den Berichten)
 - Lauf 10 (runs/2026-11-09.md): erledigt am 2026-11-09 (Phase A) R1, R2, R4 (Regel fürs
   erste Schlüssel-Backup in beiden Attrappen, kein gemeinsames Modul), Fragen 1–3, die
-  minor-Funde `setUp`/`unlocked` und Mutex in `work`, der wacklige Test. Offen: R3
-  (`CloudBackup.kt` teilen), R5 (Tests), übrige minor-Funde (Rückfrage hält den Mutex,
+  minor-Funde `setUp`/`unlocked` und Mutex in `work`, der wacklige Test; am 2026-11-10
+  (Phase C) R3 und W-7 „zu weit“ aus R5. Offen: R5 (übrige Tests), übrige minor-Funde (Rückfrage hält den Mutex,
   halb gescheitertes Löschen, `cannotActOnServer`, `compareNow`, W-7-Reihenfolge,
   `beforeName`, `takeIfDue`, `RestoreFiles`), Doku kürzen.
 - Lauf 9 (runs/2026-11-08.md): Fragen 1 und 4 und R3 umgesetzt und deployt am 2026-11-09; R2 bis B3 zurückgestellt; R5 (Cloud-Fälle in App `geraetetest.md`)
   kommt mit der Überarbeitung der Gerätetests.
 - Lauf 8 (runs/2026-11-05.md), Stand am 2026-11-09 im Code geprüft: erledigt E1, E5, E12;
-  weitgehend E6; teilweise E7 (App-Regeln im Test-Client), E8 (Fehlerarten im Adapter);
-  erledigt am 2026-11-10 (Phase B) E3, E4, E9, E14, E16, E18. Offen E2/E10 (Drift), E11
+  weitgehend E6; erledigt am 2026-11-10 (Phase B) E3, E4, E9, E14, E16, E18, (Phase C)
+  E7 und E8 (`Fehlergrund` als Error-Detail zurückgestellt, anforderungen.md 2026-11-10). Offen E2/E10 (Drift), E11
   (A2), E13 (Begriffe), E15 (Plätze je Konto, U2), E17 (stand.md, mit dem Kürzungsplan
   aus Lauf 10).
 - Lauf 6 (runs/2026-11-03-2.md): E4 (30 s bei 8 MiB nicht gemessen), E5 (Skript-Check
