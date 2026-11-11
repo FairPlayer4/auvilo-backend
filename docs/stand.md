@@ -129,20 +129,18 @@ Einzelheiten stehen in den Entwürfen, in git und in den Review-Berichten
 | B2b | Daten-Backup einer Person: Datensicherung in Cloud Storage, Freischaltung neuer Geräte (E-B2b-13), Tageslimits, Fassungen (R-4), Diagnose-Log ([b2b-entwurf.md](b2b-entwurf.md), [diagnose-entwurf.md](diagnose-entwurf.md)) | Server und Client fertig, zuletzt in der Cloud getestet am 2026-11-10 (Limits, Fassungen, Trennen ab 150 %); App-Einbindung: App-Repo `docs/stand.md` |
 | B3 | Teilen zwischen Personen | nicht begonnen; Vorgaben in [anforderungen.md](anforderungen.md) Kap. 4.6; davor die Sicherheitsphase |
 
-Letzte Deploys: PR #19 am 2026-11-10 (Phase B, Revision `server-00017-5n2`). Phase C
-war nur Client. Phase D (2026-11-10, Richtlinie je Prozedur, ein Typ je Dienst,
-Speicher-Entscheidungen, Begriffe) liegt in `develop`, **noch nicht deployt**.
+Letzter Deploy: PR #20 am 2026-11-11 (Phase D: Richtlinie je Prozedur, ein Typ je
+Dienst, Speicher-Entscheidungen, Begriffe), Revision `server-00018-fc4`, bereit.
 
 ## Offen
-1. **Deploy Phase D** per PR nach `main` (CI auf `develop` grün, dann Kevins Go).
-2. **Eigenbetrieb** seit 2026-11-07: Die App sichert Kevins echte Daten in der Cloud;
+1. **Eigenbetrieb** seit 2026-11-07: Die App sichert Kevins echte Daten in der Cloud;
    Claude darf die Schlüssel dafür kennen. Vor dem ersten weiteren Nutzer beginnt die
    Sicherheitsphase (Checkliste „Vor dem ersten weiteren Nutzer“ in b2b-entwurf.md;
    `CLAUDE.md`). Die Desktop-Client-ID des Test-Clients bleibt bis dahin.
-3. **App-Einbindung** (Schritte 1–5, Wiederherstellen R-1…R-6): App-Repo
+2. **App-Einbindung** (Schritte 1–5, Wiederherstellen R-1…R-6): App-Repo
    `docs/stand.md`; dort auch die Gerätetests.
-4. **Review-Punkte:** `.review/state.md`, Abschnitt „Offen“.
-5. **B3:** Vorgaben B3-1 bis B3-4 (anforderungen.md Kap. 4.6).
+3. **Review-Punkte:** `.review/state.md`, Abschnitt „Offen“.
+4. **B3:** Vorgaben B3-1 bis B3-4 (anforderungen.md Kap. 4.6).
 
 ## Befehle
 ```bash
