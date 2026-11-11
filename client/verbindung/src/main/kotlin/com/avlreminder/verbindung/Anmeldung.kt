@@ -140,6 +140,26 @@ class Anmeldung(
         return if (gemerkt.laeuftAbUnix - uhr() >= VORLAUF) gemerkt else erneuern()
     }
 
+    /**
+     * Führt [aufruf] mit einer gültigen Sitzung aus. Lehnt der Dienst die Sitzung ab
+     * ([SitzungAbgelehnt]), erneuert es sie einmal mit dem Geräteschlüssel und ruft
+     * [aufruf] noch einmal auf.
+     *
+     * KRITISCH: Erst das Erneuern sagt, warum die Sitzung nicht mehr gilt: Ist das Gerät
+     * gesperrt, wirft es [GeraetGesperrt], sonst [AnmeldungAbgelehnt] (neu mit Google
+     * anmelden), oder es klappt (Sitzungen auf dem Server gelöscht). Ein zweites
+     * [SitzungAbgelehnt] geht an den Aufrufer; es wird nicht endlos erneuert.
+     * [aufruf] muss sich wiederholen lassen.
+     */
+    suspend fun <T> mitSitzung(aufruf: suspend (Sitzung) -> T): T {
+        val sitzung = sitzung()
+        return try {
+            aufruf(sitzung)
+        } catch (_: SitzungAbgelehnt) {
+            aufruf(erneuern())
+        }
+    }
+
     private fun Serverfehler.uebersetzt(): Exception =
         when {
             !vomDienst -> this

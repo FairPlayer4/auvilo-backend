@@ -642,6 +642,11 @@ func pruefeVertrag(t *testing.T, neu func(t *testing.T) Speicher) {
 				muss(t, s.GeraetSperren(ctx, kontoA, "geraet-alt", t0))
 				anmelden(t, s, "kennung-b", "geraet-b", "hash-b", 2)
 			}, "geraet-b", ErrNichtGefunden},
+		{"abgelehnt für ein gesperrtes Gerät, auch ohne freigeschaltetes",
+			func(t *testing.T, s Speicher, kontoA string) {
+				muss(t, s.GeraetSperren(ctx, kontoA, "geraet-alt", t0))
+				muss(t, s.GeraetSperren(ctx, kontoA, "geraet-neu", t0))
+			}, "geraet-neu", ErrGeraetGesperrt},
 	}
 	for _, fall := range ungeschuetztFaelle {
 		t.Run("erstes Backup eines nicht freigeschalteten Geräts: "+fall.name, func(t *testing.T) {

@@ -154,8 +154,17 @@ fun mitSitzung(token: String): Headers = mapOf("Authorization" to listOf("Bearer
 fun <T> ResponseMessage<T>.ergebnis(): T =
     when (this) {
         is ResponseMessage.Success -> message
-        is ResponseMessage.Failure -> throw netzfehler(cause) ?: Serverfehler(cause, vomDienst = istConnectFehler(headers))
+        is ResponseMessage.Failure -> throw netzfehler(cause) ?: serverfehler(cause, vomDienst = istConnectFehler(headers))
     }
+
+/**
+ * KRITISCH: unauthenticated vom Dienst selbst heißt bei Aufrufen mit Sitzung: Die
+ * Sitzung gilt nicht mehr (Gerät gesperrt, Sitzungen auf dem Server gelöscht). Das ist
+ * kein Serverfehler, nach dem die App „später erneut versuchen“ sagt, sondern
+ * [SitzungAbgelehnt]: Erneuern klärt, ob das Gerät gesperrt ist ([Anmeldung.mitSitzung]).
+ */
+private fun serverfehler(cause: ConnectException, vomDienst: Boolean): Serverfehler =
+    if (vomDienst && cause.code == Code.UNAUTHENTICATED) SitzungAbgelehnt(cause) else Serverfehler(cause, vomDienst)
 
 /** Die [IOException] in [e], wenn der Aufruf den Server nicht erreicht hat. */
 private fun netzfehler(e: ConnectException): IOException? =
@@ -176,13 +185,20 @@ private fun istConnectFehler(headers: Headers): Boolean =
  * Ein Fehler beim Aufruf. [vomDienst] = false: Die Antwort kam nicht vom
  * Dienst (kein Connect-Fehler), der Code ist nur aus dem HTTP-Status geraten.
  */
-class Serverfehler(val ursache: ConnectException, val vomDienst: Boolean = true) :
+open class Serverfehler(val ursache: ConnectException, val vomDienst: Boolean = true) :
     Exception("Server: ${ursache.code.codeName} - ${ursache.message}", ursache) {
     val code: Code get() = ursache.code
 
     /** permission_denied, gesagt vom Dienst selbst (nicht von einer Sperre davor). */
     internal val keineErlaubnis: Boolean get() = vomDienst && code == Code.PERMISSION_DENIED
 }
+
+/**
+ * Der Dienst hat die Sitzung abgelehnt (unauthenticated). Beim Anmelden und Erneuern
+ * wird daraus [AnmeldungAbgelehnt]; bei allen anderen Aufrufen hilft vielleicht ein
+ * Erneuern mit dem Geräteschlüssel ([Anmeldung.mitSitzung]).
+ */
+class SitzungAbgelehnt(ursache: ConnectException) : Serverfehler(ursache, vomDienst = true)
 
 /**
  * permission_denied heißt bei den ändernden Aufrufen: Dieses Gerät ist noch
@@ -195,11 +211,20 @@ class Serverfehler(val ursache: ConnectException, val vomDienst: Boolean = true)
 private fun Serverfehler.nichtFreigeschaltetOder(): Exception =
     if (keineErlaubnis) GeraetNichtFreigeschaltet() else this
 
-/** Die Backup-Ablage des Servers für die Einrichtung (protokoll). */
-class ServerBackupAblage(private val verbindung: Verbindung, private val token: String) : BackupAblage {
+/**
+ * Die Backup-Ablage des Servers für die Einrichtung (protokoll).
+ *
+ * Die Adapter holen das Token vor jedem Aufruf (R2): Zwischen zwei Aufrufen
+ * kann die Person lange tippen (Wiederherstellungsschlüssel), und eine Stunde
+ * später gilt die Sitzung nicht mehr. Üblich: `{ anmeldung.sitzung().token }`.
+ */
+class ServerBackupAblage(private val verbindung: Verbindung, private val token: suspend () -> String) : BackupAblage {
+    /** Mit festem Token (Tests, kurze Abläufe). */
+    constructor(verbindung: Verbindung, token: String) : this(verbindung, { token })
+
     override suspend fun holen(): GeholtesBackup? =
         try {
-            val b = verbindung.schluessel.backupHolen(BackupHolenRequest.getDefaultInstance(), mitSitzung(token)).ergebnis()
+            val b = verbindung.schluessel.backupHolen(BackupHolenRequest.getDefaultInstance(), mitSitzung(token())).ergebnis()
             GeholtesBackup(b.chiffrat.toByteArray(), b.version)
         } catch (e: Serverfehler) {
             if (e.code == Code.NOT_FOUND) null else throw e
@@ -212,7 +237,7 @@ class ServerBackupAblage(private val verbindung: Verbindung, private val token: 
                 .setFreischaltschluessel(ByteString.copyFrom(freischaltschluessel))
                 .setErwarteteVersion(erwartet)
                 .build()
-            verbindung.schluessel.backupSpeichern(anfrage, mitSitzung(token)).ergebnis().version
+            verbindung.schluessel.backupSpeichern(anfrage, mitSitzung(token())).ergebnis().version
         } catch (e: Serverfehler) {
             if (e.code == Code.FAILED_PRECONDITION) throw VersionVeraltet() else throw e.nichtFreigeschaltetOder()
         }
@@ -220,7 +245,7 @@ class ServerBackupAblage(private val verbindung: Verbindung, private val token: 
     /** Löscht das Schlüssel-Backup des Kontos (gibt es keins, ist das kein Fehler). */
     suspend fun loeschen() {
         try {
-            verbindung.schluessel.backupLoeschen(BackupLoeschenRequest.getDefaultInstance(), mitSitzung(token)).ergebnis()
+            verbindung.schluessel.backupLoeschen(BackupLoeschenRequest.getDefaultInstance(), mitSitzung(token())).ergebnis()
         } catch (e: Serverfehler) {
             throw e.nichtFreigeschaltetOder()
         }
@@ -234,11 +259,14 @@ class ServerBackupAblage(private val verbindung: Verbindung, private val token: 
  * passt nicht“. not_found (fremdes Gerät) und failed_precondition (gesperrt, kein
  * Backup mit Freischaltschlüssel) bleiben Serverfehler mit eigener Meldung.
  */
-class ServerGeraete(private val verbindung: Verbindung, private val token: String) : GeraeteFreischaltung {
+class ServerGeraete(private val verbindung: Verbindung, private val token: suspend () -> String) : GeraeteFreischaltung {
+    /** Mit festem Token (Tests, kurze Abläufe). */
+    constructor(verbindung: Verbindung, token: String) : this(verbindung, { token })
+
     override suspend fun mitWiederherstellung(signatur: ByteArray) {
         try {
             val anfrage = MitWiederherstellungFreischaltenRequest.newBuilder().setSignatur(ByteString.copyFrom(signatur)).build()
-            verbindung.geraete.mitWiederherstellungFreischalten(anfrage, mitSitzung(token)).ergebnis()
+            verbindung.geraete.mitWiederherstellungFreischalten(anfrage, mitSitzung(token())).ergebnis()
         } catch (e: Serverfehler) {
             throw e.nichtFreigeschaltetOder()
         }
@@ -252,7 +280,7 @@ class ServerGeraete(private val verbindung: Verbindung, private val token: Strin
     suspend fun sperren(geraetId: String) {
         try {
             val anfrage = GeraetSperrenRequest.newBuilder().setGeraetId(geraetId).build()
-            verbindung.geraete.geraetSperren(anfrage, mitSitzung(token)).ergebnis()
+            verbindung.geraete.geraetSperren(anfrage, mitSitzung(token())).ergebnis()
         } catch (e: Serverfehler) {
             throw e.nichtFreigeschaltetOder()
         }
@@ -260,14 +288,14 @@ class ServerGeraete(private val verbindung: Verbindung, private val token: Strin
 
     /** Die Geräte des Kontos, auch gesperrte. */
     suspend fun auflisten(): List<KontoGeraet> =
-        verbindung.geraete.geraeteAuflisten(GeraeteAuflistenRequest.getDefaultInstance(), mitSitzung(token)).ergebnis()
+        verbindung.geraete.geraeteAuflisten(GeraeteAuflistenRequest.getDefaultInstance(), mitSitzung(token())).ergebnis()
             .geraeteList.map { KontoGeraet(it.geraetId, it.gesperrt, it.diesesGeraet) }
 
     /** Schaltet ein anderes Gerät des Kontos frei; dieses Gerät muss selbst freigeschaltet sein. */
     suspend fun freischalten(geraetId: String) {
         try {
             val anfrage = GeraetFreischaltenRequest.newBuilder().setGeraetId(geraetId).build()
-            verbindung.geraete.geraetFreischalten(anfrage, mitSitzung(token)).ergebnis()
+            verbindung.geraete.geraetFreischalten(anfrage, mitSitzung(token())).ergebnis()
         } catch (e: Serverfehler) {
             throw e.nichtFreigeschaltetOder()
         }
@@ -275,7 +303,10 @@ class ServerGeraete(private val verbindung: Verbindung, private val token: Strin
 }
 
 /** Das Konto auf dem Server für „Cloud-Daten löschen“ ([com.avlreminder.protokoll.CloudLoeschen]). */
-class ServerKonto(verbindung: Verbindung, token: String) : KontoAufDemServer {
+class ServerKonto(verbindung: Verbindung, token: suspend () -> String) : KontoAufDemServer {
+    /** Mit festem Token (Tests, kurze Abläufe). */
+    constructor(verbindung: Verbindung, token: String) : this(verbindung, { token })
+
     private val geraete = ServerGeraete(verbindung, token)
     private val sicherung = ServerSicherungsAblage(verbindung, token)
     private val schluessel = ServerBackupAblage(verbindung, token)
@@ -294,7 +325,10 @@ class ServerKonto(verbindung: Verbindung, token: String) : KontoAufDemServer {
  * ein fremdes Gerät überschreiben (veraltet) oder „keine Sicherung“ melden, wo es
  * nur einen Netzfehler gab.
  */
-class ServerSicherungsAblage(private val verbindung: Verbindung, private val token: String) : SicherungsAblage, FassungsArchiv {
+class ServerSicherungsAblage(private val verbindung: Verbindung, private val token: suspend () -> String) : SicherungsAblage, FassungsArchiv {
+    /** Mit festem Token (Tests, kurze Abläufe). */
+    constructor(verbindung: Verbindung, token: String) : this(verbindung, { token })
+
     override suspend fun holen(): GeholteSicherung? = holenVersion(0)
 
     override suspend fun holen(version: Long): GeholteSicherung? {
@@ -306,7 +340,7 @@ class ServerSicherungsAblage(private val verbindung: Verbindung, private val tok
     private suspend fun holenVersion(version: Long): GeholteSicherung? =
         try {
             val anfrage = SicherungHolenRequest.newBuilder().setVersion(version).build()
-            val s = verbindung.sicherung.sicherungHolen(anfrage, mitSitzung(token)).ergebnis()
+            val s = verbindung.sicherung.sicherungHolen(anfrage, mitSitzung(token())).ergebnis()
             GeholteSicherung(s.chiffrat.toByteArray(), s.version)
         } catch (e: Serverfehler) {
             when (e.code) {
@@ -318,7 +352,7 @@ class ServerSicherungsAblage(private val verbindung: Verbindung, private val tok
 
     override suspend fun fassungen(): List<SicherungsFassung> =
         try {
-            verbindung.sicherung.fassungenAuflisten(FassungenAuflistenRequest.getDefaultInstance(), mitSitzung(token)).ergebnis()
+            verbindung.sicherung.fassungenAuflisten(FassungenAuflistenRequest.getDefaultInstance(), mitSitzung(token())).ergebnis()
                 .fassungenList.map {
                     SicherungsFassung(it.version, Instant.ofEpochSecond(it.gespeichertAm.seconds, it.gespeichertAm.nanos.toLong()), it.bytes)
                 }
@@ -333,7 +367,7 @@ class ServerSicherungsAblage(private val verbindung: Verbindung, private val tok
                 .setChiffrat(ByteString.copyFrom(chiffrat))
                 .setErwarteteVersion(erwartet)
                 .build()
-            verbindung.sicherung.sicherungSpeichern(anfrage, mitSitzung(token)).ergebnis().version
+            verbindung.sicherung.sicherungSpeichern(anfrage, mitSitzung(token())).ergebnis().version
         } catch (e: Serverfehler) {
             when (e.code) {
                 Code.FAILED_PRECONDITION -> throw VersionVeraltet()
@@ -348,7 +382,7 @@ class ServerSicherungsAblage(private val verbindung: Verbindung, private val tok
 
     override suspend fun loeschen() {
         try {
-            verbindung.sicherung.sicherungLoeschen(SicherungLoeschenRequest.getDefaultInstance(), mitSitzung(token)).ergebnis()
+            verbindung.sicherung.sicherungLoeschen(SicherungLoeschenRequest.getDefaultInstance(), mitSitzung(token())).ergebnis()
         } catch (e: Serverfehler) {
             if (e.code == Code.RESOURCE_EXHAUSTED) throw SicherungTageslimit("das Löschen der Sicherung")
             throw e.nichtFreigeschaltetOder()
@@ -366,11 +400,14 @@ class ServerSicherungsAblage(private val verbindung: Verbindung, private val tok
  * des Limits ab. Zu große Sendungen hält schon [Diagnose.senden] zurück.
  * Ein 403 ohne Connect-Fehler (Kill-Switch, Proxy) bleibt ein Serverfehler.
  */
-class ServerDiagnoseAblage(private val verbindung: Verbindung, private val token: String) : DiagnoseAblage {
+class ServerDiagnoseAblage(private val verbindung: Verbindung, private val token: suspend () -> String) : DiagnoseAblage {
+    /** Mit festem Token (Tests, kurze Abläufe). */
+    constructor(verbindung: Verbindung, token: String) : this(verbindung, { token })
+
     override suspend fun senden(nutzlast: ByteArray) {
         try {
             val anfrage = DiagnoseSendenRequest.newBuilder().setNutzlast(ByteString.copyFrom(nutzlast)).build()
-            verbindung.diagnose.diagnoseSenden(anfrage, mitSitzung(token)).ergebnis()
+            verbindung.diagnose.diagnoseSenden(anfrage, mitSitzung(token())).ergebnis()
         } catch (e: Serverfehler) {
             when {
                 e.keineErlaubnis -> throw DiagnoseNichtFreigeschaltet()

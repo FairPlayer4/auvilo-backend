@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
+import org.junit.jupiter.params.provider.ValueSource
 import java.time.Instant
 
 class SicherungsablaufTest {
@@ -230,6 +231,21 @@ class SicherungsablaufTest {
         assertEquals("handy", server.inhalt().kopf.geraetId)
     }
 
+    // Nach dem Einspielen der fremden Sicherung ruht das Sichern nicht mehr, ersetzt sie
+    // aber auch nicht ungefragt (W-7): Es fragt wieder.
+    @Test
+    fun `nach abgelehnter Übernahme und Wiederherstellen fragt das Gerät wieder`() {
+        val server = FalscheAblage().apply { vonGeraet("tablet", zaehler = 5) }
+        val g = Geraet(server, uebernimmt = false)
+        g.sichern() // abgelehnt
+        runBlocking { g.ablauf.wiederherstellen(SCHEMA, { true }, { }) }
+        g.gefragt = null
+
+        assertInstanceOf(Gesichert.AnderesGeraet::class.java, g.sichern())
+        assertEquals("tablet", g.gefragt?.geraetId)
+        assertEquals("tablet", server.inhalt().kopf.geraetId)
+    }
+
     // KRITISCH: Ein Server, der eine ältere Fassung zeigt als das Gerät kennt, bringt
     // es nicht dazu, Zähler zurückzusetzen oder etwas zu überschreiben.
     @Test
@@ -331,19 +347,43 @@ class SicherungsablaufTest {
 
         assertEquals(Wiederhergestellt.Ja(server.inhalt().kopf), ergebnis)
         assertArrayEquals("alles".toByteArray(), angewendet.single().nutzlast)
-        assertEquals(GemerkteSicherung(4, server.sicherung!!.version), stand.stand)
+        // Version 0: Die Sicherung stammt von einem anderen Gerät (W-7).
+        assertEquals(GemerkteSicherung(4, 0), stand.stand)
     }
 
     @Test
-    fun `danach sichert das Gerät ohne Rückfrage weiter`() {
-        val server = FalscheAblage().apply { vonGeraet("tablet", zaehler = 4) }
+    fun `nach dem Einspielen der eigenen Sicherung sichert das Gerät ohne Rückfrage weiter`() {
+        val server = FalscheAblage().apply { vonGeraet("neu", zaehler = 4) }
         val stand = FalscherStand()
         wiederherstellen(server, stand)
+        assertEquals(GemerkteSicherung(4, server.sicherung!!.version), stand.stand)
         val g = Geraet(server, stand, id = "neu")
 
-        assertInstanceOf(Gesichert.Ja::class.java, g.sichern())
+        assertInstanceOf(Gesichert.Ja::class.java, g.sichern(automatisch = false))
         assertNull(g.gefragt)
         assertEquals(5, server.inhalt().kopf.zaehler)
+    }
+
+    // KRITISCH (W-7): Nach dem Einspielen der Sicherung eines anderen Geräts ersetzt die
+    // nächste Sicherung sie nur nach Rückfrage; ohne Zustimmung bleibt sie auf dem Server.
+    @ParameterizedTest(name = "übernimmt = {0}")
+    @ValueSource(booleans = [true, false])
+    fun `nach dem Einspielen einer fremden Sicherung fragt das Gerät vor dem Ersetzen`(uebernimmt: Boolean) {
+        val server = FalscheAblage().apply { vonGeraet("tablet", zaehler = 4, nutzlast = "vom Tablet") }
+        val stand = FalscherStand()
+        wiederherstellen(server, stand)
+        val g = Geraet(server, stand, id = "neu", uebernimmt = uebernimmt)
+
+        val ergebnis = g.sichern(automatisch = false)
+
+        assertEquals("tablet", g.gefragt?.geraetId)
+        if (uebernimmt) {
+            assertInstanceOf(Gesichert.Ja::class.java, ergebnis)
+            assertEquals(5, server.inhalt().kopf.zaehler)
+        } else {
+            assertInstanceOf(Gesichert.AnderesGeraet::class.java, ergebnis)
+            assertArrayEquals("vom Tablet".toByteArray(), server.inhalt().nutzlast)
+        }
     }
 
     @Test
@@ -509,9 +549,6 @@ class SicherungsablaufTest {
             Freigabe("von Hand übernommen") {
                 it.uebernimmt = true
                 assertInstanceOf(Gesichert.Ja::class.java, it.sichern(automatisch = false))
-            },
-            Freigabe("wiederhergestellt") {
-                runBlocking { it.ablauf.wiederherstellen(SCHEMA, { true }, { }) }
             },
             Freigabe("gelöscht") {
                 runBlocking { it.ablauf.loeschen() }

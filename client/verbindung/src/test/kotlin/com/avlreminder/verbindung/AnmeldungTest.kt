@@ -2,7 +2,10 @@ package com.avlreminder.verbindung
 
 import com.avlreminder.protokoll.Geraetenachrichten
 import com.avlreminder.schnittstelle.v1.AnmeldenRequest
+import com.avlreminder.protokoll.KontoGeraet
 import com.avlreminder.schnittstelle.v1.AnmeldenResponse
+import com.avlreminder.schnittstelle.v1.Geraet
+import com.avlreminder.schnittstelle.v1.GeraeteAuflistenResponse
 import com.avlreminder.schnittstelle.v1.SitzungErneuernRequest
 import com.avlreminder.schnittstelle.v1.SitzungErneuernResponse
 import com.google.protobuf.MessageLite
@@ -40,18 +43,21 @@ class AnmeldungTest {
         data class Roh(val status: Int, val typ: String, val text: String) : Antwort
     }
 
-    private class Anfrage(val pfad: String, val inhalt: ByteArray)
+    private class Anfrage(val pfad: String, val inhalt: ByteArray, val token: String?)
 
     private lateinit var server: HttpServer
     private var antwort: Antwort = Antwort.Fehler("internal")
+
+    /** Antworten der Reihe nach; sind sie aufgebraucht, gilt [antwort]. */
+    private val folge = ArrayDeque<Antwort>()
     private val anfragen = mutableListOf<Anfrage>()
 
     @BeforeEach
     fun starten() {
         server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
         server.createContext("/") { ex ->
-            anfragen += Anfrage(ex.requestURI.path, ex.requestBody.readAllBytes())
-            val (status, typ, inhalt) = when (val a = antwort) {
+            anfragen += Anfrage(ex.requestURI.path, ex.requestBody.readAllBytes(), ex.requestHeaders.getFirst("Authorization"))
+            val (status, typ, inhalt) = when (val a = folge.removeFirstOrNull() ?: antwort) {
                 is Antwort.Ok -> Triple(200, "application/proto", a.nachricht.toByteArray())
                 is Antwort.Fehler -> Triple(400, "application/json", """{"code":"${a.code}","message":"nachgebaut"}""".toByteArray())
                 is Antwort.Roh -> Triple(a.status, a.typ, a.text.toByteArray())
@@ -222,7 +228,72 @@ class AnmeldungTest {
         assertEquals(vorher, speicher.sitzung)
     }
 
+    data class Abgelehnt(
+        val name: String,
+        val antworten: List<Any>,
+        /** null = der Aufruf gelingt. */
+        val erwartet: KClass<out Throwable>?,
+        val anfragen: Int,
+    ) {
+        override fun toString() = name
+    }
+
+    // KRITISCH: Lehnt der Dienst die Sitzung ab, erneuert mitSitzung genau einmal; erst
+    // das Erneuern sagt, ob das Gerät gesperrt ist. Zu „erneuert und ruft erneut auf“
+    // die Fälle, in denen es nicht erneuert oder aufgibt.
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("abgelehnteSitzungen")
+    fun `Aufruf mit Sitzung`(fall: Abgelehnt) {
+        fall.antworten.forEach { folge += it as Antwort }
+        val geraetId = Geraetenachrichten.geraetId(schluessel.oeffentlich)
+        val a = anmeldung(Speicher(Sitzung("konto-1", geraetId, "token-alt", jetzt + 3600)))
+        val verbindung = Verbindung("http://127.0.0.1:${server.address.port}")
+
+        val ergebnis = runCatching { runBlocking { a.mitSitzung { ServerGeraete(verbindung, it.token).auflisten() } } }
+
+        if (fall.erwartet == null) {
+            assertEquals(listOf(KontoGeraet("g-1", gesperrt = false, diesesGeraet = true)), ergebnis.getOrThrow())
+            assertEquals(if (fall.anfragen > 1) "Bearer token-neu" else "Bearer token-alt", anfragen.last().token)
+        } else {
+            val e = ergebnis.exceptionOrNull()
+            assertTrue(fall.erwartet.isInstance(e), "erwartet ${fall.erwartet.simpleName}, bekommen $e")
+        }
+        assertEquals(fall.anfragen, anfragen.size)
+        assertEquals("Bearer token-alt", anfragen.first().token)
+    }
+
     companion object {
+        private val liste = Antwort.Ok(
+            GeraeteAuflistenResponse.newBuilder().addGeraete(Geraet.newBuilder().setGeraetId("g-1").setDiesesGeraet(true)).build(),
+        )
+        private val abgelehnt = Antwort.Fehler("unauthenticated")
+        private val erneuert = Antwort.Ok(
+            SitzungErneuernResponse.newBuilder()
+                .setSitzung(SitzungNachricht.newBuilder().setToken("token-neu").setLaeuftAb(Timestamp.newBuilder().setSeconds(1_793_538_000L)))
+                .build(),
+        )
+
+        @JvmStatic
+        fun abgelehnteSitzungen() = listOf(
+            Abgelehnt("Sitzung gilt: ein Aufruf, kein Erneuern", listOf(liste), erwartet = null, anfragen = 1),
+            Abgelehnt(
+                "Sitzung abgelehnt: erneuert und ruft mit dem neuen Token erneut auf",
+                listOf(abgelehnt, erneuert, liste),
+                erwartet = null,
+                anfragen = 3,
+            ),
+            Abgelehnt("Sitzung abgelehnt, Gerät gesperrt", listOf(abgelehnt, Antwort.Fehler("permission_denied")), GeraetGesperrt::class, anfragen = 2),
+            Abgelehnt("Sitzung abgelehnt, Erneuern abgelehnt", listOf(abgelehnt, abgelehnt), AnmeldungAbgelehnt::class, anfragen = 2),
+            Abgelehnt(
+                "nach dem Erneuern wieder abgelehnt: gibt auf",
+                listOf(abgelehnt, erneuert, abgelehnt),
+                SitzungAbgelehnt::class,
+                anfragen = 3,
+            ),
+            Abgelehnt("401 ohne Connect-Fehler (vor dem Dienst): kein Erneuern", listOf(Antwort.Roh(401, "text/html", "<html>nein</html>")), Serverfehler::class, anfragen = 1),
+            Abgelehnt("anderer Fehler des Dienstes: kein Erneuern", listOf(Antwort.Fehler("unavailable")), Serverfehler::class, anfragen = 1),
+        )
+
         @JvmStatic
         fun ablaeufe() = listOf(
             Ablauf("gilt noch eine Stunde: gemerkte Sitzung", laeuftAbIn = 3600, erneuert = false),

@@ -144,11 +144,8 @@ func (a *Arbeitsspeicher) GeraetFreischalten(_ context.Context, kontoID, geraetI
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	g, ok := a.geraete[geraetID]
-	if !ok || g.KontoID != kontoID {
-		return ErrNichtGefunden
-	}
-	if g.Gesperrt {
-		return ErrGeraetGesperrt
+	if err := darfFreischalten(g, ok, kontoID); err != nil {
+		return err
 	}
 	g.Freigeschaltet = true
 	a.geraete[geraetID] = g
@@ -159,20 +156,11 @@ func (a *Arbeitsspeicher) BackupSpeichern(_ context.Context, kontoID string, chi
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	// Ohne Eintrag liefert die Map den Nullwert: Version 0 = es gibt keins.
-	if a.backups[kontoID].Version != erwartet {
-		return 0, ErrVersionVeraltet
+	if err := darfBackupSpeichern(a.backups[kontoID].Version, erwartet, a.geraeteVon(kontoID), ungeschuetztFuer); err != nil {
+		return 0, err
 	}
 	if ungeschuetztFuer != "" {
-		if gibtFreigeschaltetes(a.geraeteVon(kontoID)) {
-			return 0, ErrKontoGeschuetzt
-		}
-		g, ok := a.geraete[ungeschuetztFuer]
-		if !ok || g.KontoID != kontoID {
-			return 0, ErrNichtGefunden
-		}
-		if g.Gesperrt {
-			return 0, ErrGeraetGesperrt
-		}
+		g := a.geraete[ungeschuetztFuer]
 		g.Freigeschaltet = true
 		a.geraete[ungeschuetztFuer] = g
 	}

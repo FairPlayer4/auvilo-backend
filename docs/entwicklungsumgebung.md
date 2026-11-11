@@ -81,4 +81,4 @@ angegeben.
   Für die Datensicherung braucht der lokale Server zusätzlich
   `STORAGE_EMULATOR_HOST=localhost:4443` und `SICHERUNG_BUCKET=lokal` (Bucket wie
   oben anlegen), für Diagnosen `DIAGNOSE_BUCKET=lokal` (derselbe Bucket reicht) und
-  in `DIAGNOSE_KONTEN` die freigeschalteten Konto-IDs (leer = niemand).
+  in `DIAGNOSE_KONTEN` die Konto-IDs mit Diagnose-Erlaubnis (leer = niemand).

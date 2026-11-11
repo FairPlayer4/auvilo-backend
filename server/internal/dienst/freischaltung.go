@@ -25,11 +25,12 @@ func errNichtFreigeschaltet() error {
 }
 
 // nurFreigeschaltetesGeraet lehnt ab, wenn das anfragende Gerät nicht
-// freigeschaltet ist. Aufruf in jedem Dienst, der etwas ändert oder löscht.
+// freigeschaltet ist. Aufruf über die Richtlinie "freigeschaltet" (richtlinie.go)
+// und in Diensten mit eigener Regel.
 //
 // KRITISCH: Das Merkmal kommt aus dem Speicher, nicht aus der Sitzung. So
 // wirkt ein Freischalten sofort, ohne neue Sitzung.
-func (d *dienste) nurFreigeschaltetesGeraet(ctx context.Context, id sitzung.Identitaet) error {
+func (d *freischaltPruefer) nurFreigeschaltetesGeraet(ctx context.Context, id sitzung.Identitaet) error {
 	frei, err := d.istFreigeschaltet(ctx, id)
 	if err != nil {
 		return err
@@ -43,8 +44,8 @@ func (d *dienste) nurFreigeschaltetesGeraet(ctx context.Context, id sitzung.Iden
 
 // istFreigeschaltet liest, ob das anfragende Gerät freigeschaltet ist. Ein
 // fehlendes Gerät ist es nicht; nur ein Speicherfehler ist ein Fehler.
-func (d *dienste) istFreigeschaltet(ctx context.Context, id sitzung.Identitaet) (bool, error) {
-	g, err := d.k.Speicher.Geraet(ctx, id.GeraetID)
+func (d *freischaltPruefer) istFreigeschaltet(ctx context.Context, id sitzung.Identitaet) (bool, error) {
+	g, err := d.geraete.Geraet(ctx, id.GeraetID)
 	if errors.Is(err, speicher.ErrNichtGefunden) {
 		slog.ErrorContext(ctx, "Sitzung zu einem unbekannten Gerät", "geraet", id.GeraetID)
 		return false, nil
@@ -62,19 +63,16 @@ func (d *dienste) istFreigeschaltet(ctx context.Context, id sitzung.Identitaet) 
 //
 // KRITISCH: Nur ein freigeschaltetes Gerät darf das, und nur im eigenen Konto
 // (die Konto-ID kommt aus der Sitzung, nie aus der Anfrage).
-func (d *dienste) GeraetFreischalten(ctx context.Context, req *connect.Request[v1.GeraetFreischaltenRequest]) (*connect.Response[v1.GeraetFreischaltenResponse], error) {
+func (d *geraeteDienst) GeraetFreischalten(ctx context.Context, req *connect.Request[v1.GeraetFreischaltenRequest]) (*connect.Response[v1.GeraetFreischaltenResponse], error) {
 	id, err := identitaet(ctx)
 	if err != nil {
-		return nil, err
-	}
-	if err := d.nurFreigeschaltetesGeraet(ctx, id); err != nil {
 		return nil, err
 	}
 	ziel := req.Msg.GetGeraetId()
 	if !geraeteschluessel.IstGeraetID(ziel) {
 		return nil, connect.NewError(connect.CodeNotFound, errors.New("Gerät nicht gefunden"))
 	}
-	err = d.k.Speicher.GeraetFreischalten(ctx, id.KontoID, ziel)
+	err = d.speicher.GeraetFreischalten(ctx, id.KontoID, ziel)
 	switch {
 	case errors.Is(err, speicher.ErrNichtGefunden):
 		return nil, connect.NewError(connect.CodeNotFound, errors.New("Gerät nicht gefunden"))
@@ -96,12 +94,12 @@ func (d *dienste) GeraetFreischalten(ctx context.Context, req *connect.Request[v
 //     und über die Geräte-ID aus der Sitzung. Eine Signatur für ein anderes
 //     Gerät oder mit einem anderen Schlüssel schaltet nichts frei.
 //   - Ohne Backup mit Freischaltschlüssel gibt es nichts zu prüfen: abgelehnt.
-func (d *dienste) MitWiederherstellungFreischalten(ctx context.Context, req *connect.Request[v1.MitWiederherstellungFreischaltenRequest]) (*connect.Response[v1.MitWiederherstellungFreischaltenResponse], error) {
+func (d *geraeteDienst) MitWiederherstellungFreischalten(ctx context.Context, req *connect.Request[v1.MitWiederherstellungFreischaltenRequest]) (*connect.Response[v1.MitWiederherstellungFreischaltenResponse], error) {
 	id, err := identitaet(ctx)
 	if err != nil {
 		return nil, err
 	}
-	b, err := d.k.Speicher.BackupHolen(ctx, id.KontoID)
+	b, err := d.speicher.BackupHolen(ctx, id.KontoID)
 	if err != nil && !errors.Is(err, speicher.ErrNichtGefunden) {
 		return nil, speicherFehler(ctx, err)
 	}
@@ -112,7 +110,7 @@ func (d *dienste) MitWiederherstellungFreischalten(ctx context.Context, req *con
 		slog.WarnContext(ctx, "Freischaltung mit falscher Signatur", "geraet", id.GeraetID)
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("Signatur passt nicht zum Wiederherstellungsschlüssel"))
 	}
-	err = d.k.Speicher.GeraetFreischalten(ctx, id.KontoID, id.GeraetID)
+	err = d.speicher.GeraetFreischalten(ctx, id.KontoID, id.GeraetID)
 	if errors.Is(err, speicher.ErrGeraetGesperrt) {
 		return nil, errGesperrt()
 	}

@@ -17,7 +17,7 @@ import (
 // 1 KiB (Personen- und Tresor-Keyset); der Rest ist Luft für Schlüsselwechsel.
 const MaxBackup = 16 << 10 // 16 KiB
 
-var _ avlreminderv1connect.SchluesselDienstHandler = (*dienste)(nil)
+var _ avlreminderv1connect.SchluesselDienstHandler = (*schluesselDienst)(nil)
 
 // BackupSpeichern legt das Backup des eigenen Kontos ab.
 //
@@ -35,7 +35,7 @@ var _ avlreminderv1connect.SchluesselDienstHandler = (*dienste)(nil)
 //   - Eine veraltete Version meldet failed_precondition, auch an ein nicht
 //     freigeschaltetes Gerät: Es holt dann das Backup und schaltet sich mit dem
 //     Wiederherstellungsschlüssel frei.
-func (d *dienste) BackupSpeichern(ctx context.Context, req *connect.Request[v1.BackupSpeichernRequest]) (*connect.Response[v1.BackupSpeichernResponse], error) {
+func (d *schluesselDienst) BackupSpeichern(ctx context.Context, req *connect.Request[v1.BackupSpeichernRequest]) (*connect.Response[v1.BackupSpeichernResponse], error) {
 	id, err := identitaet(ctx)
 	if err != nil {
 		return nil, err
@@ -44,7 +44,7 @@ func (d *dienste) BackupSpeichern(ctx context.Context, req *connect.Request[v1.B
 	if len(chiffrat) == 0 || len(chiffrat) > MaxBackup || erwartet < 0 || len(fs) != freischaltung.SchluesselLaenge {
 		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("Backup leer, größer als 16 KiB, Version negativ oder Freischaltschlüssel nicht 32 Bytes"))
 	}
-	frei, err := d.istFreigeschaltet(ctx, id)
+	frei, err := d.frei.istFreigeschaltet(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -56,7 +56,7 @@ func (d *dienste) BackupSpeichern(ctx context.Context, req *connect.Request[v1.B
 	if !frei {
 		ungeschuetztFuer = id.GeraetID
 	}
-	version, err := d.k.Speicher.BackupSpeichern(ctx, id.KontoID, chiffrat, fs, erwartet, ungeschuetztFuer, d.k.Jetzt())
+	version, err := d.speicher.BackupSpeichern(ctx, id.KontoID, chiffrat, fs, erwartet, ungeschuetztFuer, d.jetzt())
 	if errors.Is(err, speicher.ErrKontoGeschuetzt) || errors.Is(err, speicher.ErrNichtGefunden) || errors.Is(err, speicher.ErrGeraetGesperrt) {
 		slog.WarnContext(ctx, "Erstes Backup von nicht freigeschaltetem Gerät abgelehnt", "geraet", id.GeraetID)
 		return nil, errNichtFreigeschaltet()
@@ -73,12 +73,12 @@ func (d *dienste) BackupSpeichern(ctx context.Context, req *connect.Request[v1.B
 }
 
 // BackupHolen liefert das Backup des eigenen Kontos.
-func (d *dienste) BackupHolen(ctx context.Context, _ *connect.Request[v1.BackupHolenRequest]) (*connect.Response[v1.BackupHolenResponse], error) {
+func (d *schluesselDienst) BackupHolen(ctx context.Context, _ *connect.Request[v1.BackupHolenRequest]) (*connect.Response[v1.BackupHolenResponse], error) {
 	id, err := identitaet(ctx)
 	if err != nil {
 		return nil, err
 	}
-	b, err := d.k.Speicher.BackupHolen(ctx, id.KontoID)
+	b, err := d.speicher.BackupHolen(ctx, id.KontoID)
 	if errors.Is(err, speicher.ErrNichtGefunden) {
 		return nil, connect.NewError(connect.CodeNotFound, errors.New("noch kein Backup"))
 	}
@@ -91,15 +91,12 @@ func (d *dienste) BackupHolen(ctx context.Context, _ *connect.Request[v1.BackupH
 // BackupLoeschen löscht das Backup des eigenen Kontos.
 //
 // KRITISCH: Nur ein freigeschaltetes Gerät (E-B2b-13).
-func (d *dienste) BackupLoeschen(ctx context.Context, _ *connect.Request[v1.BackupLoeschenRequest]) (*connect.Response[v1.BackupLoeschenResponse], error) {
+func (d *schluesselDienst) BackupLoeschen(ctx context.Context, _ *connect.Request[v1.BackupLoeschenRequest]) (*connect.Response[v1.BackupLoeschenResponse], error) {
 	id, err := identitaet(ctx)
 	if err != nil {
 		return nil, err
 	}
-	if err := d.nurFreigeschaltetesGeraet(ctx, id); err != nil {
-		return nil, err
-	}
-	if err := d.k.Speicher.BackupLoeschen(ctx, id.KontoID); err != nil {
+	if err := d.speicher.BackupLoeschen(ctx, id.KontoID); err != nil {
 		return nil, speicherFehler(ctx, err)
 	}
 	slog.InfoContext(ctx, "Backup gelöscht", "geraet", id.GeraetID)

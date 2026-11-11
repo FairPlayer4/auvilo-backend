@@ -89,10 +89,12 @@ Schlägt das Entschlüsseln fehl oder ist der Zähler kleiner als der gemerkte, 
 nichts ersetzt. Lehnt der Mensch in Schritt 3 ab, merkt sich das Gerät den Zähler als
 gesehen (wie beim Sichern).
 
-**Wiederherstellen heißt übernehmen (E-B2b-6).** Nach dem Wiederherstellen ist dieses
-Gerät das sichernde Gerät: Es sichert ohne weitere Rückfrage weiter, auch wenn die
-Fassung von einem anderen Gerät stammte. Die Bestätigung in Schritt 3 ist zugleich
-die Rückfrage „Dieses Gerät übernimmt die Sicherung?“.
+**Wiederherstellen ersetzt nicht ungefragt (App W-7, im Ablauf seit 2026-11-10).**
+Stammt die Fassung von einem anderen Gerät, merkt sich dieses Gerät die Version 0. Die
+nächste Sicherung trifft so auf die Fassung des anderen Geräts und fragt, bevor sie sie
+ersetzt (E-B2b-6). Ein frisches Testgerät überschreibt also nie die Sicherung, aus der
+es eingespielt wurde. Nach dem Einspielen der eigenen Fassung sichert es ohne Rückfrage
+weiter. Eine frühere Ablehnung gilt nach dem Wiederherstellen nicht mehr.
 
 ### Löschen
 `Sicherungsablauf.loeschen` löscht die Sicherung mit allen älteren Fassungen. Das

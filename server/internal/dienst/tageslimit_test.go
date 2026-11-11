@@ -134,7 +134,7 @@ func TestAbgelehnteAnfragenVerbrauchenNichtsVomTageslimit(t *testing.T) {
 	z := &zaehlerAttrappe{echt: kontingent.NeuerArbeitsspeicher()}
 	ts := neuerTestServerMit(t, datensicherung.NeuerArbeitsspeicher(), 0, mitZaehler(z))
 	k := ts.kontoMitNeuemGeraet(t) // Handy hat schon eine Sicherung gespeichert
-	ohneDiagnose := k.handySitzung // Konto nicht für Diagnosen freigeschaltet
+	ohneDiagnose := k.handySitzung // Konto ohne Diagnose-Erlaubnis
 	mitDiagnose, _ := ts.diagnoseFreischalten(t, "google-anna")
 	annasLaptop := ts.anmelden(t, "google-anna", testhilfe.NeuesGeraet(t)).Sitzung.Token // nicht freigeschaltet
 

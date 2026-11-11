@@ -41,7 +41,7 @@ func TestLeseKonfiguration(t *testing.T) {
 			t.Errorf("Pfeffer = %q, Fehler %v", k.pfeffer, err)
 		}
 	})
-	t.Run("ohne freigeschaltete Konten nimmt der Server keine Diagnosen an", func(t *testing.T) {
+	t.Run("ohne Konten mit Diagnose-Erlaubnis nimmt der Server keine Diagnosen an", func(t *testing.T) {
 		k, err := leseKonfiguration(mit(map[string]string{"DIAGNOSE_KONTEN": ""}))
 		if err != nil || len(k.diagnoseKonten) != 0 {
 			t.Errorf("Konten = %q, Fehler %v", k.diagnoseKonten, err)

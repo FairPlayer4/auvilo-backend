@@ -1,6 +1,6 @@
 # Diagnose-Log aus der App (docs/diagnose-entwurf.md).
 #
-# Freigeschaltete Konten senden gzip-komprimierte JSON-Zeilen ohne Inhalte; der
+# Konten mit Diagnose-Erlaubnis senden gzip-komprimierte JSON-Zeilen ohne Inhalte; der
 # Server legt jede Sendung als eigenes Objekt ab (diagnose/<konto_id>/…). Nach
 # 14 Tagen löscht Google sie (E-D-5). Unverschlüsselt, damit Kevin und Claude
 # sie lesen können (werkzeuge/diagnose-holen.sh).

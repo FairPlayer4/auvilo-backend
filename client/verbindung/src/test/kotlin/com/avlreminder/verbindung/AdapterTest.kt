@@ -227,6 +227,21 @@ class AdapterTest {
         override fun toString() = name
     }
 
+    // KRITISCH (R2): Jeder Aufruf holt das Token neu. Mit einem festen Token
+    // scheiterte nach langer Eingabe der zweite Aufruf an der abgelaufenen Sitzung.
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("tokenFaelle")
+    fun `jeder Aufruf holt das Token neu`(fall: TokenFall) {
+        antwort = Antwort.Ok(fall.antwort)
+        val tokens = ArrayDeque(listOf("erstes", "zweites"))
+        runBlocking { repeat(2) { fall.aufruf(verbindung()) { tokens.removeFirst() } } }
+        assertEquals(listOf("Bearer erstes", "Bearer zweites"), anfragen.map { it.autorisierung })
+    }
+
+    data class TokenFall(val name: String, val antwort: MessageLite, val aufruf: suspend (Verbindung, suspend () -> String) -> Any?) {
+        override fun toString() = name
+    }
+
     @Test
     fun `speichert die Sicherung mit Sitzung und erwarteter Version`() {
         antwort = Antwort.Ok(SicherungSpeichernResponse.newBuilder().setVersion(42).build())
@@ -384,6 +399,15 @@ class AdapterTest {
     }
 
     companion object {
+        @JvmStatic
+        fun tokenFaelle() = listOf(
+            TokenFall("Schlüssel-Backup", BackupLoeschenResponse.getDefaultInstance()) { v, t -> ServerBackupAblage(v, t).loeschen() },
+            TokenFall("Datensicherung", SicherungLoeschenResponse.getDefaultInstance()) { v, t -> ServerSicherungsAblage(v, t).loeschen() },
+            TokenFall("Geräte", GeraetSperrenResponse.getDefaultInstance()) { v, t -> ServerGeraete(v, t).sperren("a".repeat(32)) },
+            TokenFall("Konto", SicherungLoeschenResponse.getDefaultInstance()) { v, t -> ServerKonto(v, t).datensicherungLoeschen() },
+            TokenFall("Diagnose", DiagnoseSendenResponse.getDefaultInstance()) { v, t -> ServerDiagnoseAblage(v, t).senden(ByteArray(1)) },
+        )
+
         @JvmStatic
         fun aufrufe() = listOf(
             Aufruf("Sicherung holen") { ServerSicherungsAblage(it, TOKEN).holen() },

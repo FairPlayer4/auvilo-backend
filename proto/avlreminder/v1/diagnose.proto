@@ -13,12 +13,12 @@ option java_package = "com.avlreminder.schnittstelle.v1";
 // Meldungstext; Format in docs/formate.md). Der Server liest sie nicht, er prüft
 // nur Größe und gzip-Kopf. Nach 14 Tagen wird sie gelöscht.
 //
-// Senden dürfen nur freigeschaltete Konten (E-D-3), und nur von einem
+// Senden dürfen nur Konten mit Diagnose-Erlaubnis (E-D-3), und nur von einem
 // freigeschalteten Gerät (geraete.proto); jedes Konto höchstens 10-mal am Tag.
 //
 // Fehlercodes (Connect):
 //   unauthenticated     Sitzung fehlt, ist ungültig oder abgelaufen.
-//   permission_denied   Das Konto ist für Diagnosen nicht freigeschaltet, oder
+//   permission_denied   Das Konto hat keine Diagnose-Erlaubnis, oder
 //                       das Gerät ist nicht freigeschaltet.
 //   invalid_argument    nutzlast leer oder nicht gzip-komprimiert.
 //   resource_exhausted  nutzlast größer als 256 KiB oder Tageslimit erreicht

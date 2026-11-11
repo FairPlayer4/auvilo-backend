@@ -104,7 +104,7 @@ func TestDiagnoseSendenPrueftDieAnfrage(t *testing.T) {
 		nutzlast []byte
 		code     connect.Code
 	}{
-		{"lehnt Konto ab, das nicht freigeschaltet ist", fremd, gzipJSON(t, "{}"), connect.CodePermissionDenied},
+		{"lehnt Konto ohne Diagnose-Erlaubnis ab", fremd, gzipJSON(t, "{}"), connect.CodePermissionDenied},
 		{"lehnt Aufruf ohne Sitzung ab", "", gzipJSON(t, "{}"), connect.CodeUnauthenticated},
 		{"lehnt leere Sendung ab", frei, nil, connect.CodeInvalidArgument},
 		{"lehnt Sendung ohne gzip ab", frei, []byte(`{"art":"kopf"}`), connect.CodeInvalidArgument},
@@ -115,7 +115,7 @@ func TestDiagnoseSendenPrueftDieAnfrage(t *testing.T) {
 		// KRITISCH: Sitzung und Freischaltung werden vor dem Lesen geprüft. Läse
 		// der Server erst, käme für 512 KiB resource_exhausted (Lesegrenze).
 		{"lehnt große Sendung ohne Sitzung ab, bevor er sie liest", "", mitGzipKopf(2 * kiB256), connect.CodeUnauthenticated},
-		{"lehnt große Sendung eines nicht freigeschalteten Kontos ab, bevor er sie liest", fremd, mitGzipKopf(2 * kiB256), connect.CodePermissionDenied},
+		{"lehnt große Sendung eines Kontos ohne Diagnose-Erlaubnis ab, bevor er sie liest", fremd, mitGzipKopf(2 * kiB256), connect.CodePermissionDenied},
 	}
 	for _, fall := range faelle {
 		t.Run(fall.name, func(t *testing.T) {
