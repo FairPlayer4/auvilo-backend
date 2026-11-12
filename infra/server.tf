@@ -8,7 +8,8 @@
 
 # Unter diesem Konto läuft der Server. Es darf nur Firestore benutzen, genau
 # ein Secret (den Pfeffer) lesen, im Bucket der Datensicherungen schreiben
-# (datensicherung.tf) und Diagnosen anlegen (diagnose.tf).
+# (datensicherung.tf) und Diagnosen anlegen und löschen (diagnose.tf,
+# aufraeumen.tf).
 resource "google_service_account" "server" {
   account_id   = "server"
   display_name = "Server (Cloud Run)"

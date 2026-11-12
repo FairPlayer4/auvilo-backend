@@ -140,8 +140,12 @@ Dienst, Speicher-Entscheidungen, Begriffe), Revision `server-00018-fc4`, bereit.
    **Vorher fertig** (Sicherheits- und Datenschutzprüfung 2026-11-12, Liste dort):
    Konto löschen, Bestätigung mit der Displaysperre, Format v2 mit HKDF-Labels,
    A-15 neu in der App, Dokumente. **Konto löschen:** Server und Client fertig
-   (2026-11-12, noch nicht deployt); offen sind Infrastruktur (Cloud Run Job
-   `aufraeumen` mit Scheduler, Löschrecht auf dem Diagnose-Bucket) und die App. Ergebnis der Prüfung: Nach der Rotation ist die
+   (2026-11-12, noch nicht deployt). Die Infrastruktur steht in `infra/aufraeumen.tf`
+   (Cloud Run Job `aufraeumen`, täglich 4 Uhr per Cloud Scheduler, Rolle
+   „Objekte auflisten und löschen“ ohne Lesen, Alarm), **noch nicht angewendet**.
+   Reihenfolge: erst `tofu apply` (legt den Job an), dann PR nach `main`; der
+   Deploy setzt das Image auch im Job und scheitert, solange es ihn nicht gibt.
+   Offen danach: die App. Ergebnis der Prüfung: Nach der Rotation ist die
    Sicherung für eine Person sicher; für die DSGVO fehlen vor allem Konto löschen
    und Fristen ([anforderungen.md](anforderungen.md) Kap. 4.4, 4.5, 11).
 2. **App-Einbindung** (Schritte 1–5, Wiederherstellen R-1…R-6): App-Repo

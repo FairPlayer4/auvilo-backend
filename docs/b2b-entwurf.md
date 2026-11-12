@@ -177,8 +177,8 @@ erster Tester, Veröffentlichung im Play Store.
 - **Konto löschen** in Server, `protokoll` und App (B1 in Kap. 3.5), auch als Antrag
   mit 7 Tagen Wartezeit für Geräte ohne Freischaltung; damit lassen
   sich auch Punkt 1 und 2 unten je Konto erledigen. Server und Client fertig
-  (2026-11-12, Abschnitt „Konto löschen“ oben); offen sind Infrastruktur (Job,
-  Rechte) und App.
+  (2026-11-12, Abschnitt „Konto löschen“ oben); Infrastruktur in
+  `infra/aufraeumen.tf` (noch nicht angewendet); offen ist die App.
 - **Bestätigung mit der Displaysperre** für *Cloud-Daten löschen*, *Konto löschen*
   und *Gerät sperren* (SE5).
 - **Format v2:** Schlüssel aus dem Wiederherstellungsschlüssel per HKDF mit eigenem
