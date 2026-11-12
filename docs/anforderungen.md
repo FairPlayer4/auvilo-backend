@@ -140,7 +140,27 @@ liegt in einem Kotlin-Modul, das später in die App übernommen werden kann. [E]
   Tageszähler und die Kennung, damit eine neue Anmeldung ein neues Konto bekommt.
   Erst die Inhalte, zuletzt Kennung und Konto: Bricht es ab, erledigt ein zweiter
   Aufruf den Rest. In der App vor dem ersten weiteren Nutzer (vorgezogen aus B4,
-  Kap. 11, 2026-11-12); als Webseite genügt bis B6 eine Anleitung mit Kontakt.
+  Kap. 11, 2026-11-12).
+  **Ohne Zugang** (Kap. 11, 2026-11-12):
+  - Ein *freigeschaltetes* Gerät löscht sofort. Ein nicht freigeschaltetes Gerät
+    (nur Google-Login, z. B. Handy und Wiederherstellungsschlüssel verloren) darf die
+    Löschung nur **beantragen**: Der Server setzt `loeschen_ab` auf 7 Tage später.
+    Bis dahin läuft das Konto normal weiter, und jedes freigeschaltete Gerät kann den
+    Antrag abbrechen (`KontoLoeschenAbbrechen`). Die Wartezeit schützt davor, dass
+    jemand mit einem übernommenen Google-Konto sofort alles vernichtet.
+  - Vorhandene Geräte erfahren vom Antrag bei ihrem nächsten Aufruf (der stündliche
+    Worker reicht, Push erst mit B4); die App zeigt eine Benachrichtigung mit
+    *Abbrechen*.
+  - Fällige Anträge arbeitet derselbe regelmäßige Lauf ab wie die Fristen aus P5;
+    es gibt nur einen Löschpfad.
+  - Die **Webseite** nutzt dieselbe Regel: „Mit Google anmelden“ (Web-Client), der
+    Server prüft das ID-Token wie bei der App und setzt den Antrag. Bis B6 genügt
+    dort die Anleitung „App installieren, anmelden, Konto löschen“.
+  - Ist auch das **Google-Konto** weg, lässt sich das Konto nicht zuordnen (es gibt
+    weder E-Mail noch Namen, nur den HMAC der Google-ID). Das deckt Art. 11 DSGVO,
+    wenn die Datenschutzerklärung es sagt; die Frist aus P5 löscht nach 24 Monaten
+    ohne Anmeldung. Eine Mail-Adresse ist kein Löschweg, sie bekommt nur die
+    Anleitung.
 - B2 Auskunft/Export der eigenen Server-Daten (Art. 15/20); Inhalte hat die App ohnehin.
 - B3 Strukturierte Logs ohne Inhalte, ohne dauerhaft gespeicherte IP-Adressen
   (die Anfrage-Logs von Cloud Run mit IP höchstens 30 Tage, siehe Kap. 11).
@@ -494,3 +514,4 @@ tragen die Tests die Spezifikation. Anleitung zum Review: [go-review.md](go-revi
 | 2026-11-12 | Diagnose: Bis es einen AV-Vertrag mit Anthropic gibt, hat **nur Kevins Konto** eine Diagnose-Erlaubnis (P9); Tester senden keine Diagnosen |
 | 2026-11-12 | B3: Vorgaben **B3-5 bis B3-8** (Kap. 4.6): Lücken und aufgespaltene Verläufe erkennen, Person entfernen heißt neuer Freigabe-Schlüssel, öffentliche Schlüssel nur nach Vergleich des Fingerabdrucks, langlebige Personenschlüssel als bekannte Grenze bis B4 |
 | 2026-11-12 | Metadaten: Sicherungen werden vorerst nicht auf feste Größen aufgefüllt; Größe und Zeitpunkt nennt die Datenschutzerklärung (Kap. 4.2) |
+| 2026-11-12 | Konto löschen **ohne Zugang** (B1 in Kap. 3.5): Ein freigeschaltetes Gerät löscht sofort; mit Google-Login allein (nicht freigeschaltetes Gerät oder Webseite) nur ein **Antrag mit 7 Tagen Wartezeit**, den jedes freigeschaltete Gerät abbrechen kann und von dem vorhandene Geräte beim nächsten Aufruf erfahren. Ohne Google-Konto ist keine Zuordnung möglich (Art. 11 DSGVO); dann löscht die Frist aus P5. Keine Löschung per Mail |

@@ -155,7 +155,8 @@ erster Tester, Veröffentlichung im Play Store.
 
 **Vorher fertig** (Sicherheits- und Datenschutzprüfung vom 2026-11-12,
 [anforderungen.md](anforderungen.md) Kap. 11):
-- **Konto löschen** in Server, `protokoll` und App (B1 in Kap. 3.5); damit lassen
+- **Konto löschen** in Server, `protokoll` und App (B1 in Kap. 3.5), auch als Antrag
+  mit 7 Tagen Wartezeit für Geräte ohne Freischaltung; damit lassen
   sich auch Punkt 1 und 2 unten je Konto erledigen.
 - **Bestätigung mit der Displaysperre** für *Cloud-Daten löschen*, *Konto löschen*
   und *Gerät sperren* (SE5).
