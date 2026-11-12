@@ -4,7 +4,8 @@
 // (vertrag_test.go) für beide.
 //
 // Gespeichert werden nur Metadaten (Anforderung 4.2): Kennung (HMAC der
-// Google-Konto-ID), Konto- und Geräte-IDs, öffentliche Schlüssel, Zeitpunkte.
+// Google-Konto-ID), Konto- und Geräte-IDs, öffentliche Schlüssel, Zeitpunkte
+// (auch der Termin einer beantragten Kontolöschung).
 // Bewusst NICHT: E-Mail, Name, IP-Adressen, "zuletzt gesehen".
 package speicher
 
@@ -32,6 +33,12 @@ var (
 	// ErrKontoGeschuetzt: Ein nicht freigeschaltetes Gerät will das erste
 	// Backup anlegen, aber das Konto hat ein freigeschaltetes, ungesperrtes Gerät.
 	ErrKontoGeschuetzt = errors.New("Konto hat ein freigeschaltetes Gerät")
+	// ErrLoeschungLaeuft: Der Termin der Kontolöschung ist erreicht; abbrechen
+	// geht nicht mehr, die Löschung kann schon begonnen haben.
+	ErrLoeschungLaeuft = errors.New("Löschung des Kontos ist fällig")
+	// ErrNichtFaellig: Ein Konto soll gesperrt oder entfernt werden, dessen
+	// Löschung nicht beantragt oder noch nicht fällig ist.
+	ErrNichtFaellig = errors.New("Löschung des Kontos ist nicht fällig")
 )
 
 // MaxOffeneGeraete ist die Zahl neuer Geräte, die ein Konto höchstens hat,
@@ -181,6 +188,65 @@ type Speicher interface {
 	// BackupLoeschen entfernt das Backup des Kontos samt Freischaltschlüssel. Gibt es keins, ist das
 	// kein Fehler. Danach beginnt ein neues Backup wieder mit Version 1.
 	BackupLoeschen(ctx context.Context, kontoID string) error
+
+	// Konto löschen (docs/anforderungen.md, B1 in Kap. 3.5; konto.proto). Ein
+	// Konto wird erst zur Löschung markiert (Termin), dann gesperrt, dann
+	// entfernt. Bricht das ab, findet FaelligeLoeschungen das Konto wieder.
+
+	// LoeschungBeantragen setzt den Termin, ab dem das Konto gelöscht wird, und
+	// liefert den gültigen Termin. ErrNichtGefunden, wenn es das Konto nicht gibt.
+	//
+	// KRITISCH: Ein früherer Termin bleibt (frueherTermin): Ein zweiter Antrag
+	// verschiebt die Löschung nie nach hinten, und das sofortige Löschen eines
+	// freigeschalteten Geräts zieht einen offenen Antrag vor.
+	LoeschungBeantragen(ctx context.Context, kontoID string, ab time.Time) (time.Time, error)
+
+	// LoeschungAbbrechen entfernt den Termin. Ohne Termin oder Konto ist das
+	// kein Fehler.
+	//
+	// KRITISCH: Ist der Termin erreicht, ErrLoeschungLaeuft, und der Termin
+	// bleibt: Die Löschung kann schon begonnen haben (Kennung weg, Geräte
+	// gesperrt); ein Abbruch ließe ein halb gelöschtes Konto ohne Termin zurück.
+	LoeschungAbbrechen(ctx context.Context, kontoID string, jetzt time.Time) error
+
+	// LoeschenAb liefert den Termin des Kontos; Nullwert = kein Antrag oder
+	// kein Konto.
+	LoeschenAb(ctx context.Context, kontoID string) (time.Time, error)
+
+	// FaelligeLoeschungen liefert höchstens max Konten, deren Termin erreicht
+	// ist (für den regelmäßigen Lauf).
+	FaelligeLoeschungen(ctx context.Context, jetzt time.Time, max int) ([]string, error)
+
+	// KontoSperren entzieht einem fälligen Konto den Zugang: Es löscht die
+	// Kennung (ein neues Anmelden mit demselben Google-Konto legt dann ein
+	// neues Konto an), sperrt alle Geräte und löscht ihre Sitzungen.
+	// Wiederholbar; ein Konto, das es nicht mehr gibt, ist kein Fehler.
+	//
+	// KRITISCH: Nur ein Konto mit erreichtem Termin, sonst ErrNichtFaellig. So
+	// kann ein Fehler im Aufrufer kein beliebiges Konto löschen.
+	KontoSperren(ctx context.Context, kontoID string, jetzt time.Time) error
+
+	// KontoEntfernen löscht die Geräte, übrige Sitzungen, das Schlüssel-Backup
+	// und zuletzt das Konto selbst. Wiederholbar; ein Konto, das es nicht mehr
+	// gibt, ist kein Fehler.
+	//
+	// KRITISCH: Nur ein Konto mit erreichtem Termin (sonst ErrNichtFaellig), und
+	// das Konto zuletzt: Solange es da ist, findet FaelligeLoeschungen den Rest.
+	KontoEntfernen(ctx context.Context, kontoID string, jetzt time.Time) error
+}
+
+// frueherTermin entscheidet LoeschungBeantragen: Der frühere Termin gilt
+// (Nullwert = es gab keinen).
+func frueherTermin(alt, neu time.Time) time.Time {
+	if !alt.IsZero() && !alt.After(neu) {
+		return alt
+	}
+	return neu
+}
+
+// istFaellig: Gibt es einen Termin, und ist er erreicht?
+func istFaellig(ab, jetzt time.Time) bool {
+	return !ab.IsZero() && !ab.After(jetzt)
 }
 
 // Die Regeln zur Freischaltung als reine Funktionen: Beide Umsetzungen lesen

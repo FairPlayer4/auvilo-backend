@@ -24,7 +24,7 @@ func (d *geraeteDienst) GeraeteAuflisten(ctx context.Context, _ *connect.Request
 	if err != nil {
 		return nil, speicherFehler(ctx, err)
 	}
-	antwort := &v1.GeraeteAuflistenResponse{}
+	antwort := &v1.GeraeteAuflistenResponse{LoeschenAb: loeschenAb(ctx, d.speicher, id.KontoID)}
 	for _, g := range liste {
 		antwort.Geraete = append(antwort.Geraete, &v1.Geraet{
 			GeraetId:       g.ID,

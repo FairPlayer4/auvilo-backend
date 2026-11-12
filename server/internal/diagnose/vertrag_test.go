@@ -175,6 +175,44 @@ func pruefeVertrag(t *testing.T, neu func(t *testing.T) pruefling) {
 		}
 	})
 
+	// KRITISCH: Löschen trifft nur die Sendungen dieses Kontos, auch wenn eine
+	// andere Konto-ID mit derselben Zeichenfolge beginnt (a1 und a10).
+	t.Run("Löschen entfernt alle Sendungen des Kontos und nur diese", func(t *testing.T) {
+		p := neu(t)
+		var namen []string
+		for _, konto := range []string{"a1", "a1", "a10", "b2"} {
+			name, err := p.ablage.Ablegen(ctx, konto, jetzt, []byte(konto))
+			if err != nil {
+				t.Fatal(err)
+			}
+			namen = append(namen, name)
+		}
+		if err := p.ablage.Loeschen(ctx, "a1"); err != nil {
+			t.Fatal(err)
+		}
+		inhalt := p.inhalt(t)
+		if len(inhalt) != 2 || string(inhalt[namen[2]]) != "a10" || string(inhalt[namen[3]]) != "b2" {
+			t.Errorf("nach dem Löschen: %q", inhalt)
+		}
+		// Wiederholt und ohne Sendungen: kein Fehler.
+		if err := p.ablage.Loeschen(ctx, "a1"); err != nil {
+			t.Errorf("zweites Löschen: %v", err)
+		}
+	})
+
+	t.Run("Löschen ohne Konto-ID lehnt ab und löscht nichts", func(t *testing.T) {
+		p := neu(t)
+		if _, err := p.ablage.Ablegen(ctx, "a1", jetzt, []byte("x")); err != nil {
+			t.Fatal(err)
+		}
+		if err := p.ablage.Loeschen(ctx, ""); err == nil {
+			t.Error("kein Fehler, erwartet einen")
+		}
+		if inhalt := p.inhalt(t); len(inhalt) != 1 {
+			t.Errorf("nach dem Löschen: %q", inhalt)
+		}
+	})
+
 	t.Run("ohne Konto-ID wird nichts abgelegt", func(t *testing.T) {
 		p := neu(t)
 		if _, err := p.ablage.Ablegen(ctx, "", jetzt, []byte("x")); err == nil {

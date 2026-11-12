@@ -61,6 +61,9 @@ message AnmeldenResponse {
   // true, wenn dieses Gerät freigeschaltet ist (geraete.proto). Ein neues Gerät
   // ist es sofort nur, wenn es im Konto nichts zu schützen gibt.
   bool freigeschaltet = 5;
+  // Gesetzt, wenn die Löschung des Kontos beantragt ist: ab dann löscht der
+  // Server (konto.proto). Die App zeigt das mit „Abbrechen“ an.
+  google.protobuf.Timestamp loeschen_ab = 6;
 }
 
 message SitzungErneuernRequest {
@@ -75,6 +78,9 @@ message SitzungErneuernRequest {
 
 message SitzungErneuernResponse {
   Sitzung sitzung = 1;
+  // Gesetzt, wenn die Löschung des Kontos beantragt ist: ab dann löscht der
+  // Server (konto.proto). Die App zeigt das mit „Abbrechen“ an.
+  google.protobuf.Timestamp loeschen_ab = 2;
 }
 
 message Sitzung {

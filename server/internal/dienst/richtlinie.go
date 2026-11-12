@@ -55,6 +55,11 @@ var richtlinien = map[string]richtlinie{
 	avlreminderv1connect.DatensicherungDienstSicherungSpeichernProcedure: freigeschaltet,
 	avlreminderv1connect.DatensicherungDienstSicherungLoeschenProcedure:  freigeschaltet,
 
+	// Löschen beantragen darf jedes Gerät, sofort löschen nur ein
+	// freigeschaltetes (konto.go); abbrechen nur ein freigeschaltetes.
+	avlreminderv1connect.KontoDienstKontoLoeschenProcedure:          eigeneRegel,
+	avlreminderv1connect.KontoDienstKontoLoeschenAbbrechenProcedure: freigeschaltet,
+
 	// Dazu prüft nurDiagnoseErlaubt vor dem Lesen die Diagnose-Erlaubnis des Kontos.
 	avlreminderv1connect.DiagnoseDienstDiagnoseSendenProcedure: freigeschaltet,
 }

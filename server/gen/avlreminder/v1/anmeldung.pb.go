@@ -108,8 +108,11 @@ type AnmeldenResponse struct {
 	// true, wenn dieses Gerät freigeschaltet ist (geraete.proto). Ein neues Gerät
 	// ist es sofort nur, wenn es im Konto nichts zu schützen gibt.
 	Freigeschaltet bool `protobuf:"varint,5,opt,name=freigeschaltet,proto3" json:"freigeschaltet,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// Gesetzt, wenn die Löschung des Kontos beantragt ist: ab dann löscht der
+	// Server (konto.proto). Die App zeigt das mit „Abbrechen“ an.
+	LoeschenAb    *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=loeschen_ab,json=loeschenAb,proto3" json:"loeschen_ab,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *AnmeldenResponse) Reset() {
@@ -177,6 +180,13 @@ func (x *AnmeldenResponse) GetFreigeschaltet() bool {
 	return false
 }
 
+func (x *AnmeldenResponse) GetLoeschenAb() *timestamppb.Timestamp {
+	if x != nil {
+		return x.LoeschenAb
+	}
+	return nil
+}
+
 type SitzungErneuernRequest struct {
 	state    protoimpl.MessageState `protogen:"open.v1"`
 	GeraetId string                 `protobuf:"bytes,1,opt,name=geraet_id,json=geraetId,proto3" json:"geraet_id,omitempty"`
@@ -242,8 +252,11 @@ func (x *SitzungErneuernRequest) GetSignatur() []byte {
 }
 
 type SitzungErneuernResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Sitzung       *Sitzung               `protobuf:"bytes,1,opt,name=sitzung,proto3" json:"sitzung,omitempty"`
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Sitzung *Sitzung               `protobuf:"bytes,1,opt,name=sitzung,proto3" json:"sitzung,omitempty"`
+	// Gesetzt, wenn die Löschung des Kontos beantragt ist: ab dann löscht der
+	// Server (konto.proto). Die App zeigt das mit „Abbrechen“ an.
+	LoeschenAb    *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=loeschen_ab,json=loeschenAb,proto3" json:"loeschen_ab,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -281,6 +294,13 @@ func (*SitzungErneuernResponse) Descriptor() ([]byte, []int) {
 func (x *SitzungErneuernResponse) GetSitzung() *Sitzung {
 	if x != nil {
 		return x.Sitzung
+	}
+	return nil
+}
+
+func (x *SitzungErneuernResponse) GetLoeschenAb() *timestamppb.Timestamp {
+	if x != nil {
+		return x.LoeschenAb
 	}
 	return nil
 }
@@ -348,20 +368,24 @@ const file_avlreminder_v1_anmeldung_proto_rawDesc = "" +
 	"\x0fgoogle_id_token\x18\x01 \x01(\tR\rgoogleIdToken\x12,\n" +
 	"\x11geraeteschluessel\x18\x02 \x01(\fR\x11geraeteschluessel\x12\x1a\n" +
 	"\bsignatur\x18\x03 \x01(\fR\bsignatur\x12!\n" +
-	"\fnonce_zufall\x18\x04 \x01(\fR\vnonceZufall\"\xc6\x01\n" +
+	"\fnonce_zufall\x18\x04 \x01(\fR\vnonceZufall\"\x83\x02\n" +
 	"\x10AnmeldenResponse\x12\x19\n" +
 	"\bkonto_id\x18\x01 \x01(\tR\akontoId\x12\x1b\n" +
 	"\tgeraet_id\x18\x02 \x01(\tR\bgeraetId\x121\n" +
 	"\asitzung\x18\x03 \x01(\v2\x17.avlreminder.v1.SitzungR\asitzung\x12\x1f\n" +
 	"\vneues_konto\x18\x04 \x01(\bR\n" +
 	"neuesKonto\x12&\n" +
-	"\x0efreigeschaltet\x18\x05 \x01(\bR\x0efreigeschaltet\"\x8b\x01\n" +
+	"\x0efreigeschaltet\x18\x05 \x01(\bR\x0efreigeschaltet\x12;\n" +
+	"\vloeschen_ab\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
+	"loeschenAb\"\x8b\x01\n" +
 	"\x16SitzungErneuernRequest\x12\x1b\n" +
 	"\tgeraet_id\x18\x01 \x01(\tR\bgeraetId\x128\n" +
 	"\tzeitpunkt\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\tzeitpunkt\x12\x1a\n" +
-	"\bsignatur\x18\x03 \x01(\fR\bsignatur\"L\n" +
+	"\bsignatur\x18\x03 \x01(\fR\bsignatur\"\x89\x01\n" +
 	"\x17SitzungErneuernResponse\x121\n" +
-	"\asitzung\x18\x01 \x01(\v2\x17.avlreminder.v1.SitzungR\asitzung\"X\n" +
+	"\asitzung\x18\x01 \x01(\v2\x17.avlreminder.v1.SitzungR\asitzung\x12;\n" +
+	"\vloeschen_ab\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
+	"loeschenAb\"X\n" +
 	"\aSitzung\x12\x14\n" +
 	"\x05token\x18\x01 \x01(\tR\x05token\x127\n" +
 	"\tlaeuft_ab\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\blaeuftAb2\xc2\x01\n" +
@@ -393,18 +417,20 @@ var file_avlreminder_v1_anmeldung_proto_goTypes = []any{
 }
 var file_avlreminder_v1_anmeldung_proto_depIdxs = []int32{
 	4, // 0: avlreminder.v1.AnmeldenResponse.sitzung:type_name -> avlreminder.v1.Sitzung
-	5, // 1: avlreminder.v1.SitzungErneuernRequest.zeitpunkt:type_name -> google.protobuf.Timestamp
-	4, // 2: avlreminder.v1.SitzungErneuernResponse.sitzung:type_name -> avlreminder.v1.Sitzung
-	5, // 3: avlreminder.v1.Sitzung.laeuft_ab:type_name -> google.protobuf.Timestamp
-	0, // 4: avlreminder.v1.AnmeldeDienst.Anmelden:input_type -> avlreminder.v1.AnmeldenRequest
-	2, // 5: avlreminder.v1.AnmeldeDienst.SitzungErneuern:input_type -> avlreminder.v1.SitzungErneuernRequest
-	1, // 6: avlreminder.v1.AnmeldeDienst.Anmelden:output_type -> avlreminder.v1.AnmeldenResponse
-	3, // 7: avlreminder.v1.AnmeldeDienst.SitzungErneuern:output_type -> avlreminder.v1.SitzungErneuernResponse
-	6, // [6:8] is the sub-list for method output_type
-	4, // [4:6] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	5, // 1: avlreminder.v1.AnmeldenResponse.loeschen_ab:type_name -> google.protobuf.Timestamp
+	5, // 2: avlreminder.v1.SitzungErneuernRequest.zeitpunkt:type_name -> google.protobuf.Timestamp
+	4, // 3: avlreminder.v1.SitzungErneuernResponse.sitzung:type_name -> avlreminder.v1.Sitzung
+	5, // 4: avlreminder.v1.SitzungErneuernResponse.loeschen_ab:type_name -> google.protobuf.Timestamp
+	5, // 5: avlreminder.v1.Sitzung.laeuft_ab:type_name -> google.protobuf.Timestamp
+	0, // 6: avlreminder.v1.AnmeldeDienst.Anmelden:input_type -> avlreminder.v1.AnmeldenRequest
+	2, // 7: avlreminder.v1.AnmeldeDienst.SitzungErneuern:input_type -> avlreminder.v1.SitzungErneuernRequest
+	1, // 8: avlreminder.v1.AnmeldeDienst.Anmelden:output_type -> avlreminder.v1.AnmeldenResponse
+	3, // 9: avlreminder.v1.AnmeldeDienst.SitzungErneuern:output_type -> avlreminder.v1.SitzungErneuernResponse
+	8, // [8:10] is the sub-list for method output_type
+	6, // [6:8] is the sub-list for method input_type
+	6, // [6:6] is the sub-list for extension type_name
+	6, // [6:6] is the sub-list for extension extendee
+	0, // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_avlreminder_v1_anmeldung_proto_init() }

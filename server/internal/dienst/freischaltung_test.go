@@ -191,6 +191,20 @@ func TestNichtFreigeschaltetesGeraetDarfNichtsAendern(t *testing.T) {
 			}
 			return nil
 		}},
+		// Der Antrag kommt direkt in den Speicher; KontoLoeschen vom Laptop
+		// löschte im Erlaubnisfall sofort.
+		{"Löschung abbrechen", func(_ *testing.T, ts *testServer, k konto) error {
+			if _, err := ts.speicher.LoeschungBeantragen(context.Background(), k.kontoID, ts.jetzt.Add(time.Hour)); err != nil {
+				return err
+			}
+			if err := ts.loeschenAbbrechen(k.laptopSitzung); err != nil {
+				return err
+			}
+			if ab, err := ts.speicher.LoeschenAb(context.Background(), k.kontoID); err != nil || !ab.IsZero() {
+				return fmt.Errorf("Termin nach dem Abbrechen = %v, Fehler %w", ab, err)
+			}
+			return nil
+		}},
 		{"Sicherung löschen", func(_ *testing.T, ts *testServer, k konto) error {
 			if err := ts.sicherungLoeschen(k.laptopSitzung); err != nil {
 				return err

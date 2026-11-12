@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"maps"
+	"strings"
 	"sync"
 	"time"
 )
@@ -34,6 +35,20 @@ func (a *Arbeitsspeicher) Ablegen(_ context.Context, kontoID string, jetzt time.
 	}
 	a.objekte[name] = append([]byte(nil), nutzlast...)
 	return name, nil
+}
+
+func (a *Arbeitsspeicher) Loeschen(_ context.Context, kontoID string) error {
+	if kontoID == "" {
+		return errors.New("Konto-ID fehlt")
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	for name := range a.objekte {
+		if strings.HasPrefix(name, ordner(kontoID)) {
+			delete(a.objekte, name)
+		}
+	}
+	return nil
 }
 
 // Objekte liefert eine Kopie aller Sendungen (nur für Tests).

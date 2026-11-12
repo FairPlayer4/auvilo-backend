@@ -98,6 +98,7 @@ func NeuerHandler(k Konfiguration) (http.Handler, error) {
 	schluessel := &schluesselDienst{speicher: k.Speicher, frei: frei, jetzt: k.Jetzt}
 	sicherung := &datensicherungDienst{ablage: k.Sicherungen, limit: limit}
 	diag := &diagnoseDienst{ablage: k.Diagnosen, erlaubt: k.DiagnoseErlaubt, kontingente: k.Kontingente, jetzt: k.Jetzt}
+	konto := &kontoDienst{speicher: k.Speicher, loescher: NeuerLoescher(k.Speicher, k.Sicherungen, k.Diagnosen), frei: frei, jetzt: k.Jetzt}
 
 	// Erst die Sitzung, dann die Richtlinie der Prozedur (richtlinie.go).
 	interceptor := sitzung.NeuerInterceptor(k.Speicher, offeneProzeduren(), k.Jetzt)
@@ -111,6 +112,7 @@ func NeuerHandler(k Konfiguration) (http.Handler, error) {
 	mux.Handle(avlreminderv1connect.NewAnmeldeDienstHandler(anmelde, optionen...))
 	mux.Handle(avlreminderv1connect.NewGeraeteDienstHandler(geraete, optionen...))
 	mux.Handle(avlreminderv1connect.NewSchluesselDienstHandler(schluessel, optionen...))
+	mux.Handle(avlreminderv1connect.NewKontoDienstHandler(konto, optionen...))
 
 	// Datensicherungen sind bis zu 8 MiB groß: eigene, größere Grenze für die
 	// Anfrage (die spätere Option gilt), dafür nur wenige gleichzeitig. Antworten
@@ -143,12 +145,14 @@ func beiPanik(ctx context.Context, spec connect.Spec, _ http.Header, p any) erro
 
 type anmeldeSpeicher interface {
 	geraetLesen
+	loeschenAbLesen
 	Anmelden(ctx context.Context, kennung string, geraet speicher.Geraet, sitzung speicher.NeueSitzung) (speicher.AnmeldeErgebnis, error)
 	SitzungAnlegen(ctx context.Context, geraetID string, sitzung speicher.NeueSitzung) (kontoID string, err error)
 }
 
 type geraeteSpeicher interface {
 	geraetLesen
+	loeschenAbLesen
 	Geraete(ctx context.Context, kontoID string) ([]speicher.Geraet, error)
 	GeraetSperren(ctx context.Context, kontoID, geraetID string, jetzt time.Time) error
 	GeraetFreischalten(ctx context.Context, kontoID, geraetID string) error
@@ -210,6 +214,7 @@ type diagnoseDienst struct {
 var (
 	_ avlreminderv1connect.AnmeldeDienstHandler = (*anmeldeDienst)(nil)
 	_ avlreminderv1connect.GeraeteDienstHandler = (*geraeteDienst)(nil)
+	_ avlreminderv1connect.KontoDienstHandler   = (*kontoDienst)(nil)
 )
 
 // Antworten nach außen sind bewusst knapp: Ein Angreifer soll nicht erfahren,
@@ -279,6 +284,7 @@ func (d *anmeldeDienst) Anmelden(ctx context.Context, req *connect.Request[v1.An
 		Sitzung:        sitzungNachAussen(token, neueSitzung),
 		NeuesKonto:     ergebnis.NeuesKonto,
 		Freigeschaltet: ergebnis.Freigeschaltet,
+		LoeschenAb:     loeschenAb(ctx, d.speicher, ergebnis.KontoID),
 	}), nil
 }
 
@@ -329,13 +335,17 @@ func (d *anmeldeDienst) SitzungErneuern(ctx context.Context, req *connect.Reques
 	token, neueSitzung := sitzung.Neu(jetzt)
 	// SitzungAnlegen prüft die Sperre noch einmal in derselben Transaktion –
 	// falls das Gerät gerade eben gesperrt wurde.
-	if _, err := d.speicher.SitzungAnlegen(ctx, geraetID, neueSitzung); err != nil {
+	kontoID, err := d.speicher.SitzungAnlegen(ctx, geraetID, neueSitzung)
+	if err != nil {
 		if errors.Is(err, speicher.ErrGeraetGesperrt) {
 			return nil, errGesperrt()
 		}
 		return nil, speicherFehler(ctx, err)
 	}
-	return connect.NewResponse(&v1.SitzungErneuernResponse{Sitzung: sitzungNachAussen(token, neueSitzung)}), nil
+	return connect.NewResponse(&v1.SitzungErneuernResponse{
+		Sitzung:    sitzungNachAussen(token, neueSitzung),
+		LoeschenAb: loeschenAb(ctx, d.speicher, kontoID),
+	}), nil
 }
 
 // identitaet holt die vom Interceptor geprüfte Identität. Fehlt sie, ist der

@@ -2,6 +2,7 @@ package speicher
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -27,6 +28,8 @@ type kennungDok struct {
 
 type kontoDok struct {
 	Erstellt time.Time `firestore:"erstellt"` // nur der Tag (Datensparsamkeit)
+	// Gesetzt, solange eine Löschung beantragt ist (KontoLoeschen).
+	LoeschenAb *time.Time `firestore:"loeschen_ab,omitempty"`
 }
 
 type geraetDok struct {
@@ -343,14 +346,21 @@ func (f *Firestore) sperreGeraet(ctx context.Context, kontoID, geraetID string, 
 	})
 }
 
-// loescheSitzungen löscht alle Sitzungen eines Geräts, je Durchgang höchstens
-// sitzungenJeStapel. Endet, wenn keine mehr da ist; das gesperrte Gerät bekommt
-// keine neuen.
+// loescheSitzungen löscht alle Sitzungen eines Geräts. Endet, wenn keine mehr
+// da ist; das gesperrte Gerät bekommt keine neuen.
 func (f *Firestore) loescheSitzungen(ctx context.Context, geraetID string) error {
+	return f.loescheAlle(ctx, f.c.Collection(sammlungSitzungen).Where("geraet_id", "==", geraetID))
+}
+
+// loescheAlle löscht alle Dokumente, die die Abfrage findet, je Transaktion
+// höchstens sitzungenJeStapel. Sie läuft, bis die Abfrage nichts mehr findet;
+// kämen ständig neue Dokumente dazu, endete sie nicht. Daher nur für
+// Sitzungen gesperrter Geräte und Daten fälliger Konten, die keine neuen
+// bekommen.
+func (f *Firestore) loescheAlle(ctx context.Context, q firestore.Query) error {
 	for {
 		// Select() ohne Felder: nur die Verweise, nicht die Inhalte.
-		snaps, err := f.c.Collection(sammlungSitzungen).Where("geraet_id", "==", geraetID).
-			Select().Limit(sitzungenJeStapel).Documents(ctx).GetAll()
+		snaps, err := q.Select().Limit(sitzungenJeStapel).Documents(ctx).GetAll()
 		if err != nil {
 			return err
 		}
@@ -474,6 +484,188 @@ func (f *Firestore) BackupHolen(ctx context.Context, kontoID string) (Backup, er
 func (f *Firestore) BackupLoeschen(ctx context.Context, kontoID string) error {
 	if _, err := f.c.Collection(sammlungBackups).Doc(kontoID).Delete(ctx); err != nil {
 		return fmt.Errorf("Backup löschen: %w", err)
+	}
+	return nil
+}
+
+// LoeschungBeantragen erfüllt Speicher.LoeschungBeantragen. Lesen und
+// Schreiben in einer Transaktion, damit zwei gleichzeitige Anträge den
+// früheren Termin behalten.
+func (f *Firestore) LoeschungBeantragen(ctx context.Context, kontoID string, ab time.Time) (time.Time, error) {
+	var termin time.Time
+	err := f.c.RunTransaction(ctx, func(ctx context.Context, tx *firestore.Transaction) error {
+		ref := f.c.Collection(sammlungKonten).Doc(kontoID)
+		kd, err := kontoIn(tx, ref)
+		if err != nil {
+			return err
+		}
+		var alt time.Time
+		if kd.LoeschenAb != nil {
+			alt = kd.LoeschenAb.UTC()
+		}
+		termin = frueherTermin(alt, ab.UTC().Truncate(time.Millisecond))
+		return tx.Update(ref, []firestore.Update{{Path: "loeschen_ab", Value: termin}})
+	})
+	if err != nil {
+		return time.Time{}, fmt.Errorf("Löschung beantragen: %w", err)
+	}
+	return termin, nil
+}
+
+// LoeschungAbbrechen erfüllt Speicher.LoeschungAbbrechen.
+//
+// KRITISCH: Fälligkeit prüfen und Termin entfernen in einer Transaktion. Hat
+// der Lauf schon mit dem Löschen begonnen, ist der Termin fällig, und das
+// Abbrechen scheitert; ein halb gelöschtes Konto bleibt so immer fällig.
+func (f *Firestore) LoeschungAbbrechen(ctx context.Context, kontoID string, jetzt time.Time) error {
+	err := f.c.RunTransaction(ctx, func(ctx context.Context, tx *firestore.Transaction) error {
+		ref := f.c.Collection(sammlungKonten).Doc(kontoID)
+		kd, err := kontoIn(tx, ref)
+		if errors.Is(err, ErrNichtGefunden) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if kd.LoeschenAb == nil {
+			return nil
+		}
+		if istFaellig(kd.LoeschenAb.UTC(), jetzt) {
+			return ErrLoeschungLaeuft
+		}
+		return tx.Update(ref, []firestore.Update{{Path: "loeschen_ab", Value: firestore.Delete}})
+	})
+	if err != nil {
+		return fmt.Errorf("Löschung abbrechen: %w", err)
+	}
+	return nil
+}
+
+// kontoIn liest das Konto in der Transaktion.
+func kontoIn(tx *firestore.Transaction, ref *firestore.DocumentRef) (kontoDok, error) {
+	var kd kontoDok
+	snap, err := tx.Get(ref)
+	if nichtGefunden(err) {
+		return kd, ErrNichtGefunden
+	}
+	if err != nil {
+		return kd, err
+	}
+	return kd, snap.DataTo(&kd)
+}
+
+func (f *Firestore) LoeschenAb(ctx context.Context, kontoID string) (time.Time, error) {
+	kd, gibtEs, err := f.konto(ctx, kontoID)
+	if err != nil || !gibtEs || kd.LoeschenAb == nil {
+		return time.Time{}, err
+	}
+	return kd.LoeschenAb.UTC(), nil
+}
+
+// konto liest das Konto außerhalb einer Transaktion.
+func (f *Firestore) konto(ctx context.Context, kontoID string) (kd kontoDok, gibtEs bool, err error) {
+	snap, err := f.c.Collection(sammlungKonten).Doc(kontoID).Get(ctx)
+	if nichtGefunden(err) {
+		return kd, false, nil
+	}
+	if err != nil {
+		return kd, false, err
+	}
+	return kd, true, snap.DataTo(&kd)
+}
+
+// FaelligeLoeschungen erfüllt Speicher.FaelligeLoeschungen. Konten ohne
+// loeschen_ab stehen nicht im Index des Felds und werden nicht gefunden.
+func (f *Firestore) FaelligeLoeschungen(ctx context.Context, jetzt time.Time, max int) ([]string, error) {
+	snaps, err := f.c.Collection(sammlungKonten).Where("loeschen_ab", "<=", jetzt.UTC()).
+		Select().Limit(max).Documents(ctx).GetAll()
+	if err != nil {
+		return nil, fmt.Errorf("fällige Löschungen: %w", err)
+	}
+	ids := make([]string, 0, len(snaps))
+	for _, snap := range snaps {
+		ids = append(ids, snap.Ref.ID)
+	}
+	return ids, nil
+}
+
+// faellig prüft außerhalb einer Transaktion, ob ein Konto entfernt werden
+// darf (gibtEs = es gibt das Konto noch). Reicht ohne Transaktion, weil ein
+// fälliger Termin nicht mehr verschwindet (LoeschungAbbrechen lehnt dann ab).
+func (f *Firestore) faellig(ctx context.Context, kontoID string, jetzt time.Time) (gibtEs bool, err error) {
+	kd, gibtEs, err := f.konto(ctx, kontoID)
+	if err != nil || !gibtEs {
+		return false, err
+	}
+	if kd.LoeschenAb == nil || !istFaellig(kd.LoeschenAb.UTC(), jetzt) {
+		return true, ErrNichtFaellig
+	}
+	return true, nil
+}
+
+// KontoSperren erfüllt Speicher.KontoSperren.
+//
+// KRITISCH: Zuerst verschwinden die Kennungen (in einer Transaktion). Eine
+// Anmeldung, die die Kennung gerade gelesen hat, wiederholt Firestore dann,
+// und sie legt ein neues Konto an; eine, die vorher fertig war, hat ihr Gerät
+// schon geschrieben, und das Sperren danach findet es. Dann werden alle Geräte
+// gesperrt und ihre Sitzungen gelöscht, zuletzt übrige Sitzungen des Kontos.
+func (f *Firestore) KontoSperren(ctx context.Context, kontoID string, jetzt time.Time) error {
+	gibtEs, err := f.faellig(ctx, kontoID, jetzt)
+	if err != nil {
+		return fmt.Errorf("Konto sperren: %w", err)
+	}
+	if !gibtEs {
+		return nil
+	}
+	if err := f.loescheAlle(ctx, f.c.Collection(sammlungKennungen).Where("konto_id", "==", kontoID)); err != nil {
+		return fmt.Errorf("Kennung löschen: %w", err)
+	}
+	geraete, err := f.Geraete(ctx, kontoID)
+	if err != nil {
+		return fmt.Errorf("Geräte des Kontos lesen: %w", err)
+	}
+	for _, g := range geraete {
+		// ErrNichtGefunden: Das Gerät ist inzwischen weg (paralleler Lauf).
+		if err := f.GeraetSperren(ctx, kontoID, g.ID, jetzt); err != nil && !errors.Is(err, ErrNichtGefunden) {
+			return err
+		}
+	}
+	if err := f.loescheAlle(ctx, f.c.Collection(sammlungSitzungen).Where("konto_id", "==", kontoID)); err != nil {
+		return fmt.Errorf("Sitzungen des Kontos löschen: %w", err)
+	}
+	return nil
+}
+
+// KontoEntfernen erfüllt Speicher.KontoEntfernen. Das Konto-Dokument kommt
+// zuletzt: Bricht etwas vorher ab, findet FaelligeLoeschungen das Konto wieder.
+func (f *Firestore) KontoEntfernen(ctx context.Context, kontoID string, jetzt time.Time) error {
+	gibtEs, err := f.faellig(ctx, kontoID, jetzt)
+	if err != nil {
+		return fmt.Errorf("Konto entfernen: %w", err)
+	}
+	if !gibtEs {
+		return nil
+	}
+	schritte := []struct {
+		was string
+		q   firestore.Query
+	}{
+		// Kennungen noch einmal, falls KontoSperren nicht gelaufen ist.
+		{"Kennung", f.c.Collection(sammlungKennungen).Where("konto_id", "==", kontoID)},
+		{"Sitzungen", f.c.Collection(sammlungSitzungen).Where("konto_id", "==", kontoID)},
+		{"Geräte", f.c.Collection(sammlungGeraete).Where("konto_id", "==", kontoID)},
+	}
+	for _, s := range schritte {
+		if err := f.loescheAlle(ctx, s.q); err != nil {
+			return fmt.Errorf("Konto entfernen (%s): %w", s.was, err)
+		}
+	}
+	if err := f.BackupLoeschen(ctx, kontoID); err != nil {
+		return fmt.Errorf("Konto entfernen: %w", err)
+	}
+	if _, err := f.c.Collection(sammlungKonten).Doc(kontoID).Delete(ctx); err != nil {
+		return fmt.Errorf("Konto entfernen: %w", err)
 	}
 	return nil
 }

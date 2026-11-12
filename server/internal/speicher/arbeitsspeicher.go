@@ -13,6 +13,7 @@ type Arbeitsspeicher struct {
 	// Ein Mutex für alles: Jede Methode ist damit atomar wie eine Transaktion.
 	mu        sync.Mutex
 	kennungen map[string]string // Kennung → Konto-ID
+	konten    map[string]konto  // Konto-ID → Konto
 	geraete   map[string]Geraet // Geräte-ID → Gerät
 	sitzungen map[string]Sitzung
 	backups   map[string]Backup // Konto-ID → Backup
@@ -22,10 +23,16 @@ type Arbeitsspeicher struct {
 func NeuerArbeitsspeicher() *Arbeitsspeicher {
 	return &Arbeitsspeicher{
 		kennungen: map[string]string{},
+		konten:    map[string]konto{},
 		geraete:   map[string]Geraet{},
 		sitzungen: map[string]Sitzung{},
 		backups:   map[string]Backup{},
 	}
+}
+
+// konto: was der Arbeitsspeicher zu einem Konto hält.
+type konto struct {
+	loeschenAb time.Time // Nullwert = keine Löschung beantragt
 }
 
 // Prüft beim Übersetzen, dass Arbeitsspeicher die Schnittstelle erfüllt.
@@ -63,6 +70,9 @@ func (a *Arbeitsspeicher) Anmelden(_ context.Context, kennung string, g Geraet, 
 	}
 	// Erst schreiben, wenn alle Prüfungen bestanden sind (wie eine Transaktion).
 	a.kennungen[kennung] = kontoID
+	if neu {
+		a.konten[kontoID] = konto{}
+	}
 	a.sitzungen[s.Hash] = Sitzung{Hash: s.Hash, KontoID: kontoID, GeraetID: g.ID, LaeuftAb: s.LaeuftAb.UTC().Truncate(time.Millisecond)}
 	return AnmeldeErgebnis{KontoID: kontoID, NeuesKonto: neu, Freigeschaltet: g.Freigeschaltet}, nil
 }
@@ -192,6 +202,125 @@ func (a *Arbeitsspeicher) BackupLoeschen(_ context.Context, kontoID string) erro
 	defer a.mu.Unlock()
 	delete(a.backups, kontoID)
 	return nil
+}
+
+func (a *Arbeitsspeicher) LoeschungBeantragen(_ context.Context, kontoID string, ab time.Time) (time.Time, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	k, ok := a.konten[kontoID]
+	if !ok {
+		return time.Time{}, ErrNichtGefunden
+	}
+	k.loeschenAb = frueherTermin(k.loeschenAb, ab.UTC().Truncate(time.Millisecond))
+	a.konten[kontoID] = k
+	return k.loeschenAb, nil
+}
+
+func (a *Arbeitsspeicher) LoeschungAbbrechen(_ context.Context, kontoID string, jetzt time.Time) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	k, ok := a.konten[kontoID]
+	if !ok || k.loeschenAb.IsZero() {
+		return nil
+	}
+	if istFaellig(k.loeschenAb, jetzt) {
+		return ErrLoeschungLaeuft
+	}
+	k.loeschenAb = time.Time{}
+	a.konten[kontoID] = k
+	return nil
+}
+
+func (a *Arbeitsspeicher) LoeschenAb(_ context.Context, kontoID string) (time.Time, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.konten[kontoID].loeschenAb, nil
+}
+
+func (a *Arbeitsspeicher) FaelligeLoeschungen(_ context.Context, jetzt time.Time, max int) ([]string, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	var ids []string
+	for id, k := range a.konten {
+		if istFaellig(k.loeschenAb, jetzt) {
+			ids = append(ids, id)
+		}
+	}
+	slices.Sort(ids) // Maps haben keine feste Reihenfolge
+	if len(ids) > max {
+		ids = ids[:max]
+	}
+	return ids, nil
+}
+
+// faellig prüft, ob ein Konto entfernt werden darf (gibtEs = es gibt das
+// Konto noch). Aufruf nur mit mu.
+func (a *Arbeitsspeicher) faellig(kontoID string, jetzt time.Time) (gibtEs bool, err error) {
+	k, ok := a.konten[kontoID]
+	if !ok {
+		return false, nil
+	}
+	if !istFaellig(k.loeschenAb, jetzt) {
+		return true, ErrNichtFaellig
+	}
+	return true, nil
+}
+
+func (a *Arbeitsspeicher) KontoSperren(_ context.Context, kontoID string, jetzt time.Time) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if gibtEs, err := a.faellig(kontoID, jetzt); !gibtEs || err != nil {
+		return err
+	}
+	a.loescheKennungenVon(kontoID)
+	for id, g := range a.geraete {
+		if g.KontoID != kontoID {
+			continue
+		}
+		if !g.Gesperrt {
+			g.Gesperrt = true
+			g.GesperrtAm = jetzt.UTC().Truncate(time.Millisecond)
+			a.geraete[id] = g
+		}
+	}
+	a.loescheSitzungenVon(kontoID)
+	return nil
+}
+
+func (a *Arbeitsspeicher) KontoEntfernen(_ context.Context, kontoID string, jetzt time.Time) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if gibtEs, err := a.faellig(kontoID, jetzt); !gibtEs || err != nil {
+		return err
+	}
+	a.loescheKennungenVon(kontoID) // falls KontoSperren nicht gelaufen ist
+	for id, g := range a.geraete {
+		if g.KontoID == kontoID {
+			delete(a.geraete, id)
+		}
+	}
+	a.loescheSitzungenVon(kontoID)
+	delete(a.backups, kontoID)
+	delete(a.konten, kontoID)
+	return nil
+}
+
+// loescheKennungenVon löscht die Kennungen eines Kontos. Aufruf nur mit mu.
+func (a *Arbeitsspeicher) loescheKennungenVon(kontoID string) {
+	for kennung, id := range a.kennungen {
+		if id == kontoID {
+			delete(a.kennungen, kennung)
+		}
+	}
+}
+
+// loescheSitzungenVon löscht alle Sitzungen eines Kontos. Aufruf nur mit mu.
+func (a *Arbeitsspeicher) loescheSitzungenVon(kontoID string) {
+	for hash, s := range a.sitzungen {
+		if s.KontoID == kontoID {
+			delete(a.sitzungen, hash)
+		}
+	}
 }
 
 // sortiereGeraete sortiert nach Erstellung, bei Gleichstand nach ID – so ist

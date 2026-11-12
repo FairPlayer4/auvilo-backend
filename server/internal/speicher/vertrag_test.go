@@ -615,6 +615,271 @@ func pruefeVertrag(t *testing.T, neu func(t *testing.T) Speicher) {
 		}
 	})
 
+	// --- Konto löschen (B1) ---
+
+	tag := 24 * time.Hour
+	// beantragt meldet sich mit kennung-a an und beantragt die Löschung ab t0+ab.
+	beantragt := func(t *testing.T, s Speicher, ab time.Duration) string {
+		t.Helper()
+		e := anmelden(t, s, "kennung-a", "geraet-1", "hash-1", 0)
+		_, err := s.LoeschungBeantragen(ctx, e.KontoID, t0.Add(ab))
+		muss(t, err)
+		return e.KontoID
+	}
+	loeschenAbPruefen := func(t *testing.T, s Speicher, kontoID string, want time.Time) {
+		t.Helper()
+		ab, err := s.LoeschenAb(ctx, kontoID)
+		muss(t, err)
+		if !ab.Equal(want) {
+			t.Errorf("LoeschenAb = %v, erwartet %v", ab, want)
+		}
+	}
+
+	t.Run("Antrag setzt den Termin, ein weiterer behält den früheren", func(t *testing.T) {
+		s := neu(t)
+		konto := beantragt(t, s, 7*tag)
+		loeschenAbPruefen(t, s, konto, t0.Add(7*tag))
+		// Ein späterer Antrag schiebt die Löschung nicht hinaus …
+		ab, err := s.LoeschungBeantragen(ctx, konto, t0.Add(8*tag))
+		muss(t, err)
+		if !ab.Equal(t0.Add(7 * tag)) {
+			t.Errorf("späterer Antrag: Termin = %v, erwartet %v", ab, t0.Add(7*tag))
+		}
+		// … ein früherer (sofort löschen) zieht sie vor.
+		ab, err = s.LoeschungBeantragen(ctx, konto, t0)
+		muss(t, err)
+		if !ab.Equal(t0) {
+			t.Errorf("früherer Antrag: Termin = %v, erwartet %v", ab, t0)
+		}
+		loeschenAbPruefen(t, s, konto, t0)
+	})
+
+	t.Run("Antrag ohne Konto meldet nicht gefunden", func(t *testing.T) {
+		if _, err := neu(t).LoeschungBeantragen(ctx, "gibt-es-nicht", t0); !errors.Is(err, ErrNichtGefunden) {
+			t.Errorf("Fehler = %v, erwartet ErrNichtGefunden", err)
+		}
+	})
+
+	t.Run("ohne Antrag oder ohne Konto ist kein Termin gesetzt", func(t *testing.T) {
+		s := neu(t)
+		e := anmelden(t, s, "kennung-a", "geraet-1", "hash-1", 0)
+		loeschenAbPruefen(t, s, e.KontoID, time.Time{})
+		loeschenAbPruefen(t, s, "gibt-es-nicht", time.Time{})
+	})
+
+	t.Run("Abbrechen vor dem Termin entfernt ihn, ohne Antrag ist es kein Fehler", func(t *testing.T) {
+		s := neu(t)
+		konto := beantragt(t, s, 7*tag)
+		muss(t, s.LoeschungAbbrechen(ctx, konto, t0.Add(7*tag-time.Millisecond)))
+		loeschenAbPruefen(t, s, konto, time.Time{})
+		ids, err := s.FaelligeLoeschungen(ctx, t0.Add(30*tag), 10)
+		muss(t, err)
+		if len(ids) != 0 {
+			t.Errorf("fällig nach dem Abbrechen: %v", ids)
+		}
+		muss(t, s.LoeschungAbbrechen(ctx, konto, t0))           // kein Antrag mehr
+		muss(t, s.LoeschungAbbrechen(ctx, "gibt-es-nicht", t0)) // kein Konto
+	})
+
+	// KRITISCH: Ab dem Termin kann niemand mehr abbrechen; sonst bliebe ein
+	// halb gelöschtes Konto ohne Termin liegen.
+	for _, nach := range []struct {
+		name string
+		d    time.Duration
+	}{{"genau am Termin", 0}, {"nach dem Termin", time.Hour}} {
+		t.Run("lehnt Abbrechen "+nach.name+" ab und behält den Termin", func(t *testing.T) {
+			s := neu(t)
+			konto := beantragt(t, s, 7*tag)
+			if err := s.LoeschungAbbrechen(ctx, konto, t0.Add(7*tag+nach.d)); !errors.Is(err, ErrLoeschungLaeuft) {
+				t.Fatalf("Fehler = %v, erwartet ErrLoeschungLaeuft", err)
+			}
+			loeschenAbPruefen(t, s, konto, t0.Add(7*tag))
+		})
+	}
+
+	t.Run("fällige Löschungen: nur Konten mit erreichtem Termin, höchstens max", func(t *testing.T) {
+		s := neu(t)
+		termine := map[string]time.Duration{"kennung-a": 0, "kennung-b": tag, "kennung-d": -tag}
+		konten := map[string]string{}
+		for i, kennung := range []string{"kennung-a", "kennung-b", "kennung-c", "kennung-d"} {
+			e := anmelden(t, s, kennung, fmt.Sprintf("geraet-%d", i), fmt.Sprintf("hash-%d", i), 0)
+			konten[kennung] = e.KontoID
+			if ab, ok := termine[kennung]; ok {
+				_, err := s.LoeschungBeantragen(ctx, e.KontoID, t0.Add(ab))
+				muss(t, err)
+			}
+		}
+		ids, err := s.FaelligeLoeschungen(ctx, t0, 10)
+		muss(t, err)
+		want := map[string]bool{konten["kennung-a"]: true, konten["kennung-d"]: true}
+		if len(ids) != len(want) || !want[ids[0]] || !want[ids[1]] || ids[0] == ids[1] {
+			t.Errorf("fällig = %v, erwartet a und d (%v)", ids, want)
+		}
+		ids, err = s.FaelligeLoeschungen(ctx, t0, 1)
+		muss(t, err)
+		if len(ids) != 1 || !want[ids[0]] {
+			t.Errorf("mit max 1: %v", ids)
+		}
+	})
+
+	// KRITISCH: Vor dem Termin löschen Sperren und Entfernen nichts.
+	vorDemTermin := []struct {
+		name string
+		ab   time.Duration // < 0: kein Antrag
+	}{{"ohne Antrag", -1}, {"vor dem Termin", 7 * tag}}
+	for _, fall := range vorDemTermin {
+		for _, schritt := range []struct {
+			name string
+			tun  func(Speicher, string) error
+		}{
+			{"Sperren", func(s Speicher, k string) error { return s.KontoSperren(ctx, k, t0.Add(time.Hour)) }},
+			{"Entfernen", func(s Speicher, k string) error { return s.KontoEntfernen(ctx, k, t0.Add(time.Hour)) }},
+		} {
+			t.Run("lehnt "+schritt.name+" "+fall.name+" ab und ändert nichts", func(t *testing.T) {
+				s := neu(t)
+				e := anmelden(t, s, "kennung-a", "geraet-1", "hash-1", 0)
+				_, err := s.BackupSpeichern(ctx, e.KontoID, []byte("backup"), fsSchluessel, 0, "", t0)
+				muss(t, err)
+				if fall.ab >= 0 {
+					_, err := s.LoeschungBeantragen(ctx, e.KontoID, t0.Add(fall.ab))
+					muss(t, err)
+				}
+				if err := schritt.tun(s, e.KontoID); !errors.Is(err, ErrNichtFaellig) {
+					t.Fatalf("Fehler = %v, erwartet ErrNichtFaellig", err)
+				}
+				g, err := s.Geraet(ctx, "geraet-1")
+				muss(t, err)
+				if g.Gesperrt {
+					t.Error("Gerät gesperrt")
+				}
+				if _, err := s.Sitzung(ctx, "hash-1"); err != nil {
+					t.Errorf("Sitzung: %v", err)
+				}
+				backupPruefen(t, s, e.KontoID, "backup", 1)
+				if wieder := anmelden(t, s, "kennung-a", "geraet-1", "hash-2", 1); wieder.KontoID != e.KontoID {
+					t.Errorf("Kennung zeigt auf %q, erwartet %q", wieder.KontoID, e.KontoID)
+				}
+			})
+		}
+	}
+
+	// bereiteZweiKontenVor: Konto a (fällig ab t0) mit zwei Geräten, drei
+	// Sitzungen und Backup; Konto b ohne Antrag mit Gerät, Sitzung und Backup.
+	bereiteZweiKontenVor := func(t *testing.T, s Speicher) (a, b string) {
+		t.Helper()
+		a = anmelden(t, s, "kennung-a", "geraet-1", "hash-1", 0).KontoID
+		anmelden(t, s, "kennung-a", "geraet-2", "hash-2", 1)
+		_, err := s.SitzungAnlegen(ctx, "geraet-2", sitzung("hash-3"))
+		muss(t, err)
+		b = anmelden(t, s, "kennung-b", "geraet-b", "hash-b", 0).KontoID
+		for _, k := range []string{a, b} {
+			_, err := s.BackupSpeichern(ctx, k, []byte("backup-"+k), fsSchluessel, 0, "", t0)
+			muss(t, err)
+		}
+		_, err = s.LoeschungBeantragen(ctx, a, t0)
+		muss(t, err)
+		return a, b
+	}
+	// kontoBPruefen: Konto b ist unberührt.
+	kontoBPruefen := func(t *testing.T, s Speicher, b string) {
+		t.Helper()
+		g, err := s.Geraet(ctx, "geraet-b")
+		muss(t, err)
+		if g.Gesperrt {
+			t.Error("Gerät von Konto b gesperrt")
+		}
+		if _, err := s.Sitzung(ctx, "hash-b"); err != nil {
+			t.Errorf("Sitzung von Konto b: %v", err)
+		}
+		backupPruefen(t, s, b, "backup-"+b, 1)
+		if e := anmelden(t, s, "kennung-b", "geraet-b", "hash-b2", 5); e.KontoID != b {
+			t.Errorf("kennung-b zeigt auf %q, erwartet %q", e.KontoID, b)
+		}
+	}
+
+	// KRITISCH: Sperren schneidet jeden Zugang ab: keine Kennung, alle Geräte
+	// gesperrt, keine Sitzung. Konto b bleibt unberührt.
+	t.Run("Sperren eines fälligen Kontos schneidet jeden Zugang ab", func(t *testing.T) {
+		s := neu(t)
+		a, b := bereiteZweiKontenVor(t, s)
+		muss(t, s.KontoSperren(ctx, a, t0))
+		for _, id := range []string{"geraet-1", "geraet-2"} {
+			g, err := s.Geraet(ctx, id)
+			muss(t, err)
+			if !g.Gesperrt {
+				t.Errorf("%s nicht gesperrt", id)
+			}
+		}
+		for _, hash := range []string{"hash-1", "hash-2", "hash-3"} {
+			if _, err := s.Sitzung(ctx, hash); !errors.Is(err, ErrNichtGefunden) {
+				t.Errorf("Sitzung %s noch da: %v", hash, err)
+			}
+		}
+		// Das alte Gerät gehört noch zu Konto a, bis es entfernt ist.
+		if _, err := s.Anmelden(ctx, "kennung-a", geraet("geraet-1", 2), sitzung("hash-4")); !errors.Is(err, ErrGeraetFremd) {
+			t.Errorf("altes Gerät: Fehler = %v, erwartet ErrGeraetFremd", err)
+		}
+		// Ein neues Gerät bekommt ein neues, leeres Konto.
+		if e := anmelden(t, s, "kennung-a", "geraet-3", "hash-5", 3); !e.NeuesKonto || e.KontoID == a {
+			t.Errorf("Anmelden nach dem Sperren = %+v, erwartet neues Konto", e)
+		}
+		kontoBPruefen(t, s, b)
+	})
+
+	// KRITISCH: Entfernen lässt vom Konto nichts übrig, mit und ohne vorheriges
+	// Sperren, und berührt Konto b nicht.
+	for _, mitSperren := range []bool{true, false} {
+		name := "Entfernen nach dem Sperren löscht alles des Kontos"
+		if !mitSperren {
+			name = "Entfernen ohne Sperren löscht alles des Kontos"
+		}
+		t.Run(name, func(t *testing.T) {
+			s := neu(t)
+			a, b := bereiteZweiKontenVor(t, s)
+			if mitSperren {
+				muss(t, s.KontoSperren(ctx, a, t0))
+			}
+			muss(t, s.KontoEntfernen(ctx, a, t0))
+
+			for _, id := range []string{"geraet-1", "geraet-2"} {
+				if _, err := s.Geraet(ctx, id); !errors.Is(err, ErrNichtGefunden) {
+					t.Errorf("Gerät %s noch da: %v", id, err)
+				}
+			}
+			for _, hash := range []string{"hash-1", "hash-2", "hash-3"} {
+				if _, err := s.Sitzung(ctx, hash); !errors.Is(err, ErrNichtGefunden) {
+					t.Errorf("Sitzung %s noch da: %v", hash, err)
+				}
+			}
+			if _, err := s.BackupHolen(ctx, a); !errors.Is(err, ErrNichtGefunden) {
+				t.Errorf("Backup noch da: %v", err)
+			}
+			if _, err := s.LoeschungBeantragen(ctx, a, t0); !errors.Is(err, ErrNichtGefunden) {
+				t.Errorf("Konto noch da: %v", err)
+			}
+			ids, err := s.FaelligeLoeschungen(ctx, t0.Add(tag), 10)
+			muss(t, err)
+			if len(ids) != 0 {
+				t.Errorf("noch fällig: %v", ids)
+			}
+			// Dasselbe Google-Konto, sogar dasselbe Gerät: neues, leeres Konto.
+			e := anmelden(t, s, "kennung-a", "geraet-1", "hash-6", 5)
+			if !e.NeuesKonto || e.KontoID == a {
+				t.Errorf("Anmelden danach = %+v, erwartet neues Konto", e)
+			}
+			kontoBPruefen(t, s, b)
+		})
+	}
+
+	t.Run("Sperren und Entfernen eines gelöschten Kontos ist kein Fehler", func(t *testing.T) {
+		s := neu(t)
+		a, _ := bereiteZweiKontenVor(t, s)
+		muss(t, s.KontoEntfernen(ctx, a, t0))
+		muss(t, s.KontoSperren(ctx, a, t0))
+		muss(t, s.KontoEntfernen(ctx, a, t0))
+		muss(t, s.KontoSperren(ctx, "gibt-es-nicht", t0))
+	})
+
 	// KRITISCH: Ein nicht freigeschaltetes Gerät (ungeschuetztFuer) legt das
 	// erste Backup nur an, wenn das Konto kein freigeschaltetes, ungesperrtes
 	// Gerät hat, und ist danach freigeschaltet. Die Version wird vorher
