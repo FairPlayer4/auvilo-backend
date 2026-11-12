@@ -138,8 +138,11 @@ liegt in einem Kotlin-Modul, das später in die App übernommen werden kann. [E]
   löscht sofort Konto, Geräte, Mitgliedschaften und eigene Operationen, dazu die
   Datensicherung (alle Fassungen), das Schlüssel-Backup, Diagnosen, Sitzungen,
   Tageszähler und die Kennung, damit eine neue Anmeldung ein neues Konto bekommt.
-  Erst die Inhalte, zuletzt Kennung und Konto: Bricht es ab, erledigt ein zweiter
-  Aufruf den Rest. In der App vor dem ersten weiteren Nutzer (vorgezogen aus B4,
+  Erst den Termin setzen, dann den Zugang abschneiden (Kennung, Sitzungen, Geräte
+  gesperrt), dann die Inhalte, zuletzt Geräte, Schlüssel-Backup und Konto: Bricht es
+  ab, findet der regelmäßige Lauf das Konto über den Termin und macht weiter
+  (Kap. 11, 2026-11-12, Umsetzung). Tageszähler laufen von selbst ab (höchstens zwei
+  Tage). In der App vor dem ersten weiteren Nutzer (vorgezogen aus B4,
   Kap. 11, 2026-11-12).
   **Ohne Zugang** (Kap. 11, 2026-11-12):
   - Ein *freigeschaltetes* Gerät löscht sofort. Ein nicht freigeschaltetes Gerät
@@ -515,3 +518,4 @@ tragen die Tests die Spezifikation. Anleitung zum Review: [go-review.md](go-revi
 | 2026-11-12 | B3: Vorgaben **B3-5 bis B3-8** (Kap. 4.6): Lücken und aufgespaltene Verläufe erkennen, Person entfernen heißt neuer Freigabe-Schlüssel, öffentliche Schlüssel nur nach Vergleich des Fingerabdrucks, langlebige Personenschlüssel als bekannte Grenze bis B4 |
 | 2026-11-12 | Metadaten: Sicherungen werden vorerst nicht auf feste Größen aufgefüllt; Größe und Zeitpunkt nennt die Datenschutzerklärung (Kap. 4.2) |
 | 2026-11-12 | Konto löschen **ohne Zugang** (B1 in Kap. 3.5): Ein freigeschaltetes Gerät löscht sofort; mit Google-Login allein (nicht freigeschaltetes Gerät oder Webseite) nur ein **Antrag mit 7 Tagen Wartezeit**, den jedes freigeschaltete Gerät abbrechen kann und von dem vorhandene Geräte beim nächsten Aufruf erfahren. Ohne Google-Konto ist keine Zuordnung möglich (Art. 11 DSGVO); dann löscht die Frist aus P5. Keine Löschung per Mail |
+| 2026-11-12 | Konto löschen, **Umsetzung** (Server und Client, `konto.proto`): `KontoLoeschen` setzt immer zuerst den Termin (sofort oder 7 Tage später) und löscht dann im selben Weg wie der regelmäßige Lauf: Zugang abschneiden, Datensicherung (alle Fassungen) und Diagnosen löschen, zuletzt Geräte, Schlüssel-Backup und Konto. Abbrechen geht nur vor dem Termin; ab dann gilt die Löschung als begonnen (`failed_precondition`), damit nie ein halb gelöschtes Konto ohne Termin bleibt. Der Lauf ist der Unterbefehl `aufraeumen` desselben Images (Cloud Run Job mit eigenem Dienstkonto, Cloud Scheduler). `loeschen_ab` steht in den Antworten von Anmelden, SitzungErneuern und GeraeteAuflisten. Die App verwirft ihre Schlüssel nur nach `geloescht = true` |

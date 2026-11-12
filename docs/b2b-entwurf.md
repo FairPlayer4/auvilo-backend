@@ -102,6 +102,25 @@ Gerät behält seinen Zähler (nur die Version wird 0), die nächste Sicherung z
 also weiter. Finge sie bei 1 an, lehnten andere Geräte, die einen höheren Zähler
 kennen, sie als ältere Sicherung ab.
 
+### Konto löschen (B1 in Kap. 3.5, seit 2026-11-12)
+`KontoLoeschen` (`konto.proto`) setzt erst den Termin `loeschen_ab`: sofort bei einem
+freigeschalteten Gerät, sonst 7 Tage später (ein früherer Termin bleibt). Ist er
+erreicht, löscht der Server sofort, sonst antwortet er mit dem Termin. Gelöscht wird
+in dieser Reihenfolge (`dienst.Loescher`):
+1. **Zugang abschneiden** (`KontoSperren`): Kennung, Sitzungen, Geräte gesperrt.
+   Eine gleichzeitige Anmeldung bekommt danach ein neues, leeres Konto.
+2. **Inhalte**: Datensicherung mit allen Fassungen, Diagnosen (`diagnose/<konto>/`).
+3. **Rest** (`KontoEntfernen`): Geräte, Schlüssel-Backup und zuletzt das Konto mit
+   dem Termin.
+
+Jeder Schritt ist wiederholbar. Bricht einer ab, bleibt der Termin, und der
+regelmäßige Lauf (`server aufraeumen`, später auch für die Fristen aus P5) holt das
+Konto nach. Deshalb lehnt `KontoLoeschenAbbrechen` ab dem Termin ab. Die App verwirft
+Sitzung, Geräteschlüssel und Schlüssel nur nach `geloescht = true`
+(`protokoll.KontoLoeschen`); bei einem Antrag zeigt sie den Termin, den alle Geräte
+in Anmelden, SitzungErneuern und GeraeteAuflisten sehen. Test-Client:
+`konto-loeschen`, `konto-loeschen-abbrechen`.
+
 ## Server und Infrastruktur
 - `infra/` (`datensicherung.tf`): Bucket (`var.region`, Versionierung, Lebenszyklus,
   ohne Soft Delete, `public_access_prevention = "enforced"`, `uniform_bucket_level_access`),
@@ -157,7 +176,9 @@ erster Tester, Veröffentlichung im Play Store.
 [anforderungen.md](anforderungen.md) Kap. 11):
 - **Konto löschen** in Server, `protokoll` und App (B1 in Kap. 3.5), auch als Antrag
   mit 7 Tagen Wartezeit für Geräte ohne Freischaltung; damit lassen
-  sich auch Punkt 1 und 2 unten je Konto erledigen.
+  sich auch Punkt 1 und 2 unten je Konto erledigen. Server und Client fertig
+  (2026-11-12, Abschnitt „Konto löschen“ oben); offen sind Infrastruktur (Job,
+  Rechte) und App.
 - **Bestätigung mit der Displaysperre** für *Cloud-Daten löschen*, *Konto löschen*
   und *Gerät sperren* (SE5).
 - **Format v2:** Schlüssel aus dem Wiederherstellungsschlüssel per HKDF mit eigenem
@@ -326,6 +347,15 @@ nicht; sie werden beim Zurücksetzen vor dem ersten weiteren Nutzer ohnehin gel�
   das noch Version 1 erwartet, könnte so ein neues Backup überschreiben. Heute
   harmlos, weil Clients nur mit `erwartet = 0` speichern (Kommentar in
   `schluessel.proto`); ein Grabstein kommt, wenn Clients höhere Versionen nutzen.
+- **Konto löschen und ein laufender Upload.** Eine Datensicherung, die schon vor dem
+  Sperren angenommen war, kann nach dem Löschen der Inhalte noch ankommen und bleibt
+  dann liegen, ohne Konto (nur Chiffrat). Selten (Millisekunden); ein Aufräumen
+  verwaister Objekte gehört zu den Fristen aus P5.
+- **Konto löschen und die Tageszähler.** Sie bleiben bis zu ihrem Ablauf (TTL,
+  höchstens zwei Tage); sie enthalten nur die Konto-ID und Zahlen.
+- **Zwischen Sperren und Entfernen** (nur nach einem Abbruch) meldet sich ein altes
+  Gerät mit seinem Schlüssel als fremdes Gerät; ein neuer Geräteschlüssel bekommt
+  ein neues Konto.
 - **Kein Zugriff, solange der Kill-Switch greift.** Die Daten bleiben im Bucket, sind
   aber nicht erreichbar.
 - **Format der Nutzlast ist die Room-Datenbank.** Eine App-Version kann nur Sicherungen
@@ -341,4 +371,5 @@ nicht; sie werden beim Zurücksetzen vor dem ersten weiteren Nutzer ohnehin gel�
 - Synchronisation, Freigaben, Konfliktauflösung (B3)
 - Ältere Fassungen in der App auswählen (sie liegen bereit; die Auswahl kommt, wenn
   sie gebraucht wird)
-- Fotos und Audio (3.6), Konto löschen insgesamt (B4)
+- Fotos und Audio (3.6). Konto löschen ist seit 2026-11-12 vorgezogen (B1 in
+  Kap. 3.5); Mitgliedschaften und Operationen kommen mit B3 dazu.

@@ -5,6 +5,9 @@ import com.avlreminder.protokoll.DiagnoseNichtFreigeschaltet
 import com.avlreminder.protokoll.DiagnoseTageslimit
 import com.avlreminder.protokoll.DiagnoseZuGross
 import com.avlreminder.protokoll.GeraetNichtFreigeschaltet
+import com.avlreminder.protokoll.KontoGeraet
+import com.avlreminder.protokoll.KontoLoeschung
+import com.avlreminder.protokoll.LoeschungLaeuft
 import com.avlreminder.protokoll.SicherungTageslimit
 import com.avlreminder.protokoll.SicherungZuGross
 import com.avlreminder.protokoll.VersionVeraltet
@@ -18,6 +21,10 @@ import com.avlreminder.schnittstelle.v1.GeraetFreischaltenRequest
 import com.avlreminder.schnittstelle.v1.GeraetFreischaltenResponse
 import com.avlreminder.schnittstelle.v1.GeraetSperrenRequest
 import com.avlreminder.schnittstelle.v1.GeraetSperrenResponse
+import com.avlreminder.schnittstelle.v1.Geraet
+import com.avlreminder.schnittstelle.v1.GeraeteAuflistenResponse
+import com.avlreminder.schnittstelle.v1.KontoLoeschenAbbrechenResponse
+import com.avlreminder.schnittstelle.v1.KontoLoeschenResponse
 import com.avlreminder.schnittstelle.v1.MitWiederherstellungFreischaltenRequest
 import com.avlreminder.schnittstelle.v1.MitWiederherstellungFreischaltenResponse
 import com.avlreminder.schnittstelle.v1.FassungenAuflistenResponse
@@ -388,6 +395,47 @@ class AdapterTest {
         assertEquals("Bearer $TOKEN", anfragen.single().autorisierung)
     }
 
+    data class LoeschFall(val name: String, val antwort: KontoLoeschenResponse, val erwartet: Any) {
+        override fun toString() = name
+    }
+
+    // KRITISCH (B1): Nur geloescht = true heißt gelöscht; danach verwirft die App ihre
+    // Schlüssel. Eine Antwort ohne beides ist ein Fehler, kein Löschen.
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("loeschFaelle")
+    fun `Konto löschen`(fall: LoeschFall) {
+        antwort = Antwort.Ok(fall.antwort)
+        val ergebnis = runCatching { runBlocking { ServerKontoLoeschen(verbindung(), TOKEN).loeschen() } }
+        when (val erwartet = fall.erwartet) {
+            is KClass<*> -> assertTrue(erwartet.isInstance(ergebnis.exceptionOrNull()), "erwartet ${erwartet.simpleName}, bekommen $ergebnis")
+            else -> assertEquals(erwartet, ergebnis.getOrThrow())
+        }
+        assertEquals("/avlreminder.v1.KontoDienst/KontoLoeschen", anfragen.single().pfad)
+        assertEquals("Bearer $TOKEN", anfragen.single().autorisierung)
+    }
+
+    @Test
+    fun `bricht die Löschung mit Sitzung ab`() {
+        antwort = Antwort.Ok(KontoLoeschenAbbrechenResponse.getDefaultInstance())
+        runBlocking { ServerKontoLoeschen(verbindung(), TOKEN).abbrechen() }
+        assertEquals("/avlreminder.v1.KontoDienst/KontoLoeschenAbbrechen", anfragen.single().pfad)
+        assertEquals("Bearer $TOKEN", anfragen.single().autorisierung)
+    }
+
+    @ParameterizedTest(name = "mit Termin: {0}")
+    @ValueSource(booleans = [true, false])
+    fun `die Geräteliste zeigt den Termin der Löschung`(mitTermin: Boolean) {
+        val termin = Instant.ofEpochSecond(1_794_139_200L, 7_000)
+        antwort = Antwort.Ok(
+            GeraeteAuflistenResponse.newBuilder()
+                .addGeraete(Geraet.newBuilder().setGeraetId("g-1").setDiesesGeraet(true))
+                .apply { if (mitTermin) setLoeschenAb(Timestamp.newBuilder().setSeconds(termin.epochSecond).setNanos(termin.nano)) }
+                .build(),
+        )
+        val liste = runBlocking { ServerGeraete(verbindung(), TOKEN).liste() }
+        assertEquals(Geraeteliste(listOf(KontoGeraet("g-1", gesperrt = false, diesesGeraet = true)), if (mitTermin) termin else null), liste)
+    }
+
     @Test
     fun `sendet die Diagnose mit Sitzung`() {
         antwort = Antwort.Ok(DiagnoseSendenResponse.getDefaultInstance())
@@ -399,6 +447,19 @@ class AdapterTest {
     }
 
     companion object {
+        private val LOESCHEN_AB = Instant.ofEpochSecond(1_794_139_200L, 123_000_000)
+
+        @JvmStatic
+        fun loeschFaelle() = listOf(
+            LoeschFall("gelöscht", KontoLoeschenResponse.newBuilder().setGeloescht(true).build(), KontoLoeschung.Geloescht),
+            LoeschFall(
+                "beantragt: mit Termin",
+                KontoLoeschenResponse.newBuilder().setLoeschenAb(Timestamp.newBuilder().setSeconds(LOESCHEN_AB.epochSecond).setNanos(LOESCHEN_AB.nano)).build(),
+                KontoLoeschung.Beantragt(LOESCHEN_AB),
+            ),
+            LoeschFall("weder gelöscht noch Termin: Fehler", KontoLoeschenResponse.getDefaultInstance(), IllegalStateException::class),
+        )
+
         @JvmStatic
         fun tokenFaelle() = listOf(
             TokenFall("Schlüssel-Backup", BackupLoeschenResponse.getDefaultInstance()) { v, t -> ServerBackupAblage(v, t).loeschen() },
@@ -406,6 +467,8 @@ class AdapterTest {
             TokenFall("Geräte", GeraetSperrenResponse.getDefaultInstance()) { v, t -> ServerGeraete(v, t).sperren("a".repeat(32)) },
             TokenFall("Konto", SicherungLoeschenResponse.getDefaultInstance()) { v, t -> ServerKonto(v, t).datensicherungLoeschen() },
             TokenFall("Diagnose", DiagnoseSendenResponse.getDefaultInstance()) { v, t -> ServerDiagnoseAblage(v, t).senden(ByteArray(1)) },
+            TokenFall("Konto löschen", KontoLoeschenResponse.newBuilder().setGeloescht(true).build()) { v, t -> ServerKontoLoeschen(v, t).loeschen() },
+            TokenFall("Löschung abbrechen", KontoLoeschenAbbrechenResponse.getDefaultInstance()) { v, t -> ServerKontoLoeschen(v, t).abbrechen() },
         )
 
         @JvmStatic
@@ -417,6 +480,8 @@ class AdapterTest {
             Aufruf("Schlüssel-Backup holen") { ServerBackupAblage(it, TOKEN).holen() },
             Aufruf("Gerät sperren") { ServerGeraete(it, TOKEN).sperren("geraet-1") },
             Aufruf("Diagnose senden") { ServerDiagnoseAblage(it, TOKEN).senden(CHIFFRAT) },
+            Aufruf("Konto löschen") { ServerKontoLoeschen(it, TOKEN).loeschen() },
+            Aufruf("Löschung abbrechen") { ServerKontoLoeschen(it, TOKEN).abbrechen() },
         )
 
         private const val TOKEN = "test-token"
@@ -430,6 +495,7 @@ class AdapterTest {
         private fun sicherung(v: Verbindung) = ServerSicherungsAblage(v, TOKEN)
         private fun backup(v: Verbindung) = ServerBackupAblage(v, TOKEN)
         private fun geraete(v: Verbindung) = ServerGeraete(v, TOKEN)
+        private fun konto(v: Verbindung) = ServerKontoLoeschen(v, TOKEN)
         private suspend fun diagnose(v: Verbindung, nutzlast: ByteArray = CHIFFRAT): Any? =
             ServerDiagnoseAblage(v, TOKEN).senden(nutzlast).let { "gesendet" }
 
@@ -488,6 +554,17 @@ class AdapterTest {
             Fall("Gerät sperren: keine Erlaubnis heißt nicht freigeschaltet", Code.PERMISSION_DENIED, { geraete(it).sperren("x") }, GeraetNichtFreigeschaltet::class),
             Fall("Gerät sperren: ungültige Sitzung bleibt Serverfehler", Code.UNAUTHENTICATED, { geraete(it).sperren("x") }, Serverfehler::class),
             Fall("Gerät sperren: nicht gefunden bleibt Serverfehler", Code.NOT_FOUND, { geraete(it).sperren("x") }, Serverfehler::class),
+            // Konto löschen (B1)
+            // KRITISCH: Nur „schon fällig“ heißt LoeschungLaeuft; nur ein freigeschaltetes
+            // Gerät darf abbrechen. Alles andere bleibt Serverfehler.
+            Fall("Löschung abbrechen: Bedingung verletzt heißt läuft schon", Code.FAILED_PRECONDITION, { konto(it).abbrechen() }, LoeschungLaeuft::class),
+            Fall("Löschung abbrechen: keine Erlaubnis heißt nicht freigeschaltet", Code.PERMISSION_DENIED, { konto(it).abbrechen() }, GeraetNichtFreigeschaltet::class),
+            Fall("Löschung abbrechen: ungültige Sitzung bleibt Serverfehler", Code.UNAUTHENTICATED, { konto(it).abbrechen() }, Serverfehler::class),
+            Fall("Löschung abbrechen: Überlastung bleibt Serverfehler", Code.UNAVAILABLE, { konto(it).abbrechen() }, Serverfehler::class),
+            Fall("Konto löschen: ungültige Sitzung bleibt Serverfehler", Code.UNAUTHENTICATED, { konto(it).loeschen() }, Serverfehler::class),
+            Fall("Konto löschen: Überlastung bleibt Serverfehler", Code.UNAVAILABLE, { konto(it).loeschen() }, Serverfehler::class),
+            Fall("Konto löschen: keine Erlaubnis bleibt Serverfehler", Code.PERMISSION_DENIED, { konto(it).loeschen() }, Serverfehler::class),
+            Fall("Konto löschen: Bedingung verletzt bleibt Serverfehler", Code.FAILED_PRECONDITION, { konto(it).loeschen() }, Serverfehler::class),
             // Diagnose
             Fall("Diagnose senden: keine Erlaubnis heißt nicht freigeschaltet", Code.PERMISSION_DENIED, { diagnose(it) }, DiagnoseNichtFreigeschaltet::class),
             Fall("Diagnose senden: erschöpft bei kleiner Sendung heißt Tageslimit", Code.RESOURCE_EXHAUSTED, { diagnose(it) }, DiagnoseTageslimit::class),
@@ -534,6 +611,7 @@ class AdapterTest {
             RohFall("Mit Wiederherstellung freischalten: HTML-Seite mit 403", 403, "text/html", HTML_403) { geraete(it).mitWiederherstellung(CHIFFRAT) },
             RohFall("Gerät freischalten: HTML-Seite mit 403", 403, "text/html", HTML_403) { geraete(it).freischalten("x") },
             RohFall("Diagnose senden: HTML-Seite mit 403", 403, "text/html", HTML_403) { diagnose(it) },
+            RohFall("Löschung abbrechen: HTML-Seite mit 403", 403, "text/html", HTML_403) { konto(it).abbrechen() },
         )
 
         private const val HTML_403 = "<html><body>403 Forbidden</body></html>"

@@ -14,6 +14,9 @@ import com.avlreminder.protokoll.GeholteSicherung
 import com.avlreminder.protokoll.GeholtesBackup
 import com.avlreminder.protokoll.KontoAufDemServer
 import com.avlreminder.protokoll.KontoGeraet
+import com.avlreminder.protokoll.KontoLoeschenAmServer
+import com.avlreminder.protokoll.KontoLoeschung
+import com.avlreminder.protokoll.LoeschungLaeuft
 import com.avlreminder.protokoll.SicherungTageslimit
 import com.avlreminder.protokoll.SicherungZuGross
 import com.avlreminder.protokoll.SicherungsAblage
@@ -30,6 +33,9 @@ import com.avlreminder.schnittstelle.v1.GeraetFreischaltenRequest
 import com.avlreminder.schnittstelle.v1.GeraetSperrenRequest
 import com.avlreminder.schnittstelle.v1.GeraeteAuflistenRequest
 import com.avlreminder.schnittstelle.v1.GeraeteDienstClient
+import com.avlreminder.schnittstelle.v1.KontoDienstClient
+import com.avlreminder.schnittstelle.v1.KontoLoeschenAbbrechenRequest
+import com.avlreminder.schnittstelle.v1.KontoLoeschenRequest
 import com.avlreminder.schnittstelle.v1.MitWiederherstellungFreischaltenRequest
 import com.avlreminder.schnittstelle.v1.SchluesselDienstClient
 import com.avlreminder.schnittstelle.v1.FassungenAuflistenRequest
@@ -46,6 +52,7 @@ import com.connectrpc.impl.ProtocolClient
 import com.connectrpc.okhttp.ConnectOkHttpClient
 import com.connectrpc.protocols.NetworkProtocol
 import com.google.protobuf.ByteString
+import com.google.protobuf.Timestamp
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Response
@@ -83,6 +90,7 @@ class Verbindung(server: String, basis: OkHttpClient = standardHttp()) {
     val schluessel = SchluesselDienstClient(client)
     val sicherung = DatensicherungDienstClient(client)
     val diagnose = DiagnoseDienstClient(client)
+    val konto = KontoDienstClient(client)
 
     companion object {
         /**
@@ -287,9 +295,16 @@ class ServerGeraete(private val verbindung: Verbindung, private val token: suspe
     }
 
     /** Die Geräte des Kontos, auch gesperrte. */
-    suspend fun auflisten(): List<KontoGeraet> =
-        verbindung.geraete.geraeteAuflisten(GeraeteAuflistenRequest.getDefaultInstance(), mitSitzung(token())).ergebnis()
-            .geraeteList.map { KontoGeraet(it.geraetId, it.gesperrt, it.diesesGeraet) }
+    suspend fun auflisten(): List<KontoGeraet> = liste().geraete
+
+    /** Die Geräte des Kontos, auch gesperrte, und der Termin einer beantragten Löschung. */
+    suspend fun liste(): Geraeteliste {
+        val antwort = verbindung.geraete.geraeteAuflisten(GeraeteAuflistenRequest.getDefaultInstance(), mitSitzung(token())).ergebnis()
+        return Geraeteliste(
+            antwort.geraeteList.map { KontoGeraet(it.geraetId, it.gesperrt, it.diesesGeraet) },
+            if (antwort.hasLoeschenAb()) antwort.loeschenAb.instant() else null,
+        )
+    }
 
     /** Schaltet ein anderes Gerät des Kontos frei; dieses Gerät muss selbst freigeschaltet sein. */
     suspend fun freischalten(geraetId: String) {
@@ -297,6 +312,46 @@ class ServerGeraete(private val verbindung: Verbindung, private val token: suspe
             val anfrage = GeraetFreischaltenRequest.newBuilder().setGeraetId(geraetId).build()
             verbindung.geraete.geraetFreischalten(anfrage, mitSitzung(token())).ergebnis()
         } catch (e: Serverfehler) {
+            throw e.nichtFreigeschaltetOder()
+        }
+    }
+}
+
+/**
+ * Die Geräte des Kontos. [loeschenAb]: Termin einer beantragten Löschung des Kontos
+ * (B1), sonst null; die App zeigt ihn an, damit der Besitzer einen fremden Antrag
+ * bemerkt und abbricht.
+ */
+data class Geraeteliste(val geraete: List<KontoGeraet>, val loeschenAb: Instant?)
+
+/** Ein Zeitpunkt aus einer Antwort. */
+internal fun Timestamp.instant(): Instant = Instant.ofEpochSecond(seconds, nanos.toLong())
+
+/**
+ * „Konto löschen“ (konto.proto) für [com.avlreminder.protokoll.KontoLoeschen].
+ *
+ * KRITISCH: geloescht = true ist die einzige Antwort, nach der die App ihre Schlüssel
+ * verwirft. Ohne geloescht und ohne Termin antwortet der Server nicht wie vereinbart;
+ * das ist ein Fehler, kein Löschen.
+ */
+class ServerKontoLoeschen(private val verbindung: Verbindung, private val token: suspend () -> String) : KontoLoeschenAmServer {
+    /** Mit festem Token (Tests, kurze Abläufe). */
+    constructor(verbindung: Verbindung, token: String) : this(verbindung, { token })
+
+    override suspend fun loeschen(): KontoLoeschung {
+        val antwort = verbindung.konto.kontoLoeschen(KontoLoeschenRequest.getDefaultInstance(), mitSitzung(token())).ergebnis()
+        return when {
+            antwort.geloescht -> KontoLoeschung.Geloescht
+            antwort.hasLoeschenAb() -> KontoLoeschung.Beantragt(antwort.loeschenAb.instant())
+            else -> throw IllegalStateException("Server: Konto weder gelöscht noch Termin genannt")
+        }
+    }
+
+    override suspend fun abbrechen() {
+        try {
+            verbindung.konto.kontoLoeschenAbbrechen(KontoLoeschenAbbrechenRequest.getDefaultInstance(), mitSitzung(token())).ergebnis()
+        } catch (e: Serverfehler) {
+            if (e.vomDienst && e.code == Code.FAILED_PRECONDITION) throw LoeschungLaeuft()
             throw e.nichtFreigeschaltetOder()
         }
     }
@@ -354,7 +409,7 @@ class ServerSicherungsAblage(private val verbindung: Verbindung, private val tok
         try {
             verbindung.sicherung.fassungenAuflisten(FassungenAuflistenRequest.getDefaultInstance(), mitSitzung(token())).ergebnis()
                 .fassungenList.map {
-                    SicherungsFassung(it.version, Instant.ofEpochSecond(it.gespeichertAm.seconds, it.gespeichertAm.nanos.toLong()), it.bytes)
+                    SicherungsFassung(it.version, it.gespeichertAm.instant(), it.bytes)
                 }
         } catch (e: Serverfehler) {
             if (e.code == Code.RESOURCE_EXHAUSTED) throw SicherungTageslimit("Abrufe der Sicherung")

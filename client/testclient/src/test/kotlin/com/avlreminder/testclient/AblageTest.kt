@@ -43,6 +43,19 @@ class AblageTest {
         assertEquals(sitzung, ablage.sitzung("handy"))
     }
 
+    // KRITISCH (B1): Nach „Konto löschen“ bleibt vom Gerät nichts liegen, auch nicht der
+    // private Geräteschlüssel; andere Geräte bleiben unberührt.
+    @Test
+    fun `vergessen löscht alle Dateien des Geräts und nur sie`() {
+        val ablage = Ablage(ordner)
+        val namen = listOf("geraet-%s.pem", "sitzung-%s.json", "schluessel-%s.json", "stand-%s.json")
+        for (geraet in listOf("handy", "pc")) for (n in namen) File(ordner, n.format(geraet)).writeText("x")
+
+        ablage.vergessen("handy")
+
+        assertEquals(namen.map { it.format("pc") }.sorted(), ordner.list()!!.sorted())
+    }
+
     companion object {
         private const val GEHEIM = "GEHEIMES-TOKEN-123"
 

@@ -21,6 +21,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 import java.net.InetSocketAddress
+import java.time.Instant
 import java.security.KeyPairGenerator
 import java.security.PublicKey
 import java.security.Signature
@@ -175,6 +176,26 @@ class AnmeldungTest {
         assertEquals(neu, speicher.sitzung)
     }
 
+    data class Termin(val name: String, val antworten: List<Any>, val erwartet: Instant?) {
+        override fun toString() = name
+    }
+
+    // KRITISCH (B1): Den Termin einer beantragten Löschung zeigt die App auf allen Geräten,
+    // damit der Besitzer einen fremden Antrag abbricht. Er gilt aus der letzten Antwort;
+    // nach einem Abbruch verschwindet er, und ohne Antrag gibt es keinen.
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("termine")
+    fun `Anmelden und Erneuern zeigen den Termin der Löschung`(fall: Termin) {
+        fall.antworten.forEach { folge += it as Antwort }
+        val a = anmeldung(Speicher())
+
+        val angemeldet = runBlocking { a.anmelden(a.versuch(), "id-token") }
+        repeat(fall.antworten.size - 1) { runBlocking { a.erneuern() } }
+
+        if (fall.antworten.size == 1) assertEquals(fall.erwartet, angemeldet.loeschenAb)
+        assertEquals(fall.erwartet, a.loeschenAb)
+    }
+
     data class Ablauf(val name: String, val laeuftAbIn: Long, val erneuert: Boolean) {
         override fun toString() = name
     }
@@ -292,6 +313,29 @@ class AnmeldungTest {
             ),
             Abgelehnt("401 ohne Connect-Fehler (vor dem Dienst): kein Erneuern", listOf(Antwort.Roh(401, "text/html", "<html>nein</html>")), Serverfehler::class, anfragen = 1),
             Abgelehnt("anderer Fehler des Dienstes: kein Erneuern", listOf(Antwort.Fehler("unavailable")), Serverfehler::class, anfragen = 1),
+        )
+
+        private val TERMIN = Instant.ofEpochSecond(1_794_139_200L, 5_000_000)
+        private val TERMIN_TS = Timestamp.newBuilder().setSeconds(TERMIN.epochSecond).setNanos(TERMIN.nano).build()
+
+        private fun angemeldet(termin: Boolean) = Antwort.Ok(
+            AnmeldenResponse.newBuilder()
+                .setKontoId("konto-1").setGeraetId("geraet-1")
+                .setSitzung(SitzungNachricht.newBuilder().setToken("token-1").setLaeuftAb(Timestamp.newBuilder().setSeconds(1_793_538_000L)))
+                .apply { if (termin) setLoeschenAb(TERMIN_TS) }
+                .build(),
+        )
+
+        private fun erneuertMit(termin: Boolean) = Antwort.Ok(
+            (erneuert.nachricht as SitzungErneuernResponse).toBuilder().apply { if (termin) setLoeschenAb(TERMIN_TS) }.build(),
+        )
+
+        @JvmStatic
+        fun termine() = listOf(
+            Termin("Anmelden ohne Antrag: kein Termin", listOf(angemeldet(false)), erwartet = null),
+            Termin("Anmelden mit Antrag: Termin", listOf(angemeldet(true)), erwartet = TERMIN),
+            Termin("Erneuern mit Antrag: Termin", listOf(angemeldet(false), erneuertMit(true)), erwartet = TERMIN),
+            Termin("Erneuern nach Abbruch: kein Termin mehr", listOf(angemeldet(true), erneuertMit(false)), erwartet = null),
         )
 
         @JvmStatic
