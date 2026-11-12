@@ -62,6 +62,9 @@ liegt in einem Kotlin-Modul, das später in die App übernommen werden kann. [E]
 - ID4 **Wiederherstellungsschlüssel** (zum Ausdrucken oder im Passwortdienst, App-Anf. 7.33) entschlüsselt ein
   verschlüsseltes Schlüssel-Backup auf dem Server. Ohne ihn und ohne Gerät sind
   private Daten verloren (gewollt); Geteiltes kann man sich neu freigeben lassen.
+  **Papier ist der Standard;** den Passwortdienst bietet die App nur nach einem Hinweis
+  an: Ohne geräteinterne Verschlüsselung des Passwortmanagers hängt die
+  E2E-Verschlüsselung am Google-Konto (Kap. 11, 2026-11-12).
 - ID5 Missbrauchsschutz: Rate-Limits pro Konto und Gerät; später für den Play Store
   zusätzlich **Play Integrity API** (Anfrage kommt von der echten App). [E]
 - ID6 **Gerät abmelden/sperren** aus einem anderen Gerät heraus (verloren, gestohlen).
@@ -132,7 +135,12 @@ liegt in einem Kotlin-Modul, das später in die App übernommen werden kann. [E]
 
 ### 3.5 Verwaltung und Betrieb
 - B1 **Konto löschen** in der App **und über eine Webseite** (Pflicht im Play Store)
-  löscht sofort Konto, Geräte, Mitgliedschaften und eigene Operationen.
+  löscht sofort Konto, Geräte, Mitgliedschaften und eigene Operationen, dazu die
+  Datensicherung (alle Fassungen), das Schlüssel-Backup, Diagnosen, Sitzungen,
+  Tageszähler und die Kennung, damit eine neue Anmeldung ein neues Konto bekommt.
+  Erst die Inhalte, zuletzt Kennung und Konto: Bricht es ab, erledigt ein zweiter
+  Aufruf den Rest. In der App vor dem ersten weiteren Nutzer (vorgezogen aus B4,
+  Kap. 11, 2026-11-12); als Webseite genügt bis B6 eine Anleitung mit Kontakt.
 - B2 Auskunft/Export der eigenen Server-Daten (Art. 15/20); Inhalte hat die App ohnehin.
 - B3 Strukturierte Logs ohne Inhalte, ohne dauerhaft gespeicherte IP-Adressen
   (die Anfrage-Logs von Cloud Run mit IP höchstens 30 Tage, siehe Kap. 11).
@@ -177,7 +185,10 @@ Optionales Backup der Nachweis-Fotos und -Audios mit einem Kontingent, zum Preis
 ### 4.2 Metadaten (bewusst nicht verschlüsselt)
 Konto-IDs, öffentliche Schlüssel, wer in welcher Freigabe ist, Sequenznummern,
 Zeitpunkte, Größen, FCM-Tokens. Der Server weiß also, **wer mit wem wie oft** teilt,
-aber nicht **was**. Wird in der Datenschutzerklärung so benannt.
+aber nicht **was**. Auch pseudonym bleiben das personenbezogene Daten, ebenso die
+IP-Adressen in den Anfrage-Logs (30 Tage). Größe und Zeitpunkt der Sicherungen
+zeigen, wie viel jemand die App nutzt; auf feste Größen aufgefüllt wird vorerst
+nicht (Kap. 11, 2026-11-12). Wird in der Datenschutzerklärung so benannt.
 
 ### 4.3 EU-Datenhaltung
 - D1 Alle Ressourcen in einer EU-Region. Ohne eigene Domain gibt es keine
@@ -196,11 +207,28 @@ aber nicht **was**. Wird in der Datenschutzerklärung so benannt.
 - P1 Für den Haushalt greift wohl die Haushaltsausnahme; das Projekt verhält sich
   trotzdem, als gälte die DSGVO voll – mit dem Play Store ist das ohnehin Pflicht.
 - P2 Privacy by Design/Default (Art. 25): Datenminimierung, E2E, Ablaufzeiten.
-- P3 Google Cloud Data Processing Addendum; Drittlandbezug dokumentieren (EU-US DPF).
+- P3 Google Cloud Data Processing Addendum (in der Console akzeptieren); Drittlandbezug
+  dokumentieren (EU-US DPF): Google-Anmeldung (dort ist Google selbst Verantwortlicher),
+  FCM und der globale Log-Bucket `_Required` (Admin-Audit, vor allem Kevins Aktionen).
 - P4 Verzeichnis der Verarbeitungstätigkeiten, Datenschutzerklärung (öffentliche URL),
-  Angaben zur Datensicherheit im Play Store, Webseite zum Löschen des Kontos.
+  Angaben zur Datensicherheit im Play Store, Webseite zum Löschen des Kontos. Dazu
+  die TOMs (Art. 32) auf einer Seite, ein Ablauf für Datenpannen (Art. 33/34,
+  72 Stunden) und vor dem ersten Tester eine Testerinformation.
 - P5 Aufbewahrung: Operationen bis zum Snapshot bzw. max. 90 Tage, Logs max. 30 Tage,
-  KI-Anfragen gar nicht.
+  KI-Anfragen gar nicht. Konten ohne Anmeldung seit 24 Monaten löscht der Server auf
+  demselben Weg wie B1 (Kap. 3.5), gesperrte Geräte nach 90 Tagen; einmal im Monat
+  angestoßen, spätestens zu B6 (Kap. 11, 2026-11-12).
+- P6 **Rechtsgrundlagen:** Vertrag (Art. 6 Abs. 1 lit. b) für Anmeldung, Sicherung und
+  Teilen; berechtigtes Interesse (lit. f) für Server-Logs, Limits und
+  Missbrauchsschutz; Einwilligung (lit. a, je Sendung) für Diagnosen.
+- P7 **DSFA** (Art. 35) vor dem ersten weiteren Nutzer: Erinnerungen können
+  Gesundheitsdaten sein (Medikamente, Arzttermine; Art. 9). Wegen E2E liest der
+  Betreiber sie nie; die DSFA hält fest, warum das trägt.
+- P8 **Mindestalter** 16 Jahre (Art. 8). Ob jüngere Familienmitglieder mit Einwilligung
+  der Eltern teilen dürfen, wird vor B3 entschieden (Kap. 10).
+- P9 **Diagnosen von Testern** liest Claude erst, wenn es dafür einen
+  Auftragsverarbeitungsvertrag mit Anthropic gibt (Übermittlung in die USA). Bis dahin
+  hat nur Kevins Konto eine Diagnose-Erlaubnis (E-D-3).
 
 ### 4.5 Sicherheit
 - SE1 Nur HTTPS; Sitzungs-Tokens kurzlebig; Signaturen jeder Operation (gemeint sind
@@ -215,8 +243,17 @@ aber nicht **was**. Wird in der Datenschutzerklärung so benannt.
   Geräteschlüssel, Freischalten mit dem aus dem Wiederherstellungsschlüssel
   abgeleiteten Schlüssel). Begriffe: Ein Gerät ist *freigeschaltet* (E-B2b-13), ein
   Konto hat eine *Diagnose-Erlaubnis* (E-D-3).
+- SE5 **Zerstörerische Aktionen** (Cloud-Daten löschen, Konto löschen, Gerät sperren)
+  nur nach Bestätigung mit der Displaysperre des Geräts (BiometricPrompt, auch mit
+  Geräte-PIN). Sonst löscht, wer ein entsperrtes Handy in die Hand bekommt, alle
+  Fassungen endgültig (kein Soft Delete). Eine Wartezeit im Server erst, wenn es
+  mehrere Nutzer gibt (Kap. 11, 2026-11-12).
+- SE6 **Ein Schlüssel, ein Zweck:** Aus dem Wiederherstellungsschlüssel wird jeder
+  benutzte Schlüssel per HKDF mit eigenem Label abgeleitet (Schlüssel-Backup und
+  Freischaltschlüssel); heute dient er zugleich direkt als AEAD-Schlüssel. Als
+  Format v2 vor der Rotation, weil danach kein altes Backup mehr gelesen werden muss.
 
-### 4.6 Vorgaben für B3 (Review-Lauf 9, A2 und A4; festgehalten 2026-11-10)
+### 4.6 Vorgaben für B3 (Review-Lauf 9, A2 und A4, festgehalten 2026-11-10; B3-5 bis B3-8 aus der Sicherheitsprüfung vom 2026-11-12)
 - B3-1 **Die Geräteliste des Servers ist nur eine Zugangssperre.** Maßgeblich für die
   Clients ist das signierte Log der Geräte (wer wen hinzugefügt oder entfernt hat).
   Ein Client vertraut der Liste vom Server nicht, sondern prüft das Log; weicht die
@@ -231,6 +268,22 @@ aber nicht **was**. Wird in der Datenschutzerklärung so benannt.
 - B3-4 **`ausGeheimenBytes` prüft den Keyset-Typ:** Ein Keyset der falschen Art
   (z. B. ein Signaturschlüssel, wo ein Tresorschlüssel erwartet wird) wird
   abgelehnt, bevor es benutzt wird.
+- B3-5 **Der Server kann nichts unbemerkt weglassen.** Jede Operation einer Freigabe
+  trägt eine fortlaufende Nummer je Absender und den Hash der letzten Operation, die
+  der Absender kannte, beides unter der Signatur aus B3-3. Ein Client meldet Lücken
+  (fehlende Nummer, unbekannter Vorgänger), statt darüber hinwegzugehen. Hält der
+  Server Mitglieder in getrennten Verläufen, fällt das auf, sobald eine Operation aus
+  dem einen Zweig im anderen ankommt. Signaturen allein erkennen Zurückhalten nicht
+  (etwa „Person entfernt“ oder eine Terminabsage).
+- B3-6 **Person entfernen (B4) heißt neuer Freigabe-Schlüssel**, spätestens vor der
+  nächsten Änderung (faule Rotation); was sie schon hatte, behält sie. Die App sagt
+  das beim Entfernen. Das Format aus B3 sieht die Versionen dafür vor (B3-2).
+- B3-7 **Öffentliche Personenschlüssel nur nach Vergleich des Fingerabdrucks** (QR,
+  F1). Einen Schlüssel, den nur der Server liefert, benutzt kein Client; so bleibt
+  auch ein manipulierter Server ohne Zugriff auf Inhalte.
+- B3-8 **Bekannte Grenze bis B4:** Personenschlüssel sind langlebig; wer einen
+  erbeutet, liest bis zur Rotation (B4) alles mit. In Datenschutzerklärung und TOMs
+  benennen.
 
 ## 5. Architektur [E]
 
@@ -320,13 +373,17 @@ tragen die Tests die Spezifikation. Anleitung zum Review: [go-review.md](go-revi
 | B2 | Kotlin-Protokoll-Modul: Schlüsselmodell, Verpacken/Entpacken, Signaturen; Test-Client mit Wiederherstellungsschlüssel |
 | B2b | Daten-Backup für eine Person (Tresorschlüssel, Cloud Storage EU, ältere Fassungen), Formate festschreiben, `client/` bereit für die App; danach Einbindung als Backup in eine interne App-Variante ([b2b-entwurf.md](b2b-entwurf.md)) |
 | B3 | Kontakte per QR (im Test-Client als Text), Freigaben, Append-only-Log, Konfliktauflösung |
-| B4 | FCM-Push, Snapshots, Ablaufzeiten, Person entfernen + faule Rotation, Konto löschen |
+| B4 | FCM-Push, Snapshots, Ablaufzeiten, Person entfernen + faule Rotation (Konto löschen kommt vorher, Kap. 11, 2026-11-12) |
 | B5 | KI-Proxy (Text) mit Vertex AI EU, Freigabe-Ablauf im Test-Client, Kontingente |
 | B6 | Play-Store-Vorbereitung: Play Integrity, Datenschutzerklärung, Löschseite, Härtung |
 
 ## 10. Offene Fragen
 
 1. **Ferneinladung**: Wie wichtig ist sie für den Play Store? (Spätere Etappe.)
+2. **Kinder in der Familie:** Dürfen Familienmitglieder unter 16 mit Einwilligung der
+   Eltern teilen (P8)? Vor B3.
+3. **Diagnosen von Testern:** AV-Vertrag mit Anthropic, oder bleiben Tester ohne
+   Diagnose-Erlaubnis (P9)? Vor dem ersten Tester, der Diagnosen senden soll.
 
 ## 11. Entscheidungen
 
@@ -432,3 +489,8 @@ tragen die Tests die Spezifikation. Anleitung zum Review: [go-review.md](go-revi
 | 2026-11-10 | R-4 (App-Repo `docs/wiederherstellen-entwurf.md`): `DatensicherungDienst` listet die Fassungen (`FassungenAuflisten`: Version, Zeitpunkt, Größe) und holt eine ältere über ihre Version (`SicherungHolen.version`, 0 = die neueste). Auflisten zählt mit Holen zusammen (50 je Tag). Im Client als eigene Schnittstelle `FassungsArchiv` neben `SicherungsAblage`, damit der Sicherungsablauf und die Fakes der App unverändert bleiben; die App nutzt sie später |
 | 2026-11-10 | Phase C (Review-Lauf 10 R3, Lauf 8 E8): **W-7 im `Sicherungsablauf`**: Nach dem Wiederherstellen der Fassung eines anderen Geräts merkt sich das Gerät Version 0, die nächste Sicherung fragt vor dem Ersetzen (vorher setzte das nur die App). **Abgelehnte Sitzung**: `unauthenticated` vom Dienst bei Aufrufen mit Sitzung wird `SitzungAbgelehnt`; `Anmeldung.mitSitzung` erneuert dann einmal, und erst das Erneuern sagt „gesperrt“ oder „neu anmelden“. Ein `Fehlergrund` als Connect-Error-Detail (E8, mittelfristig) bleibt zurückgestellt: Jeder Code hat je Aufruf nur eine Bedeutung, die Adapter bilden ihn je Aufruf ab |
 | 2026-11-10 | Phase D (Review-Lauf 8 E2, Lauf 9 R2/A2/A4, E10/E13): **Richtlinie je Prozedur** an einer Stelle im Server (`offen`, `nurSitzung`, `freigeschaltet`, `eigeneRegel`; unbekannte Prozeduren abgelehnt, Test über alle Prozeduren der Deskriptoren). **Adapter holen das Token vor jedem Aufruf** (R2, löst die Zurückstellung vom 2026-11-09 ab). Diagnose: „Diagnose-Erlaubnis“ statt „freigeschaltetes Konto“; Regel „Krypto nur im Client“ als SE4 geschärft. Vorgaben für B3 als Kap. 4.6 (A2, A4) |
+| 2026-11-12 | Sicherheits- und Datenschutzprüfung vor der Sicherheitsphase (Konzept und Code von Server, Client, App und Infrastruktur): Nach der Rotation ist die Sicherung für eine Person sicher. Vor dem ersten weiteren Nutzer kommen dazu: **Konto löschen** (B1 in Kap. 3.5, vorgezogen aus B4), **Bestätigung mit der Displaysperre** für zerstörerische Aktionen (SE5), **Format v2** mit HKDF-Labels (SE6) und die Dokumente aus P3, P4, P6 und P7. **Aufbewahrungsfristen** (P5: 24 Monate ohne Anmeldung, gesperrte Geräte 90 Tage) spätestens zu B6. Liste in [b2b-entwurf.md](b2b-entwurf.md), „Vor dem ersten weiteren Nutzer“ |
+| 2026-11-12 | Wiederherstellungsschlüssel: **Papier ist der Standard.** Der Speicher-Dialog des Passwortdienstes öffnet sich nicht mehr von selbst; der Knopf dafür nennt vorher die Folge: Ohne geräteinterne Verschlüsselung des Passwortmanagers kann, wer das Google-Konto übernimmt, ein eigenes Gerät freischalten und alles entschlüsseln (der heutige Hinweis kommt erst nach dem Speichern). Holen aus dem Passwortdienst beim Wiederherstellen bleibt. Ändert den Eintrag vom 2026-11-08 und in der App A-15 und 7.33 WS1 |
+| 2026-11-12 | Diagnose: Bis es einen AV-Vertrag mit Anthropic gibt, hat **nur Kevins Konto** eine Diagnose-Erlaubnis (P9); Tester senden keine Diagnosen |
+| 2026-11-12 | B3: Vorgaben **B3-5 bis B3-8** (Kap. 4.6): Lücken und aufgespaltene Verläufe erkennen, Person entfernen heißt neuer Freigabe-Schlüssel, öffentliche Schlüssel nur nach Vergleich des Fingerabdrucks, langlebige Personenschlüssel als bekannte Grenze bis B4 |
+| 2026-11-12 | Metadaten: Sicherungen werden vorerst nicht auf feste Größen aufgefüllt; Größe und Zeitpunkt nennt die Datenschutzerklärung (Kap. 4.2) |

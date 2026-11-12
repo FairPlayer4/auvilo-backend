@@ -153,6 +153,24 @@ standen in Ausgaben, die Claude gelesen hat. Die Sicherheitsphase beginnt **vor*
 dem ersten dieser Schritte: Teilen mit einer anderen Person (B3, auch Familie),
 erster Tester, Veröffentlichung im Play Store.
 
+**Vorher fertig** (Sicherheits- und Datenschutzprüfung vom 2026-11-12,
+[anforderungen.md](anforderungen.md) Kap. 11):
+- **Konto löschen** in Server, `protokoll` und App (B1 in Kap. 3.5); damit lassen
+  sich auch Punkt 1 und 2 unten je Konto erledigen.
+- **Bestätigung mit der Displaysperre** für *Cloud-Daten löschen*, *Konto löschen*
+  und *Gerät sperren* (SE5).
+- **Format v2:** Schlüssel aus dem Wiederherstellungsschlüssel per HKDF mit eigenem
+  Label (SE6). Danach muss kein v1-Backup mehr gelesen werden.
+- **App A-15 neu:** Papier ist der Standard, der Passwortdienst nur nach dem Hinweis
+  (Kap. 11, 2026-11-12).
+- **`DIAGNOSE_KONTEN`** enthält nach Punkt 5 nur Kevins neues Konto (P9).
+- **GitHub-Konto** mit Passkey oder Sicherheitsschlüssel: Ohne Branch-Schutz kann ein
+  übernommenes Konto über `main` deployen.
+- **Dokumente** vor dem ersten Tester bzw. vor B3: Datenschutzerklärung oder
+  Testerinformation (P4, P6), Verzeichnis der Verarbeitungstätigkeiten, TOMs,
+  DSFA (P7), Google Cloud DPA akzeptiert (P3), Angaben zur Datensicherheit im Play
+  Store passend zu A-15.
+
 Zurückgesetzt wird so, dass nichts mit einem alten Schlüssel Verschlüsseltes übrig
 bleibt; dann sind die alten Werte in Gesprächsverläufen wertlos. Kevins Daten liegen
 dabei nur noch auf dem Handy: nur mit einem funktionierenden Handy beginnen und
@@ -160,7 +178,9 @@ gleich danach neu sichern. Checkliste:
 1. **Daten auf dem Server löschen:** für jedes Konto die Datensicherung mit allen
    Fassungen (`sicherung-loeschen`) und das Schlüssel-Backup (`schluessel-loeschen`),
    dazu alle Diagnosen im Bucket `…-diagnose`. Danach prüfen, dass die Buckets leer
-   sind (auch ältere Fassungen: `gcloud storage ls --all-versions`).
+   sind (auch ältere Fassungen: `gcloud storage ls --all-versions`). Dann
+   `werkzeuge/diagnose-holen.sh` einmal laufen lassen: Die lokale Kopie in
+   `.diagnose/` folgt dem leeren Bucket.
 2. **Firestore leeren:** die Sammlungen `konten`, `google_kennungen`, `geraete`,
    `sitzungen`, `backups` und `kontingente`. Mit dem neuen Pfeffer (Punkt 3)
    entstehen ohnehin neue Konto-IDs; die alten Dokumente wären verwaist.
@@ -178,9 +198,13 @@ gleich danach neu sichern. Checkliste:
    Kontos“). Dann erzeugt die App auf dem Gerät **neue** Geräte- und
    Personenschlüssel und einen neuen Wiederherstellungsschlüssel. Den sieht nur
    Kevin, auf Papier; kein Terminal, kein Screenshot, kein Gespräch mit Claude.
-   Danach sofort sichern und einmal wiederherstellen (Probe).
+   Danach sofort sichern und einmal wiederherstellen (Probe). Einen alten
+   Wiederherstellungsschlüssel im Passwortmanager löschen.
 6. **Prüfen:** Ab jetzt meldet Claude, wenn eine Aufgabe einen der Werte bräuchte,
-   statt ihn zu lesen.
+   statt ihn zu lesen. Die alten Claude-Gesprächsverläufe beider Repos löschen
+   (`*.jsonl` unter `~/.claude/projects/E--src-avlreminder-backend` und
+   `…/E--src-avlreminder`, **nicht** den Ordner `memory/`): Die Werte darin sind
+   jetzt wertlos, aber es gibt keinen Grund, sie aufzuheben.
 
 Außerdem, damals unter „Vor echten Daten“ (erledigt bis auf die Offline-Kopie des
 Pfeffers, die mit den ersten echten Daten fällig wird):
@@ -194,8 +218,8 @@ Pfeffers, die mit den ersten echten Daten fällig wird):
    Gerät erfahren (Grenze in [b1-entwurf.md](b1-entwurf.md), „Gerät sperren“).
    Erledigt 2026-11-05: E-B2b-13 (unten), Server, Schnittstelle, `protokoll`,
    Adapter und Test-Client. Der Hinweis „Neues Gerät angemeldet“ kommt mit der App.
-- **Pfeffer offline sichern:** Die Konto-ID ist ein HMAC der Google-Konto-ID mit
-  dem Pfeffer. Geht er verloren, findet kein Gerät Schlüssel-Backup und
+- **Pfeffer offline sichern:** Die Kennung, über die ein Gerät seine (zufällige)
+  Konto-ID findet, ist ein HMAC der Google-Konto-ID mit dem Pfeffer. Geht er verloren, findet kein Gerät Schlüssel-Backup und
   Datensicherung wieder. Kevin legt eine Kopie im Passwortmanager ab, sobald die
   App echte Daten sichert (im Eigenbetrieb darf Claude dabei helfen), und ersetzt
   sie in Punkt 3. Ablauf und Wiederherstellen in [gcp-einrichtung.md](gcp-einrichtung.md).

@@ -1,6 +1,6 @@
 # Stand und nächste Schritte
 
-Stand: 2026-11-10. Bei jedem größeren Schritt aktualisieren; Erledigtes gehört in git
+Stand: 2026-11-12. Bei jedem größeren Schritt aktualisieren; Erledigtes gehört in git
 und die Review-Berichte, nicht hierher.
 
 ## In GCP (Projekt `avlreminder-exp-1ef2`, Region `europe-west1`)
@@ -137,10 +137,15 @@ Dienst, Speicher-Entscheidungen, Begriffe), Revision `server-00018-fc4`, bereit.
    Claude darf die Schlüssel dafür kennen. Vor dem ersten weiteren Nutzer beginnt die
    Sicherheitsphase (Checkliste „Vor dem ersten weiteren Nutzer“ in b2b-entwurf.md;
    `CLAUDE.md`). Die Desktop-Client-ID des Test-Clients bleibt bis dahin.
+   **Vorher fertig** (Sicherheits- und Datenschutzprüfung 2026-11-12, Liste dort):
+   Konto löschen, Bestätigung mit der Displaysperre, Format v2 mit HKDF-Labels,
+   A-15 neu in der App, Dokumente. Ergebnis der Prüfung: Nach der Rotation ist die
+   Sicherung für eine Person sicher; für die DSGVO fehlen vor allem Konto löschen
+   und Fristen ([anforderungen.md](anforderungen.md) Kap. 4.4, 4.5, 11).
 2. **App-Einbindung** (Schritte 1–5, Wiederherstellen R-1…R-6): App-Repo
    `docs/stand.md`; dort auch die Gerätetests.
 3. **Review-Punkte:** `.review/state.md`, Abschnitt „Offen“.
-4. **B3:** Vorgaben B3-1 bis B3-4 (anforderungen.md Kap. 4.6).
+4. **B3:** Vorgaben B3-1 bis B3-8 (anforderungen.md Kap. 4.6), offene Fragen in Kap. 10.
 
 ## Befehle
 ```bash
