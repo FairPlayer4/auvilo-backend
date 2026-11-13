@@ -82,10 +82,12 @@ resource "google_cloud_run_v2_job" "aufraeumen" {
         image = google_cloud_run_v2_service.server.template[0].containers[0].image
         args  = ["aufraeumen"]
 
+        # Jobs laufen immer in der zweiten Generation; die verlangt mindestens
+        # 512 MiB. Der Lauf dauert Sekunden, die Kosten bleiben vernachlässigbar.
         resources {
           limits = {
             cpu    = "1"
-            memory = "256Mi"
+            memory = "512Mi"
           }
         }
 
@@ -103,7 +105,7 @@ resource "google_cloud_run_v2_job" "aufraeumen" {
         }
         env {
           name  = "GOMEMLIMIT"
-          value = "192MiB"
+          value = "384MiB"
         }
       }
     }
