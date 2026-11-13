@@ -24,8 +24,24 @@ angegeben.
 - `gcloud components install …` verweigert im nicht-interaktiven Modus (Claude Code)
   das Update mit dem mitgelieferten Python. Abhilfe vorher in PowerShell:
   `$env:CLOUDSDK_PYTHON = (gcloud.cmd components copy-bundled-python).Trim()`
+- **Alles prüfen wie die CI:** `werkzeuge/pruefen.sh` (Git Bash, Docker Desktop muss
+  laufen), vor jedem Push; `werkzeuge/pruefen.sh voll` vor einem PR nach `main`. Die CI
+  läuft nur auf `main` (seit 2026-11-13). Was die Stufen prüfen, steht im Kopf des
+  Skripts. Go (gofmt, vet, Tests, golangci-lint, govulncheck) und OpenTofu laufen in
+  Linux-Containern mit Firestore-Emulator (`google/cloud-sdk:591.0.0-emulators`) und
+  fake-gcs-server in einem eigenen Docker-Netz; Caches in den Volumes
+  `avlreminder-gomod` und `avlreminder-cache`. Dauer mit warmen Caches: `schnell` etwa
+  35 s, `voll` einige Minuten (Race-Detector, Image-Build).
+- **Smart App Control** (Windows 11) blockiert zeitweise unsignierte Programme:
+  Gos eigenes `asm.exe` (dann scheitert jedes `go build`/`go test`), `tofu.exe`, selbst
+  gebaute Programme in `~/go/bin` (Code-Integrity-Protokoll, Ereignis 3077). Ausnahmen
+  für einzelne Programme kennt Smart App Control nicht. Seit 2026-11-13 ist es auf
+  diesem Rechner ausgeschaltet. Go und OpenTofu laufen in `pruefen.sh` und buf in
+  `werkzeuge/buf.sh` trotzdem weiter in Containern: gleiche Umgebung wie die CI (Linux),
+  und die Prüfung hängt nicht an der Einstellung.
 - `go test -race` braucht cgo und damit einen C-Compiler, den es unter Windows hier
-  nicht gibt. Lokal ohne `-race` testen; die CI (Linux) testet mit `-race`.
+  nicht gibt (und den Smart App Control ebenso blockieren könnte). `pruefen.sh voll`
+  testet mit `-race` im Linux-Container.
 - In PowerShell Argumente mit `=` und Punkt quoten, z. B. `tofu plan "-out=.build\plan"`.
 - Bei `gcloud logging read` immer `--bucket=logs-eu --location=europe-west1
   --view=_AllLogs` angeben – der Standard-Bucket ist absichtlich leer.
@@ -36,8 +52,8 @@ angegeben.
 - Die Versionen von buf und den beiden Plugins stehen auch in `.github/workflows/ci.yml`
   (Job `proto`). Andere Versionen erzeugen anderen Code; dann meldet die CI „erzeugter
   Code nicht aktuell“. Beim Aktualisieren beide Stellen ändern.
-- Nach Änderungen an `.github/workflows/` actionlint ausführen (bei Bedarf, nicht in
-  der CI), im Wurzelverzeichnis des Repos in Git Bash:
+- Nach Änderungen an `.github/workflows/` actionlint ausführen (steckt auch in
+  `pruefen.sh voll`, nicht in der CI), im Wurzelverzeichnis des Repos in Git Bash:
   `MSYS_NO_PATHCONV=1 docker run --rm -v "$(pwd -W):/repo" -w /repo rhysd/actionlint:1.7.12 -no-color -oneline`
   (PowerShell: `docker run --rm -v "${PWD}:/repo" -w /repo rhysd/actionlint:1.7.12 -no-color -oneline`).
   Ohne Ausgabe und mit Exit-Code 0 ist alles in Ordnung.

@@ -27,8 +27,10 @@ Kommunikation auf **Deutsch, mit ß**.
   als Schnittstellen); die Connect-Anbindung (Adapter zu diesen Schnittstellen) liegt in
   `verbindung`, `testclient` ist nur CLI und Dateiablage.
 - Tests prüfen Verhalten, nicht die geprüfte Konstante selbst (kein `VERSUCHE == 3`).
-- Nach Änderungen an `.github/workflows/` actionlint per Docker ausführen
-  ([entwicklungsumgebung.md](docs/entwicklungsumgebung.md)).
+- Lokal prüft `werkzeuge/pruefen.sh` (Git Bash, Docker) wie die CI; Go und OpenTofu
+  laufen dort in Linux-Containern wie in der CI (Smart App Control blockierte sie früher
+  zeitweise, [entwicklungsumgebung.md](docs/entwicklungsumgebung.md)). actionlint
+  steckt in `pruefen.sh voll`.
 
 ## Zusammenarbeit
 - Kevin entwickelt die Anforderungen iterativ mit Claude: Feedback und Rückfragen geben,
@@ -84,5 +86,8 @@ Kommunikation auf **Deutsch, mit ß**.
   Hauptarbeitsbranch; `main` nur per Pull Request.
 - Commit-Nachrichten auf Deutsch.
 - Vor Commit/Push fragen, solange Kevin das nicht anders sagt (er schaut vorher drüber).
-- Keine Pflicht-Statuschecks auf GitHub (Free, privat): vor einem PR nach `main` selbst
-  prüfen, dass die CI grün ist.
+- CI läuft nur auf `main` (GitHub-Minuten, Entscheidung 2026-11-13), nicht auf
+  `develop` und nicht bei PRs. Deshalb vor jedem Push `werkzeuge/pruefen.sh` und vor
+  einem PR nach `main` (auch Dependabot-Branches) `werkzeuge/pruefen.sh voll`, beide
+  grün. Nach dem Merge die CI auf `main` ansehen; ist sie rot, folgt kein Deploy.
+  Wird das Repo öffentlich, wieder auf `develop` und bei PRs prüfen.

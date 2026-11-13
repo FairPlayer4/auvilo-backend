@@ -178,7 +178,8 @@ erster Tester, Veröffentlichung im Play Store.
   mit 7 Tagen Wartezeit für Geräte ohne Freischaltung; damit lassen
   sich auch Punkt 1 und 2 unten je Konto erledigen. Server und Client fertig
   (2026-11-12, Abschnitt „Konto löschen“ oben); Infrastruktur in
-  `infra/aufraeumen.tf` (angewendet 2026-11-13); offen ist die App.
+  `infra/aufraeumen.tf` (angewendet 2026-11-13); in der Cloud getestet am
+  2026-11-13 (Antrag mit Job und sofort, `stand.md`); offen ist die App.
 - **Bestätigung mit der Displaysperre** für *Cloud-Daten löschen*, *Konto löschen*
   und *Gerät sperren* (SE5).
 - **Format v2:** Schlüssel aus dem Wiederherstellungsschlüssel per HKDF mit eigenem
