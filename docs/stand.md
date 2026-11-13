@@ -140,12 +140,20 @@ Revision `server-00019-pw8`, bereit; der Job `aufraeumen` hat dasselbe Image.
    **Vorher fertig** (Sicherheits- und Datenschutzprüfung 2026-11-12, Liste dort):
    Konto löschen, Bestätigung mit der Displaysperre, Format v2 mit HKDF-Labels,
    A-15 neu in der App, Dokumente. **Konto löschen:** Server und Client fertig
-   (2026-11-12, noch nicht deployt). Die Infrastruktur steht in `infra/aufraeumen.tf`
+   (2026-11-12). Die Infrastruktur steht in `infra/aufraeumen.tf`
    (Cloud Run Job `aufraeumen`, täglich 4 Uhr per Cloud Scheduler, Rolle
    „Objekte auflisten und löschen“ ohne Lesen, Alarm), angewendet und deployt am
-   2026-11-13; ein Lauf von Hand endete ohne Fehler („Aufräumen beendet“, 0 Konten).
-   Noch nicht in der Cloud getestet: ein echtes Löschen (sofort und als Antrag)
-   mit dem Test-Client. Offen danach: die App. Ergebnis der Prüfung: Nach der Rotation ist die
+   2026-11-13. **In der Cloud getestet am 2026-11-13** mit dem Test-Client und dem
+   alten Testkonto (Kevins GCP-Google-Konto, keine echten Daten): Antrag von einem
+   nicht freigeschalteten Gerät (Termin +7 Tage, sichtbar in Erneuern und
+   Geräteliste), Abbrechen nur vom freigeschalteten Gerät, nach Fälligkeit
+   abgelehnt (Termin dafür in Firestore vorgezogen); der Job hat das Konto
+   gelöscht (Datensicherung mit Fassungen, Diagnosen, Konto, Schlüssel-Backup,
+   17 Geräte, Sitzungen, Kennung; Gegenprobe der Abfragen an einem anderen Konto).
+   Sofort löschen von einem freigeschalteten Gerät eines neuen Kontos: alles weg,
+   der Test-Client hat das Gerät vergessen. Die lokalen Dateien der alten
+   Testgeräte liegen in `%APPDATA%\avlreminder\testclient\alt-konto-8b07`.
+   Offen: die App. Ergebnis der Prüfung: Nach der Rotation ist die
    Sicherung für eine Person sicher; für die DSGVO fehlen vor allem Konto löschen
    und Fristen ([anforderungen.md](anforderungen.md) Kap. 4.4, 4.5, 11).
 2. **App-Einbindung** (Schritte 1–5, Wiederherstellen R-1…R-6): App-Repo
