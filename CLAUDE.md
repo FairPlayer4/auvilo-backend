@@ -28,8 +28,8 @@ Kommunikation auf **Deutsch, mit ß**.
   `verbindung`, `testclient` ist nur CLI und Dateiablage.
 - Tests prüfen Verhalten, nicht die geprüfte Konstante selbst (kein `VERSUCHE == 3`).
 - Lokal prüft `werkzeuge/pruefen.sh` (Git Bash, Docker) wie die CI; Go und OpenTofu
-  laufen dort in Linux-Containern, weil Smart App Control sie unter Windows zeitweise
-  blockiert ([entwicklungsumgebung.md](docs/entwicklungsumgebung.md)). actionlint
+  laufen dort in Linux-Containern wie in der CI (Smart App Control blockierte sie früher
+  zeitweise, [entwicklungsumgebung.md](docs/entwicklungsumgebung.md)). actionlint
   steckt in `pruefen.sh voll`.
 
 ## Zusammenarbeit

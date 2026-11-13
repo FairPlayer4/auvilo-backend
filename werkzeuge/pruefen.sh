@@ -15,9 +15,9 @@
 #          origin/main), tofu validate und tofu test, Server-Image bauen und
 #          starten, actionlint.
 #
-# Go und OpenTofu laufen in Linux-Containern, wie in der CI: Smart App Control
-# blockiert unter Windows zeitweise die Go-Werkzeuge (asm.exe), tofu.exe und
-# selbst gebaute Programme, und -race braucht cgo, das es hier nicht gibt.
+# Go und OpenTofu laufen in Linux-Containern, wie in der CI. Smart App Control
+# blockierte unter Windows zeitweise die Go-Werkzeuge (asm.exe), tofu.exe und
+# selbst gebaute Programme (seit 2026-11-13 aus), und -race braucht cgo.
 # Kotlin läuft direkt unter Windows (Java ist signiert).
 #
 # Ein roter Schritt bricht nicht ab; am Ende steht eine Übersicht, Exit-Code 1,

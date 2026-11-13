@@ -35,8 +35,10 @@ angegeben.
 - **Smart App Control** (Windows 11) blockiert zeitweise unsignierte Programme:
   Gos eigenes `asm.exe` (dann scheitert jedes `go build`/`go test`), `tofu.exe`, selbst
   gebaute Programme in `~/go/bin` (Code-Integrity-Protokoll, Ereignis 3077). Ausnahmen
-  für einzelne Programme kennt Smart App Control nicht. Deshalb laufen Go und OpenTofu
-  in `pruefen.sh` und buf in `werkzeuge/buf.sh` in Containern.
+  für einzelne Programme kennt Smart App Control nicht. Seit 2026-11-13 ist es auf
+  diesem Rechner ausgeschaltet. Go und OpenTofu laufen in `pruefen.sh` und buf in
+  `werkzeuge/buf.sh` trotzdem weiter in Containern: gleiche Umgebung wie die CI (Linux),
+  und die Prüfung hängt nicht an der Einstellung.
 - `go test -race` braucht cgo und damit einen C-Compiler, den es unter Windows hier
   nicht gibt (und den Smart App Control ebenso blockieren könnte). `pruefen.sh voll`
   testet mit `-race` im Linux-Container.
