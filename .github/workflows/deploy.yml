@@ -2,6 +2,7 @@
 #
 # Läuft nur nach grüner CI auf main (Empfehlung E3): CI meldet sich fertig,
 # dieser Workflow prüft das Ergebnis und baut genau den geprüften Commit.
+# Reine Doku-Merges starten keine CI und damit auch keinen Deploy.
 # Workload Identity Federation (infra/github.tf) lässt nur Tokens dieses
 # Workflows auf main zu. Ein Schlüssel für GCP liegt nirgends in GitHub.
 # Das Konto "deploy" darf nur Images ins Repo "container" schreiben, den
@@ -83,6 +84,12 @@ jobs:
         run: |
           gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
           docker build -t "${IMAGE}:${COMMIT}" .
+          # Vor dem Hochladen: Ohne Konfiguration muss das Programm mit genau
+          # dieser Meldung abbrechen. Das zeigt, dass die Datei im Image läuft
+          # (statisch, als Nicht-root). Früher ein eigener Job in der CI.
+          ausgabe=$(docker run --rm "${IMAGE}:${COMMIT}" 2>&1 || true)
+          echo "$ausgabe"
+          grep -q "PROJEKT fehlt" <<< "$ausgabe"
           docker push "${IMAGE}:${COMMIT}"
 
       # Per Digest statt Tag: Cloud Run startet genau das gebaute Image, auch

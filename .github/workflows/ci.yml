@@ -1,48 +1,57 @@
 # Prüft Go-Code, Kotlin-Client, Schnittstelle (proto) und OpenTofu-Konfiguration.
 # Braucht keinen Zugang zu GCP.
+#
+# Läuft nur auf main (Entscheidung 2026-11-13, GitHub-Minuten sparen, solange das
+# Repo privat ist). develop und PRs prüft werkzeuge/pruefen.sh lokal; vor einem
+# PR nach main "werkzeuge/pruefen.sh voll". Von Hand startbar für jeden Branch
+# (Reiter "Actions", z. B. für einen Dependabot-Branch).
+# Wird das Repo öffentlich, kosten die Läufe nichts mehr: dann wieder auf develop
+# und bei PRs prüfen.
 name: CI
 
 on:
   push:
-    branches: [develop, main]
-  # Nur PRs nach develop (Dependabot; deren Branches lösen keinen Push-Lauf aus).
-  # PRs von develop nach main brauchen keinen eigenen Lauf: Der Commit ist schon
-  # auf develop geprüft, und GitHub zeigt dessen Checks im PR an.
-  pull_request:
-    branches: [develop]
+    branches: [main]
+    # Reine Doku-Merges brauchen keine Prüfung (und lösen damit auch keinen
+    # Deploy aus, der Server ist dann ohnehin unverändert).
+    paths-ignore:
+      - "docs/**"
+      - "**.md"
+  workflow_dispatch:
 
 permissions:
   contents: read
 
-# Ein neuer Push auf denselben Branch bricht den noch laufenden alten Lauf ab.
+# Nie abbrechen: Der Deploy vergleicht nur mit dem vorherigen Commit von main.
+# Fiele der Lauf eines Merges mit Serveränderung weg, würde diese Änderung beim
+# nächsten Merge nicht deployt.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 # Actions sind auf Commit-SHA festgelegt (ein Tag ließe sich nachträglich auf
 # fremden Code umhängen). Die Version steht als Kommentar dahinter; Dependabot
 # schlägt Updates vor (.github/dependabot.yml).
+#
+# Das Server-Image baut erst der Deploy (deploy.yml) und prüft dort vor dem
+# Hochladen, dass es startet. Ein eigener Job hier kostete jedes Mal 3 Minuten.
 
 jobs:
-  go:
-    name: Go – ${{ matrix.modul }}
+  server:
+    name: Go – server
     runs-on: ubuntu-latest
     timeout-minutes: 15 # Standard wären 6 Stunden, falls etwas hängt
-    strategy:
-      fail-fast: false # ein rotes Modul bricht das andere nicht ab
-      matrix:
-        modul: [infra/killswitch, server]
     defaults:
       run:
-        working-directory: ${{ matrix.modul }}
+        working-directory: server
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false # kein GitHub-Token in .git/config für Tests und Werkzeuge
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version-file: ${{ matrix.modul }}/go.mod
-          cache-dependency-path: ${{ matrix.modul }}/go.sum
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
       # Der Server testet seinen Speicher auch gegen den Firestore-Emulator
       # (Vertragstests). Die Google Cloud CLI ist auf dem Runner schon da, aber
       # das Runner-Image entfernt Googles apt-Quelle nach der Installation wieder;
@@ -50,12 +59,10 @@ jobs:
       # Der Emulator aus apt braucht inzwischen Java 25 (Klassendateien Version 69);
       # das Runner-Image hat nur bis Java 21 als Vorgabe.
       - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
-        if: matrix.modul == 'server'
         with:
           distribution: temurin
           java-version: 25
       - name: Firestore-Emulator starten
-        if: matrix.modul == 'server'
         run: |
           curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo gpg --dearmor --yes -o /usr/share/keyrings/cloud.google.gpg
           echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee /etc/apt/sources.list.d/google-cloud-sdk.list > /dev/null
@@ -71,7 +78,6 @@ jobs:
       # Nachbau von Cloud Storage für die Ablage der Datensicherungen
       # (Vertragstests). Image fest mit Prüfsumme, wie die Actions oben.
       - name: fake-gcs-server starten
-        if: matrix.modul == 'server'
         run: |
           docker run -d --name fakegcs -p 4443:4443 \
             fsouza/fake-gcs-server:1.56.1@sha256:797ce226d62f947c009dc40246b30cfb456b8473d8241407f9d6f2c04e4d69ef \
@@ -86,12 +92,13 @@ jobs:
         run: test -z "$(gofmt -l .)" || (gofmt -l . && exit 1)
       - name: go vet
         run: go vet ./...
-      # -race braucht cgo; das gibt es unter Linux ohne Weiteres (lokal unter Windows nicht).
+      # -race braucht cgo; das gibt es unter Linux ohne Weiteres (lokal unter
+      # Windows nur über werkzeuge/pruefen.sh, das dafür einen Linux-Container nutzt).
       - name: Tests mit Race-Detector
         env:
-          FIRESTORE_EMULATOR_HOST: ${{ matrix.modul == 'server' && 'localhost:8086' || '' }}
-          STORAGE_EMULATOR_HOST: ${{ matrix.modul == 'server' && 'localhost:4443' || '' }}
-          EMULATOR_PFLICHT: ${{ matrix.modul == 'server' && '1' || '' }}
+          FIRESTORE_EMULATOR_HOST: localhost:8086
+          STORAGE_EMULATOR_HOST: localhost:4443
+          EMULATOR_PFLICHT: "1"
         run: go test -race -cover ./...
       - name: golangci-lint
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
@@ -99,10 +106,115 @@ jobs:
           # Version fest wie lokal (docs/entwicklungsumgebung.md), damit neue
           # Linter-Regeln die CI nicht ohne Codeänderung rot machen.
           version: v2.15.0
-          working-directory: ${{ matrix.modul }}
+          working-directory: server
           args: --config ${{ github.workspace }}/.golangci.yml
       - name: govulncheck
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+
+  # Die kleinen Prüfungen in einem Job: GitHub rechnet jeden Job auf volle
+  # Minuten auf, einzeln kosteten Kill-Switch, Schnittstelle und OpenTofu je eine.
+  rest:
+    name: Kill-Switch, Schnittstelle (buf), OpenTofu
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Versionen wie lokal (werkzeuge/buf.sh liest sie hier aus). Andere Versionen der
+    # Plugins erzeugen anderen Code, dann schlüge die Prüfung unten fehl.
+    env:
+      BUF_VERSION: v1.75.0
+      PROTOC_GEN_GO_VERSION: v1.36.12
+      PROTOC_GEN_CONNECT_GO_VERSION: v1.21.1
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0 # buf breaking vergleicht mit dem vorherigen Stand von main
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: |
+            server/go.sum
+            infra/killswitch/go.sum
+
+      # --- Kill-Switch (Go, infra/killswitch) ---
+      - name: "Kill-Switch: Formatierung, vet, Tests"
+        working-directory: infra/killswitch
+        run: |
+          test -z "$(gofmt -l .)" || (gofmt -l . && exit 1)
+          go vet ./...
+          go test -race -cover ./...
+      - name: "Kill-Switch: golangci-lint"
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: v2.15.0
+          working-directory: infra/killswitch
+          args: --config ${{ github.workspace }}/.golangci.yml
+      - name: "Kill-Switch: govulncheck"
+        working-directory: infra/killswitch
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+
+      # --- Schnittstelle (proto) ---
+      - name: "buf: Werkzeuge installieren"
+        run: |
+          go install github.com/bufbuild/buf/cmd/buf@"$BUF_VERSION"
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@"$PROTOC_GEN_GO_VERSION"
+          go install connectrpc.com/connect/cmd/protoc-gen-connect-go@"$PROTOC_GEN_CONNECT_GO_VERSION"
+      - name: "buf: Lint und Formatierung"
+        working-directory: proto
+        run: buf lint && buf format -d --exit-code
+      # Wer die .proto-Dateien ändert, muss den Code neu erzeugen und mit einchecken.
+      - name: "buf: Erzeugter Code ist aktuell"
+        working-directory: proto
+        run: |
+          buf generate
+          git add -N ../server/gen # neue Dateien im Vergleich mitzählen
+          git diff --exit-code -- ../server/gen
+      # Inkompatible Änderungen (z. B. Feld umnummeriert) würden installierte Apps
+      # brechen. Verglichen wird mit dem Stand vor diesem Push auf main; von Hand
+      # gestartet mit main (auf main selbst mit dem Commit davor).
+      # Vor dem Merge prüft das lokal werkzeuge/pruefen.sh voll (gegen main).
+      - name: "buf: Keine inkompatiblen Änderungen"
+        working-directory: proto
+        env:
+          VORHER: ${{ github.event.before }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = push ]; then
+            basis="$VORHER"
+          elif [ "$GITHUB_REF" = refs/heads/main ]; then
+            basis="HEAD^1"
+          else
+            basis="origin/main"
+          fi
+          git rev-parse --verify "$basis^{commit}" > /dev/null # fehlt die Basis, rot statt übersprungen
+          # --full-tree: Pfad ab Repo-Wurzel, nicht ab proto/ (sonst nie gefunden)
+          if [ -z "$(git ls-tree --full-tree "$basis" proto)" ]; then
+            echo "$basis hat noch kein proto/ – übersprungen"
+            exit 0
+          fi
+          echo "Vergleich mit $basis"
+          buf breaking --against "../.git#ref=$basis,subdir=proto"
+
+      # --- OpenTofu (infra) ---
+      - uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4 # v2.0.2
+        with:
+          tofu_version: 1.13.1
+      - name: "OpenTofu: Formatierung"
+        working-directory: infra
+        run: tofu fmt -check -recursive
+      # Ohne Backend: validate prüft nur die Konfiguration, nicht den Zustand in GCP.
+      - name: "OpenTofu: Validieren"
+        working-directory: infra
+        run: tofu init -backend=false -input=false && tofu validate
+      # Anforderung D1 (nur EU): Ersatz für die Standortrichtlinie einer Organisation.
+      - name: "OpenTofu: Keine fest eingetragenen Standorte"
+        working-directory: infra
+        run: ./pruefe-regionen.sh
+      # Empfehlung E4: öffentlich nur über module/oeffentlich (Kill-Switch).
+      - name: "OpenTofu: Öffnung nur über das Modul"
+        working-directory: infra
+        run: ./pruefe-oeffnung.sh && ./tests/pruefe-oeffnung_test.sh
+      - name: "OpenTofu: Tests (simulierte Provider, kein GCP-Zugang)"
+        working-directory: infra
+        run: tofu test
 
   # Kotlin-Client (client/): Protokoll, Verbindung und Test-Client. Gradle kommt über
   # den Wrapper; dessen JAR wird vorher gegen die offiziellen Prüfsummen geprüft.
@@ -131,100 +243,3 @@ jobs:
           cache-provider: basic
       - name: Bauen und testen
         run: ./gradlew check --console=plain
-
-  # Baut das Server-Image wie der Deploy (.github/workflows/deploy.yml), lädt es
-  # aber nirgends hoch. So fällt ein kaputtes Dockerfile vor dem Merge auf.
-  container:
-    name: Container bauen
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Image bauen
-        working-directory: server
-        run: docker build -t server .
-      # Startet ohne Konfiguration und muss mit genau dieser Meldung abbrechen:
-      # Das zeigt, dass die Datei im Image läuft (statisch, als Nicht-root).
-      - name: Image startet
-        run: |
-          ausgabe=$(docker run --rm server 2>&1 || true)
-          echo "$ausgabe"
-          grep -q "PROJEKT fehlt" <<< "$ausgabe"
-
-  proto:
-    name: Schnittstelle (buf)
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    defaults:
-      run:
-        working-directory: proto
-    # Versionen wie lokal (werkzeuge/buf.sh liest sie hier aus). Andere Versionen der
-    # Plugins erzeugen anderen Code, dann schlüge die Prüfung unten fehl.
-    env:
-      BUF_VERSION: v1.75.0
-      PROTOC_GEN_GO_VERSION: v1.36.12
-      PROTOC_GEN_CONNECT_GO_VERSION: v1.21.1
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          fetch-depth: 0 # buf breaking vergleicht mit main
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: server/go.mod
-          cache-dependency-path: server/go.sum
-      - name: Werkzeuge installieren
-        run: |
-          go install github.com/bufbuild/buf/cmd/buf@"$BUF_VERSION"
-          go install google.golang.org/protobuf/cmd/protoc-gen-go@"$PROTOC_GEN_GO_VERSION"
-          go install connectrpc.com/connect/cmd/protoc-gen-connect-go@"$PROTOC_GEN_CONNECT_GO_VERSION"
-      - name: Lint und Formatierung
-        run: buf lint && buf format -d --exit-code
-      # Wer die .proto-Dateien ändert, muss den Code neu erzeugen und mit einchecken.
-      - name: Erzeugter Code ist aktuell
-        run: |
-          buf generate
-          git add -N ../server/gen # neue Dateien im Vergleich mitzählen
-          git diff --exit-code -- ../server/gen
-      # Inkompatible Änderungen gegenüber main (z. B. Feld umnummeriert) würden
-      # installierte Apps brechen. Solange main noch keine Schnittstelle hat,
-      # gibt es nichts zu vergleichen.
-      - name: Keine inkompatiblen Änderungen
-        run: |
-          git rev-parse --verify origin/main > /dev/null # fehlt main, rot statt übersprungen
-          # --full-tree: Pfad ab Repo-Wurzel, nicht ab proto/ (sonst nie gefunden)
-          if [ -z "$(git ls-tree --full-tree origin/main proto)" ]; then
-            echo "main hat noch kein proto/ – übersprungen"
-            exit 0
-          fi
-          buf breaking --against '../.git#ref=origin/main,subdir=proto'
-
-  tofu:
-    name: OpenTofu
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    defaults:
-      run:
-        working-directory: infra
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false # kein GitHub-Token in .git/config für Tests und Werkzeuge
-      - uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4 # v2.0.2
-        with:
-          tofu_version: 1.13.1
-      - name: Formatierung
-        run: tofu fmt -check -recursive
-      # Ohne Backend: validate prüft nur die Konfiguration, nicht den Zustand in GCP.
-      - name: Validieren
-        run: tofu init -backend=false -input=false && tofu validate
-      # Anforderung D1 (nur EU): Ersatz für die Standortrichtlinie einer Organisation.
-      - name: Keine fest eingetragenen Standorte
-        run: ./pruefe-regionen.sh
-      # Empfehlung E4: öffentlich nur über module/oeffentlich (Kill-Switch).
-      - name: Öffnung nur über das Modul
-        run: ./pruefe-oeffnung.sh && ./tests/pruefe-oeffnung_test.sh
-      - name: Tests (simulierte Provider, kein GCP-Zugang)
-        run: tofu test

@@ -1,4 +1,6 @@
-# Dependabot schlägt wöchentlich Updates als Pull Request vor (Anforderung SE3).
+# Dependabot schlägt monatlich Updates als Pull Request vor (Anforderung SE3).
+# PRs prüft keine CI (nur main, Entscheidung 2026-11-13): den Branch lokal mit
+# werkzeuge/pruefen.sh voll prüfen oder die CI für ihn von Hand starten.
 # Ziel ist develop; nach main kommt alles nur über den normalen PR-Weg.
 # OpenTofu-Provider fehlen bewusst: Dependabot kennt nur die Terraform-Registry,
 # die Lock-Datei nutzt registry.opentofu.org. Provider aktualisieren:
@@ -9,7 +11,7 @@ updates:
     directory: /
     target-branch: develop
     schedule:
-      interval: weekly
+      interval: monthly
     groups:
       actions:
         patterns: ["*"]
@@ -18,7 +20,7 @@ updates:
     directory: /infra/killswitch
     target-branch: develop
     schedule:
-      interval: weekly
+      interval: monthly
     groups:
       go:
         patterns: ["*"]
@@ -28,7 +30,7 @@ updates:
     directory: /server
     target-branch: develop
     schedule:
-      interval: weekly
+      interval: monthly
     groups:
       images:
         patterns: ["*"]
@@ -39,7 +41,7 @@ updates:
     directory: /server
     target-branch: develop
     schedule:
-      interval: weekly
+      interval: monthly
     groups:
       go:
         patterns: ["*"]
@@ -49,7 +51,7 @@ updates:
     directory: /client
     target-branch: develop
     schedule:
-      interval: weekly
+      interval: monthly
     groups:
       gradle:
         patterns: ["*"]
