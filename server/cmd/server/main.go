@@ -2,6 +2,11 @@
 // mit Firestore und beantwortet Connect-Anfragen. Auf Cloud Run setzt OpenTofu
 // die Variablen (infra/server.tf).
 //
+// Mit dem Argument "aufraeumen" läuft stattdessen ein Durchgang des
+// regelmäßigen Laufs (Cloud Run Job): Er löscht Konten, deren Löschung fällig
+// ist (dienst.Loescher). Dafür reichen PROJEKT, SICHERUNG_BUCKET und
+// DIAGNOSE_BUCKET.
+//
 // Lokal mit Firestore-Emulator und fake-gcs-server (darin vorher den Bucket
 // "lokal" anlegen, siehe docs/entwicklungsumgebung.md):
 //
@@ -43,10 +48,31 @@ var kontoIDMuster = regexp.MustCompile(`^[0-9a-f]{32}$`)
 
 func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{ReplaceAttr: cloudLoggingFelder})))
-	if err := starte(); err != nil {
-		slog.Error("Server beendet mit Fehler", "fehler", err.Error())
+	befehl, err := befehlAus(os.Args[1:])
+	if err == nil {
+		err = befehle[befehl]()
+	}
+	if err != nil {
+		slog.Error("Beendet mit Fehler", "befehl", befehl, "fehler", err.Error())
 		os.Exit(1)
 	}
+}
+
+// befehle: "" ist der Server, "aufraeumen" der regelmäßige Lauf.
+var befehle = map[string]func() error{
+	"":           starte,
+	"aufraeumen": aufraeumen,
+}
+
+// befehlAus wählt den Befehl aus den Argumenten (ohne Programmnamen).
+func befehlAus(args []string) (string, error) {
+	switch {
+	case len(args) == 0:
+		return "", nil
+	case len(args) == 1 && args[0] != "" && befehle[args[0]] != nil:
+		return args[0], nil
+	}
+	return "", fmt.Errorf("unbekannter Aufruf %q: erlaubt sind kein Argument (Server) oder aufraeumen", args)
 }
 
 // cloudLoggingFelder benennt die slog-Felder so um, wie Cloud Logging sie
@@ -61,38 +87,54 @@ func cloudLoggingFelder(_ []string, a slog.Attr) slog.Attr {
 	return a
 }
 
-// konfiguration aus den Umgebungsvariablen.
+// ablageKonfiguration: wo die Daten liegen (Server und regelmäßiger Lauf).
+type ablageKonfiguration struct {
+	projekt         string // PROJEKT
+	sicherungBucket string // SICHERUNG_BUCKET: Bucket für die Datensicherungen
+	diagnoseBucket  string // DIAGNOSE_BUCKET: Bucket für Diagnosen aus der App
+}
+
+// leseAblageKonfiguration liest den Teil, den auch der regelmäßige Lauf braucht.
+func leseAblageKonfiguration(getenv func(string) string) (ablageKonfiguration, error) {
+	a := ablageKonfiguration{
+		projekt:         getenv("PROJEKT"),
+		sicherungBucket: getenv("SICHERUNG_BUCKET"),
+		diagnoseBucket:  getenv("DIAGNOSE_BUCKET"),
+	}
+	if a.projekt == "" {
+		return a, errors.New("PROJEKT fehlt")
+	}
+	if a.sicherungBucket == "" {
+		return a, errors.New("SICHERUNG_BUCKET fehlt")
+	}
+	if a.diagnoseBucket == "" {
+		return a, errors.New("DIAGNOSE_BUCKET fehlt")
+	}
+	return a, nil
+}
+
+// konfiguration des Servers aus den Umgebungsvariablen.
 type konfiguration struct {
-	projekt         string   // PROJEKT
-	sicherungBucket string   // SICHERUNG_BUCKET: Bucket für die Datensicherungen
-	diagnoseBucket  string   // DIAGNOSE_BUCKET: Bucket für Diagnosen aus der App
-	diagnoseKonten  []string // DIAGNOSE_KONTEN: Konto-IDs mit Diagnose-Erlaubnis, durch Komma getrennt; leer = niemand
-	clientIDs       []string // GOOGLE_CLIENT_IDS, durch Komma getrennt
-	pfefferSecret   string   // PFEFFER_SECRET: Secret-Manager-Version (Betrieb)
-	pfeffer         []byte   // PFEFFER: base64 (nur lokal)
-	port            string   // PORT, setzt Cloud Run; sonst 8080
+	ablageKonfiguration          // eingebettet: k.projekt usw. funktionieren direkt
+	diagnoseKonten      []string // DIAGNOSE_KONTEN: Konto-IDs mit Diagnose-Erlaubnis, durch Komma getrennt; leer = niemand
+	clientIDs           []string // GOOGLE_CLIENT_IDS, durch Komma getrennt
+	pfefferSecret       string   // PFEFFER_SECRET: Secret-Manager-Version (Betrieb)
+	pfeffer             []byte   // PFEFFER: base64 (nur lokal)
+	port                string   // PORT, setzt Cloud Run; sonst 8080
 }
 
 // leseKonfiguration ist von os.Getenv getrennt, damit sie testbar ist.
 func leseKonfiguration(getenv func(string) string) (konfiguration, error) {
 	k := konfiguration{
-		projekt:         getenv("PROJEKT"),
-		sicherungBucket: getenv("SICHERUNG_BUCKET"),
-		diagnoseBucket:  getenv("DIAGNOSE_BUCKET"),
-		pfefferSecret:   getenv("PFEFFER_SECRET"),
-		port:            getenv("PORT"),
+		pfefferSecret: getenv("PFEFFER_SECRET"),
+		port:          getenv("PORT"),
 	}
 	if k.port == "" {
 		k.port = "8080"
 	}
-	if k.projekt == "" {
-		return k, errors.New("PROJEKT fehlt")
-	}
-	if k.sicherungBucket == "" {
-		return k, errors.New("SICHERUNG_BUCKET fehlt")
-	}
-	if k.diagnoseBucket == "" {
-		return k, errors.New("DIAGNOSE_BUCKET fehlt")
+	var err error
+	if k.ablageKonfiguration, err = leseAblageKonfiguration(getenv); err != nil {
+		return k, err
 	}
 	// DIAGNOSE_KONTEN darf leer sein: Dann nimmt der Server keine Diagnosen an.
 	k.diagnoseKonten = liste(getenv("DIAGNOSE_KONTEN"))
@@ -225,6 +267,36 @@ func starte() error {
 	ende, abbrechen := context.WithTimeout(context.Background(), 8*time.Second)
 	defer abbrechen()
 	return srv.Shutdown(ende)
+}
+
+// aufraeumen ist ein Durchgang des regelmäßigen Laufs (Cloud Run Job, von
+// Cloud Scheduler gestartet). Scheitert ein Konto, laufen die übrigen weiter;
+// der Lauf endet dann mit Fehler, und das Konto bleibt für den nächsten fällig.
+func aufraeumen() error {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	k, err := leseAblageKonfiguration(os.Getenv)
+	if err != nil {
+		return err
+	}
+	fs, err := firestore.NewClient(ctx, k.projekt)
+	if err != nil {
+		return fmt.Errorf("Firestore: %w", err)
+	}
+	defer func() { _ = fs.Close() }()
+	gcs, err := datensicherung.NeuerClient(ctx)
+	if err != nil {
+		return fmt.Errorf("Cloud Storage: %w", err)
+	}
+	defer func() { _ = gcs.Close() }()
+
+	loescher := dienst.NeuerLoescher(speicher.NeuerFirestore(fs),
+		datensicherung.NeuesCloudStorage(gcs, k.sicherungBucket),
+		diagnose.NeuesCloudStorage(gcs, k.diagnoseBucket))
+	n, err := loescher.Aufraeumen(ctx, time.Now())
+	slog.Info("Aufräumen beendet", "geloeschte_konten", n)
+	return err
 }
 
 // leseSecret holt den Pfeffer aus dem Secret Manager. name ist die volle

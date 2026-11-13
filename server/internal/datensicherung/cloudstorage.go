@@ -42,7 +42,7 @@ func NeuesCloudStorage(c *storage.Client, bucket string) *CloudStorage {
 	return &CloudStorage{bucket: c.Bucket(bucket)}
 }
 
-// objektname: Die Konto-ID ist ein Pseudonym (HMAC), kein Name und keine E-Mail.
+// objektname: Die Konto-ID ist ein Pseudonym (128 Bit Zufall), kein Name und keine E-Mail.
 func objektname(kontoID string) string { return "sicherung/" + kontoID }
 
 func (c *CloudStorage) Speichern(ctx context.Context, kontoID string, chiffrat []byte, erwartet int64) (int64, error) {

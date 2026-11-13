@@ -100,3 +100,45 @@ func TestErlaubtFuer(t *testing.T) {
 		}
 	})
 }
+
+func TestBefehlAus(t *testing.T) {
+	erlaubt := []struct {
+		args []string
+		want string
+	}{
+		{nil, ""},
+		{[]string{"aufraeumen"}, "aufraeumen"},
+	}
+	for _, f := range erlaubt {
+		got, err := befehlAus(f.args)
+		if err != nil || got != f.want || befehle[got] == nil {
+			t.Errorf("befehlAus(%q) = %q, %v; erwartet %q", f.args, got, err, f.want)
+		}
+	}
+	// Ein Tippfehler startet weder Server noch Lauf.
+	for _, args := range [][]string{{"aufräumen"}, {"aufraeumen", "jetzt"}, {""}, {"server"}} {
+		if got, err := befehlAus(args); err == nil {
+			t.Errorf("befehlAus(%q) = %q ohne Fehler", args, got)
+		}
+	}
+}
+
+func TestLeseAblageKonfiguration(t *testing.T) {
+	gut := map[string]string{"PROJEKT": "p", "SICHERUNG_BUCKET": "b", "DIAGNOSE_BUCKET": "d"}
+	a, err := leseAblageKonfiguration(func(k string) string { return gut[k] })
+	if err != nil || a != (ablageKonfiguration{"p", "b", "d"}) {
+		t.Errorf("Konfiguration = %+v, Fehler %v", a, err)
+	}
+	// Der Lauf braucht weder Client-IDs noch Pfeffer, aber jeden der drei Werte.
+	for name := range gut {
+		ohne := func(k string) string {
+			if k == name {
+				return ""
+			}
+			return gut[k]
+		}
+		if _, err := leseAblageKonfiguration(ohne); err == nil {
+			t.Errorf("ohne %s kein Fehler", name)
+		}
+	}
+}

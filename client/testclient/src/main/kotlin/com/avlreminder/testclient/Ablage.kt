@@ -171,6 +171,15 @@ class Ablage(private val ordner: File) {
             schreibe(datei("stand", name, "json"), json.encodeToString(GespeicherterStand(kontoId, stand.zaehler, stand.version, stand.gesehen, stand.abgelehnt)))
     }
 
+    /**
+     * Vergisst das Gerät [name] ganz (nach „Konto löschen“): Geräteschlüssel, Sitzung,
+     * Schlüssel und Sicherungsstand. Ein späteres Anmelden legt ein neues Gerät an.
+     * Andere Gerätenamen bleiben.
+     */
+    fun vergessen(name: String) {
+        for ((art, endung) in DATEIEN) datei(art, name, endung).delete()
+    }
+
     private fun datei(art: String, name: String, endung: String): File {
         // Verhindert Pfade wie "../x" als Gerätename.
         if (!Regex("[a-z0-9-]{1,32}").matches(name)) {
@@ -192,6 +201,9 @@ class Ablage(private val ordner: File) {
 
     private companion object {
         val json = Json { prettyPrint = true }
+
+        /** Alle Dateien eines Geräts: Art und Endung. */
+        val DATEIEN = listOf("geraet" to "pem", "sitzung" to "json", "schluessel" to "json", "stand" to "json")
 
         /**
          * Liest eine JSON-Datei der Ablage.

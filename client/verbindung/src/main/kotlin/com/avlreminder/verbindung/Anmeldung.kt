@@ -42,8 +42,11 @@ class Anmeldeversuch internal constructor(val zufall: ByteArray, oeffentlich: By
     val nonce: String = Geraetenachrichten.nonce(oeffentlich, zufall)
 }
 
-/** Ergebnis von [Anmeldung.anmelden]. */
-data class Angemeldet(val sitzung: Sitzung, val neuesKonto: Boolean, val freigeschaltet: Boolean)
+/**
+ * Ergebnis von [Anmeldung.anmelden]. [loeschenAb]: Termin einer beantragten Löschung des
+ * Kontos (B1), sonst null.
+ */
+data class Angemeldet(val sitzung: Sitzung, val neuesKonto: Boolean, val freigeschaltet: Boolean, val loeschenAb: Instant? = null)
 
 /** Es gibt keine Sitzung: Das Gerät muss sich zuerst mit Google anmelden. */
 class NichtAngemeldet : Exception("Nicht angemeldet - zuerst mit Google anmelden")
@@ -80,6 +83,14 @@ class Anmeldung(
     /** Quelle für den Zufall der Nonce. */
     private val zufall: SecureRandom = SecureRandom(),
 ) {
+    /**
+     * Termin einer beantragten Löschung des Kontos (B1) aus der letzten Antwort von
+     * [anmelden] oder [erneuern], sonst null. Die App zeigt ihn an, damit der Besitzer
+     * einen Antrag aus einem übernommenen Google-Konto bemerkt und abbricht.
+     */
+    var loeschenAb: Instant? = null
+        private set
+
     /** Die Geräte-ID, wie der Server sie aus dem Schlüssel ableitet. */
     val geraetId: String get() = Geraetenachrichten.geraetId(schluessel.oeffentlich)
 
@@ -108,7 +119,8 @@ class Anmeldung(
         }
         val sitzung = Sitzung(antwort.kontoId, antwort.geraetId, antwort.sitzung.token, antwort.sitzung.laeuftAb.seconds)
         ablage.speichern(sitzung)
-        return Angemeldet(sitzung, antwort.neuesKonto, antwort.freigeschaltet)
+        loeschenAb = if (antwort.hasLoeschenAb()) antwort.loeschenAb.instant() else null
+        return Angemeldet(sitzung, antwort.neuesKonto, antwort.freigeschaltet, loeschenAb)
     }
 
     /** Holt eine neue Sitzung mit einer Signatur des Geräteschlüssels und merkt sie sich. */
@@ -127,6 +139,7 @@ class Anmeldung(
         }
         val neu = alt.copy(geraetId = geraetId, token = antwort.sitzung.token, laeuftAbUnix = antwort.sitzung.laeuftAb.seconds)
         ablage.speichern(neu)
+        loeschenAb = if (antwort.hasLoeschenAb()) antwort.loeschenAb.instant() else null
         return neu
     }
 

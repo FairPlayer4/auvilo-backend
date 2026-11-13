@@ -9,6 +9,7 @@ locals {
     "cloudbilling.googleapis.com",
     "cloudbuild.googleapis.com",
     "cloudfunctions.googleapis.com",
+    "cloudscheduler.googleapis.com",
     "eventarc.googleapis.com",
     "firestore.googleapis.com",
     "iam.googleapis.com",

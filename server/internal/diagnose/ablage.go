@@ -1,7 +1,8 @@
 // Package diagnose legt die Diagnose-Logs aus der App ab (docs/diagnose-entwurf.md).
 // Jede Sendung wird ein eigenes Objekt; nichts wird überschrieben. Der Server
-// liest die Sendungen nie (er darf es im Betrieb auch nicht: nur
-// "storage.objectCreator"); Kevin holt sie mit werkzeuge/diagnose-holen.sh.
+// liest die Sendungen nie (er darf es im Betrieb auch nicht: anlegen, Namen
+// auflisten und löschen, aber nicht lesen); Kevin holt sie mit
+// werkzeuge/diagnose-holen.sh.
 package diagnose
 
 import (
@@ -24,6 +25,19 @@ type Ablage interface {
 	// Ablegen speichert eine Sendung unter einem neuen Namen (objektname) und
 	// liefert diesen zurück. Eine vorhandene Sendung wird nie überschrieben.
 	Ablegen(ctx context.Context, kontoID string, jetzt time.Time, nutzlast []byte) (string, error)
+
+	// Loeschen entfernt alle Sendungen des Kontos (Konto löschen, B1). Ohne
+	// Sendungen ist das kein Fehler.
+	//
+	// KRITISCH: nur die Sendungen dieses Kontos, auch wenn eine andere
+	// Konto-ID mit derselben Zeichenfolge beginnt.
+	Loeschen(ctx context.Context, kontoID string) error
+}
+
+// ordner: Präfix aller Sendungen eines Kontos. Der Schrägstrich am Ende trennt
+// Konto "a1" von Konto "a10".
+func ordner(kontoID string) string {
+	return "diagnose/" + kontoID + "/"
 }
 
 // objektname: "diagnose/<konto>/<zeit>-<zufall>.jsonl.gz". Der Ordner je Konto
@@ -34,5 +48,5 @@ type Ablage interface {
 func objektname(kontoID string, jetzt time.Time) string {
 	b := make([]byte, 4)
 	_, _ = zufall(b) // rand.Read liefert seit Go 1.24 nie einen Fehler
-	return "diagnose/" + kontoID + "/" + jetzt.UTC().Format("20060102T150405Z") + "-" + hex.EncodeToString(b) + ".jsonl.gz"
+	return ordner(kontoID) + jetzt.UTC().Format("20060102T150405Z") + "-" + hex.EncodeToString(b) + ".jsonl.gz"
 }

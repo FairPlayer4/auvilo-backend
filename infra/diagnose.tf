@@ -48,9 +48,9 @@ resource "google_storage_bucket" "diagnose" {
   depends_on = [google_project_service.apis]
 }
 
-# Der Server darf nur anlegen, nicht lesen, überschreiben oder löschen: Eine
-# Lücke im Server kann so keine Diagnosen anderer Konten verraten. Lesen tut
-# Kevin über seine Projektrolle.
+# Der Server darf anlegen und (für Konto löschen, aufraeumen.tf) auflisten und
+# löschen, aber nie lesen: Eine Lücke im Server kann so keine Diagnosen anderer
+# Konten verraten. Lesen tut Kevin über seine Projektrolle.
 resource "google_storage_bucket_iam_member" "server_diagnose" {
   bucket = google_storage_bucket.diagnose.name
   role   = "roles/storage.objectCreator"

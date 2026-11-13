@@ -59,8 +59,11 @@ func (*GeraeteAuflistenRequest) Descriptor() ([]byte, []int) {
 }
 
 type GeraeteAuflistenResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Geraete       []*Geraet              `protobuf:"bytes,1,rep,name=geraete,proto3" json:"geraete,omitempty"`
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Geraete []*Geraet              `protobuf:"bytes,1,rep,name=geraete,proto3" json:"geraete,omitempty"`
+	// Gesetzt, wenn die Löschung des Kontos beantragt ist: ab dann löscht der
+	// Server (konto.proto). Die App zeigt das mit „Abbrechen“ an.
+	LoeschenAb    *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=loeschen_ab,json=loeschenAb,proto3" json:"loeschen_ab,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -98,6 +101,13 @@ func (*GeraeteAuflistenResponse) Descriptor() ([]byte, []int) {
 func (x *GeraeteAuflistenResponse) GetGeraete() []*Geraet {
 	if x != nil {
 		return x.Geraete
+	}
+	return nil
+}
+
+func (x *GeraeteAuflistenResponse) GetLoeschenAb() *timestamppb.Timestamp {
+	if x != nil {
+		return x.LoeschenAb
 	}
 	return nil
 }
@@ -432,9 +442,11 @@ var File_avlreminder_v1_geraete_proto protoreflect.FileDescriptor
 const file_avlreminder_v1_geraete_proto_rawDesc = "" +
 	"\n" +
 	"\x1cavlreminder/v1/geraete.proto\x12\x0eavlreminder.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\x19\n" +
-	"\x17GeraeteAuflistenRequest\"L\n" +
+	"\x17GeraeteAuflistenRequest\"\x89\x01\n" +
 	"\x18GeraeteAuflistenResponse\x120\n" +
-	"\ageraete\x18\x01 \x03(\v2\x16.avlreminder.v1.GeraetR\ageraete\"\xcf\x01\n" +
+	"\ageraete\x18\x01 \x03(\v2\x16.avlreminder.v1.GeraetR\ageraete\x12;\n" +
+	"\vloeschen_ab\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
+	"loeschenAb\"\xcf\x01\n" +
 	"\x06Geraet\x12\x1b\n" +
 	"\tgeraet_id\x18\x01 \x01(\tR\bgeraetId\x12?\n" +
 	"\rangemeldet_am\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\fangemeldetAm\x12\x1a\n" +
@@ -484,20 +496,21 @@ var file_avlreminder_v1_geraete_proto_goTypes = []any{
 }
 var file_avlreminder_v1_geraete_proto_depIdxs = []int32{
 	2, // 0: avlreminder.v1.GeraeteAuflistenResponse.geraete:type_name -> avlreminder.v1.Geraet
-	9, // 1: avlreminder.v1.Geraet.angemeldet_am:type_name -> google.protobuf.Timestamp
-	0, // 2: avlreminder.v1.GeraeteDienst.GeraeteAuflisten:input_type -> avlreminder.v1.GeraeteAuflistenRequest
-	3, // 3: avlreminder.v1.GeraeteDienst.GeraetSperren:input_type -> avlreminder.v1.GeraetSperrenRequest
-	5, // 4: avlreminder.v1.GeraeteDienst.GeraetFreischalten:input_type -> avlreminder.v1.GeraetFreischaltenRequest
-	7, // 5: avlreminder.v1.GeraeteDienst.MitWiederherstellungFreischalten:input_type -> avlreminder.v1.MitWiederherstellungFreischaltenRequest
-	1, // 6: avlreminder.v1.GeraeteDienst.GeraeteAuflisten:output_type -> avlreminder.v1.GeraeteAuflistenResponse
-	4, // 7: avlreminder.v1.GeraeteDienst.GeraetSperren:output_type -> avlreminder.v1.GeraetSperrenResponse
-	6, // 8: avlreminder.v1.GeraeteDienst.GeraetFreischalten:output_type -> avlreminder.v1.GeraetFreischaltenResponse
-	8, // 9: avlreminder.v1.GeraeteDienst.MitWiederherstellungFreischalten:output_type -> avlreminder.v1.MitWiederherstellungFreischaltenResponse
-	6, // [6:10] is the sub-list for method output_type
-	2, // [2:6] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	9, // 1: avlreminder.v1.GeraeteAuflistenResponse.loeschen_ab:type_name -> google.protobuf.Timestamp
+	9, // 2: avlreminder.v1.Geraet.angemeldet_am:type_name -> google.protobuf.Timestamp
+	0, // 3: avlreminder.v1.GeraeteDienst.GeraeteAuflisten:input_type -> avlreminder.v1.GeraeteAuflistenRequest
+	3, // 4: avlreminder.v1.GeraeteDienst.GeraetSperren:input_type -> avlreminder.v1.GeraetSperrenRequest
+	5, // 5: avlreminder.v1.GeraeteDienst.GeraetFreischalten:input_type -> avlreminder.v1.GeraetFreischaltenRequest
+	7, // 6: avlreminder.v1.GeraeteDienst.MitWiederherstellungFreischalten:input_type -> avlreminder.v1.MitWiederherstellungFreischaltenRequest
+	1, // 7: avlreminder.v1.GeraeteDienst.GeraeteAuflisten:output_type -> avlreminder.v1.GeraeteAuflistenResponse
+	4, // 8: avlreminder.v1.GeraeteDienst.GeraetSperren:output_type -> avlreminder.v1.GeraetSperrenResponse
+	6, // 9: avlreminder.v1.GeraeteDienst.GeraetFreischalten:output_type -> avlreminder.v1.GeraetFreischaltenResponse
+	8, // 10: avlreminder.v1.GeraeteDienst.MitWiederherstellungFreischalten:output_type -> avlreminder.v1.MitWiederherstellungFreischaltenResponse
+	7, // [7:11] is the sub-list for method output_type
+	3, // [3:7] is the sub-list for method input_type
+	3, // [3:3] is the sub-list for extension type_name
+	3, // [3:3] is the sub-list for extension extendee
+	0, // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_avlreminder_v1_geraete_proto_init() }

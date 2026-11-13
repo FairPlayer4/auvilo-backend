@@ -23,6 +23,9 @@ import com.avlreminder.protokoll.GeraetNichtFreigeschaltet
 import com.avlreminder.protokoll.Gesichert
 import com.avlreminder.protokoll.NeueresSchema
 import com.avlreminder.protokoll.SicherungTageslimit
+import com.avlreminder.protokoll.KontoLoeschen
+import com.avlreminder.protokoll.KontoLoeschung
+import com.avlreminder.protokoll.LoeschungLaeuft
 import com.avlreminder.protokoll.SicherungZuGross
 import com.avlreminder.protokoll.Sicherungsablauf
 import com.avlreminder.protokoll.Sicherungskopf
@@ -37,6 +40,7 @@ import com.avlreminder.verbindung.ServerBackupAblage
 import com.avlreminder.verbindung.ServerDiagnoseAblage
 import com.avlreminder.verbindung.ServerGeraete
 import com.avlreminder.verbindung.ServerKonto
+import com.avlreminder.verbindung.ServerKontoLoeschen
 import com.avlreminder.verbindung.ServerSicherungsAblage
 import com.avlreminder.verbindung.Serverfehler
 import com.avlreminder.verbindung.Verbindung
@@ -72,6 +76,11 @@ private const val HILFE = """Befehle:
                     Schlüssel-Backup des Kontos löschen (lokale Schlüssel bleiben)
   cloud-loeschen    wie „Cloud-Daten löschen“ in der App: beide Backups löschen
                     und alle Geräte des Kontos sperren, dieses zuletzt
+  konto-loeschen    Konto mit allen Daten auf dem Server löschen (B1); ein nicht
+                    freigeschaltetes Gerät beantragt nur (Löschen nach 7 Tagen).
+                    Nach dem Löschen vergisst der Test-Client dieses Gerät.
+  konto-loeschen-abbrechen
+                    beantragte Löschung abbrechen (nur freigeschaltetes Gerät)
   diagnose-senden   eine Test-Diagnose ohne Inhalte senden (Konto muss
                     freigeschaltet sein, infra: diagnose_konten)
 Schalter:
@@ -104,7 +113,7 @@ fun main(args: Array<String>) {
         // Erwartete Meldungen des Sicherungsablaufs (protokoll) ohne Stacktrace.
         if (e is VersionVeraltet || e is AeltereSicherung || e is NeueresSchema || e is SicherungZuGross || e is SicherungTageslimit ||
             e is EntschluesselnFehlgeschlagen || e is DiagnoseTageslimit || e is DiagnoseZuGross ||
-            e is NichtAngemeldet || e is AnmeldungAbgelehnt || e is GeraetGesperrt
+            e is NichtAngemeldet || e is AnmeldungAbgelehnt || e is GeraetGesperrt || e is LoeschungLaeuft
         ) {
             System.err.println("Fehler: ${e.message}")
             exitProcess(1)
@@ -147,6 +156,8 @@ private suspend fun ausfuehren(args: List<String>) {
         rest == listOf("schluessel-loeschen") -> werkzeug.schluesselLoeschen()
         rest == listOf("cloud-loeschen") -> werkzeug.cloudLoeschen()
         rest == listOf("diagnose-senden") -> werkzeug.diagnoseSenden()
+        rest == listOf("konto-loeschen") -> werkzeug.kontoLoeschen()
+        rest == listOf("konto-loeschen-abbrechen") -> werkzeug.kontoLoeschenAbbrechen()
         else -> {
             println(HILFE)
             throw Bedienfehler(if (rest.isEmpty()) "Befehl fehlt" else "unbekannter Befehl: ${rest.joinToString(" ")}")
@@ -185,6 +196,7 @@ private class Werkzeug(
         val antwort = angemeldet.sitzung
         println("Angemeldet: Konto ${antwort.kontoId}, Gerät ${antwort.geraetId}" + if (angemeldet.neuesKonto) " (neues Konto)" else "")
         if (!angemeldet.freigeschaltet) println("Dieses Gerät ist noch nicht freigeschaltet.")
+        angemeldet.loeschenAb?.let(::zeigeLoeschung)
 
         val ergebnis = Einrichtung(
             antwort.kontoId,
@@ -218,8 +230,10 @@ private class Werkzeug(
     }
 
     suspend fun erneuern() {
-        val sitzung = anmeldung().erneuern()
+        val anmeldung = anmeldung()
+        val sitzung = anmeldung.erneuern()
         println("Sitzung erneuert, gültig bis ${Instant.ofEpochSecond(sitzung.laeuftAbUnix)}")
+        anmeldung.loeschenAb?.let(::zeigeLoeschung)
     }
 
     suspend fun geraete() {
@@ -233,6 +247,7 @@ private class Werkzeug(
             )
             println("${g.geraetId}  seit ${Instant.ofEpochSecond(g.angemeldetAm.seconds)}" + if (merkmale.isEmpty()) "" else "  (${merkmale.joinToString()})")
         }
+        if (liste.hasLoeschenAb()) zeigeLoeschung(Instant.ofEpochSecond(liste.loeschenAb.seconds, liste.loeschenAb.nanos.toLong()))
     }
 
     suspend fun sperren(geraetId: String) {
@@ -325,6 +340,28 @@ private class Werkzeug(
         }
         println("Diagnose gesendet ($groesse Bytes).")
     }
+
+    suspend fun kontoLoeschen() {
+        val s = ablage.sitzung(name)
+        if (!frage("Konto ${s.kontoId} mit Datensicherung, Schlüssel-Backup, Diagnosen und allen Geräten auf dem Server löschen?")) {
+            return println("Nichts gelöscht.")
+        }
+        when (val ergebnis = KontoLoeschen.loeschen(ServerKontoLoeschen(verbindung, s.token)) { ablage.vergessen(name) }) {
+            KontoLoeschung.Geloescht -> println("Konto gelöscht. Gerät \"$name\" ist vergessen; ein neues Anmelden legt ein neues Konto an.")
+            is KontoLoeschung.Beantragt -> {
+                println("Dieses Gerät ist nicht freigeschaltet: Löschung beantragt.")
+                zeigeLoeschung(ergebnis.ab)
+            }
+        }
+    }
+
+    suspend fun kontoLoeschenAbbrechen() {
+        ServerKontoLoeschen(verbindung, ablage.sitzung(name).token).abbrechen()
+        println("Löschung abgebrochen (oder es war keine beantragt).")
+    }
+
+    private fun zeigeLoeschung(ab: Instant) =
+        println("ACHTUNG: Das Konto wird ab ${ZEIT.format(ab)} gelöscht. Abbrechen mit \"konto-loeschen-abbrechen\" auf einem freigeschalteten Gerät.")
 
     /** Der Ablauf für das angemeldete Gerät; braucht Sitzung und eingerichtete Schlüssel. */
     private fun sicherungsablauf(uebernehmen: (Sicherungskopf) -> Boolean): Sicherungsablauf {

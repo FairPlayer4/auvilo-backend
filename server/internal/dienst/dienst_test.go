@@ -38,6 +38,7 @@ type testServer struct {
 	backup   avlreminderv1connect.SchluesselDienstClient
 	sicherer avlreminderv1connect.DatensicherungDienstClient
 	diagnose avlreminderv1connect.DiagnoseDienstClient
+	konto    avlreminderv1connect.KontoDienstClient
 	speicher *speicher.Arbeitsspeicher
 	jetzt    time.Time // die Uhr des Servers; Tests stellen sie vor
 	url      string    // Adresse des Testservers (für Anfragen ohne Connect-Client)
@@ -94,6 +95,7 @@ func neuerTestServerMit(t *testing.T, sicherungen datensicherung.Ablage, gleichz
 	ts.backup = avlreminderv1connect.NewSchluesselDienstClient(http.DefaultClient, srv.URL)
 	ts.sicherer = avlreminderv1connect.NewDatensicherungDienstClient(http.DefaultClient, srv.URL)
 	ts.diagnose = avlreminderv1connect.NewDiagnoseDienstClient(http.DefaultClient, srv.URL)
+	ts.konto = avlreminderv1connect.NewKontoDienstClient(http.DefaultClient, srv.URL)
 	return ts
 }
 

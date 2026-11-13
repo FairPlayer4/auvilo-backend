@@ -4,8 +4,9 @@
 # dieser Workflow prüft das Ergebnis und baut genau den geprüften Commit.
 # Workload Identity Federation (infra/github.tf) lässt nur Tokens dieses
 # Workflows auf main zu. Ein Schlüssel für GCP liegt nirgends in GitHub.
-# Das Konto "deploy" darf nur Images ins Repo "container" schreiben und den
-# Dienst "server" ändern (infra/server.tf).
+# Das Konto "deploy" darf nur Images ins Repo "container" schreiben, den
+# Dienst "server" und den Job "aufraeumen" ändern (infra/server.tf,
+# infra/aufraeumen.tf).
 name: Deploy
 
 on:
@@ -91,3 +92,5 @@ jobs:
         run: |
           digest=$(gcloud artifacts docker images describe "${IMAGE}:${COMMIT}" --format='value(image_summary.digest)')
           gcloud run services update server --region "${REGION}" --image "${IMAGE}@${digest}" --quiet
+          # Der tägliche Lauf (Konto löschen) nutzt dasselbe Image.
+          gcloud run jobs update aufraeumen --region "${REGION}" --image "${IMAGE}@${digest}" --quiet

@@ -62,6 +62,9 @@ message GeraeteAuflistenRequest {}
 
 message GeraeteAuflistenResponse {
   repeated Geraet geraete = 1;
+  // Gesetzt, wenn die Löschung des Kontos beantragt ist: ab dann löscht der
+  // Server (konto.proto). Die App zeigt das mit „Abbrechen“ an.
+  google.protobuf.Timestamp loeschen_ab = 2;
 }
 
 message Geraet {

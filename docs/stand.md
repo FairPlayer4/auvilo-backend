@@ -1,6 +1,6 @@
 # Stand und nächste Schritte
 
-Stand: 2026-11-10. Bei jedem größeren Schritt aktualisieren; Erledigtes gehört in git
+Stand: 2026-11-12. Bei jedem größeren Schritt aktualisieren; Erledigtes gehört in git
 und die Review-Berichte, nicht hierher.
 
 ## In GCP (Projekt `avlreminder-exp-1ef2`, Region `europe-west1`)
@@ -129,20 +129,30 @@ Einzelheiten stehen in den Entwürfen, in git und in den Review-Berichten
 | B2b | Daten-Backup einer Person: Datensicherung in Cloud Storage, Freischaltung neuer Geräte (E-B2b-13), Tageslimits, Fassungen (R-4), Diagnose-Log ([b2b-entwurf.md](b2b-entwurf.md), [diagnose-entwurf.md](diagnose-entwurf.md)) | Server und Client fertig, zuletzt in der Cloud getestet am 2026-11-10 (Limits, Fassungen, Trennen ab 150 %); App-Einbindung: App-Repo `docs/stand.md` |
 | B3 | Teilen zwischen Personen | nicht begonnen; Vorgaben in [anforderungen.md](anforderungen.md) Kap. 4.6; davor die Sicherheitsphase |
 
-Letzte Deploys: PR #19 am 2026-11-10 (Phase B, Revision `server-00017-5n2`). Phase C
-war nur Client. Phase D (2026-11-10, Richtlinie je Prozedur, ein Typ je Dienst,
-Speicher-Entscheidungen, Begriffe) liegt in `develop`, **noch nicht deployt**.
+Letzter Deploy: PR #20 am 2026-11-11 (Phase D: Richtlinie je Prozedur, ein Typ je
+Dienst, Speicher-Entscheidungen, Begriffe), Revision `server-00018-fc4`, bereit.
 
 ## Offen
-1. **Deploy Phase D** per PR nach `main` (CI auf `develop` grün, dann Kevins Go).
-2. **Eigenbetrieb** seit 2026-11-07: Die App sichert Kevins echte Daten in der Cloud;
+1. **Eigenbetrieb** seit 2026-11-07: Die App sichert Kevins echte Daten in der Cloud;
    Claude darf die Schlüssel dafür kennen. Vor dem ersten weiteren Nutzer beginnt die
    Sicherheitsphase (Checkliste „Vor dem ersten weiteren Nutzer“ in b2b-entwurf.md;
    `CLAUDE.md`). Die Desktop-Client-ID des Test-Clients bleibt bis dahin.
-3. **App-Einbindung** (Schritte 1–5, Wiederherstellen R-1…R-6): App-Repo
+   **Vorher fertig** (Sicherheits- und Datenschutzprüfung 2026-11-12, Liste dort):
+   Konto löschen, Bestätigung mit der Displaysperre, Format v2 mit HKDF-Labels,
+   A-15 neu in der App, Dokumente. **Konto löschen:** Server und Client fertig
+   (2026-11-12, noch nicht deployt). Die Infrastruktur steht in `infra/aufraeumen.tf`
+   (Cloud Run Job `aufraeumen`, täglich 4 Uhr per Cloud Scheduler, Rolle
+   „Objekte auflisten und löschen“ ohne Lesen, Alarm), **angewendet am
+   2026-11-13**. Der Job hat noch das alte Server-Image ohne den Unterbefehl:
+   Bis der PR nach `main` deployt ist, hängt ein Lauf bis zum Timeout und löst
+   den Alarm aus. Danach einmal `gcloud run jobs execute aufraeumen
+   --region=europe-west1` und die Logs prüfen. Offen danach: die App. Ergebnis der Prüfung: Nach der Rotation ist die
+   Sicherung für eine Person sicher; für die DSGVO fehlen vor allem Konto löschen
+   und Fristen ([anforderungen.md](anforderungen.md) Kap. 4.4, 4.5, 11).
+2. **App-Einbindung** (Schritte 1–5, Wiederherstellen R-1…R-6): App-Repo
    `docs/stand.md`; dort auch die Gerätetests.
-4. **Review-Punkte:** `.review/state.md`, Abschnitt „Offen“.
-5. **B3:** Vorgaben B3-1 bis B3-4 (anforderungen.md Kap. 4.6).
+3. **Review-Punkte:** `.review/state.md`, Abschnitt „Offen“.
+4. **B3:** Vorgaben B3-1 bis B3-8 (anforderungen.md Kap. 4.6), offene Fragen in Kap. 10.
 
 ## Befehle
 ```bash

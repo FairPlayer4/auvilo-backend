@@ -74,6 +74,10 @@ angegeben.
   `protoc` ist ein Programm je Plattform; Gradle trägt nur die Windows-Variante ein.
   Die Linux-Variante für die CI von Hand ergänzen (SHA-256 der Datei von Maven
   Central, SHA-1 mit der `.sha1`-Datei dort abgleichen).
+- Den regelmäßigen Lauf (fällige Konto-Löschungen) lokal einmal ausführen, mit
+  denselben Emulatoren und Variablen wie den Server (ohne Pfeffer und Client-IDs):
+  `PROJEKT=lokal SICHERUNG_BUCKET=lokal DIAGNOSE_BUCKET=lokal go run ./cmd/server aufraeumen`
+  in `server/`. In der Cloud läuft er als Cloud Run Job.
 - Test-Client gegen den lokalen Server:
   `./gradlew :testclient:run --args="--geraet pc anmelden"` (Befehle mit `--hilfe`).
   Er nutzt die `client_secret_*.json` in `%APPDATA%\avlreminder` und legt

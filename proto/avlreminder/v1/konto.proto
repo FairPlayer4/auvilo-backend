@@ -1,0 +1,60 @@
+syntax = "proto3";
+
+package avlreminder.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option java_multiple_files = true;
+option java_package = "com.avlreminder.schnittstelle.v1";
+
+// Das eigene Konto löschen (docs/anforderungen.md, B1 in Kap. 3.5).
+//
+// Gelöscht wird alles, was der Server zum Konto hat: Datensicherung mit allen
+// Fassungen, Schlüssel-Backup, Diagnosen, Geräte, Sitzungen und die Kennung
+// (HMAC der Google-Konto-ID). Danach legt ein neues Anmelden mit demselben
+// Google-Konto ein neues, leeres Konto an. Die Tageszähler laufen von selbst ab
+// (höchstens zwei Tage).
+//
+// Ein freigeschaltetes Gerät löscht sofort. Ein nicht freigeschaltetes Gerät
+// (nur der Google-Login, z. B. Handy und Wiederherstellungsschlüssel verloren)
+// stellt nur einen Antrag: Der Server löscht 7 Tage später, und bis dahin kann
+// jedes freigeschaltete Gerät abbrechen. Die Wartezeit schützt davor, dass
+// jemand mit einem übernommenen Google-Konto sofort alles vernichtet. Den
+// offenen Antrag sehen alle Geräte im Feld loeschen_ab von Anmelden,
+// SitzungErneuern und GeraeteAuflisten.
+//
+// Fehlercodes (Connect):
+//   unauthenticated     Sitzung fehlt, ist ungültig oder abgelaufen.
+//   permission_denied   KontoLoeschenAbbrechen: Das Gerät ist nicht
+//                       freigeschaltet.
+//   failed_precondition KontoLoeschenAbbrechen: Die Löschung ist schon fällig
+//                       oder läuft (dann gibt es nichts mehr abzubrechen).
+//   unavailable         vorübergehend; später wiederholen. Bei KontoLoeschen
+//                       ist das Konto dann schon als fällig markiert, und der
+//                       regelmäßige Lauf des Servers löscht den Rest.
+//   internal            Fehler im Server.
+service KontoDienst {
+  // Löscht das eigene Konto (freigeschaltetes Gerät) oder beantragt die
+  // Löschung (nicht freigeschaltetes Gerät). Wiederholbar: Ein zweiter Antrag
+  // verschiebt den Termin nicht nach hinten.
+  rpc KontoLoeschen(KontoLoeschenRequest) returns (KontoLoeschenResponse);
+
+  // Bricht einen offenen Antrag ab. Nur freigeschaltete Geräte. Ohne Antrag
+  // ist das kein Fehler.
+  rpc KontoLoeschenAbbrechen(KontoLoeschenAbbrechenRequest) returns (KontoLoeschenAbbrechenResponse);
+}
+
+message KontoLoeschenRequest {}
+
+message KontoLoeschenResponse {
+  // true: Das Konto ist gelöscht; die Sitzung gilt nicht mehr. Die App
+  // verwirft dann wie beim Abmelden Sitzung, Geräteschlüssel und die Schlüssel
+  // der Sicherung und legt für ein späteres Anmelden neue an.
+  bool geloescht = 1;
+  // Ohne geloescht: Zeitpunkt, ab dem der Server löscht.
+  google.protobuf.Timestamp loeschen_ab = 2;
+}
+
+message KontoLoeschenAbbrechenRequest {}
+
+message KontoLoeschenAbbrechenResponse {}

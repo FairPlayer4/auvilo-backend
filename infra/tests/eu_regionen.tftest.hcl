@@ -139,6 +139,14 @@ run "alle_standorte_liegen_in_der_eu" {
     condition     = upper(google_storage_bucket.diagnose.location) == upper(var.region)
     error_message = "Der Bucket der Diagnosen liegt nicht in var.region."
   }
+  assert {
+    condition     = google_cloud_run_v2_job.aufraeumen.location == var.region
+    error_message = "Der Job aufraeumen liegt nicht in var.region."
+  }
+  assert {
+    condition     = google_cloud_scheduler_job.aufraeumen.region == var.region
+    error_message = "Der Scheduler-Job liegt nicht in var.region."
+  }
 }
 
 # Eine andere EU-Region geht durch, und alles zieht mit (nicht nur die Vorgabe).
@@ -499,6 +507,43 @@ run "kill_switch_kann_keine_dienste_aendern" {
   assert {
     condition     = length([for m in google_project_iam_member.killswitch : m if m.member != google_service_account.killswitch.member]) == 0
     error_message = "Die Rollen des Kill-Switch gehen an ein anderes Konto."
+  }
+}
+
+# Konto löschen (aufraeumen.tf): Der tägliche Lauf und der Server dürfen in den
+# Buckets löschen, aber nichts lesen; der Lauf hat nur sein eigenes Konto.
+run "aufraeumen_loescht_ohne_zu_lesen" {
+  command = plan
+
+  assert {
+    # KRITISCH: Ohne storage.objects.get liest die Rolle keine Inhalte.
+    condition     = toset(google_project_iam_custom_role.objekte_loeschen.permissions) == toset(["storage.objects.list", "storage.objects.delete"])
+    error_message = "Die Rolle zum Löschen hat andere Rechte als Auflisten und Löschen."
+  }
+  assert {
+    condition     = toset(keys(google_storage_bucket_iam_member.aufraeumen)) == toset(["datensicherung", "diagnose"]) && alltrue([for m in google_storage_bucket_iam_member.aufraeumen : m.role == google_project_iam_custom_role.objekte_loeschen.name && m.member == google_service_account.aufraeumen.member])
+    error_message = "Der Lauf hat in den Buckets andere Rechte als Auflisten und Löschen."
+  }
+  assert {
+    condition     = google_storage_bucket_iam_member.server_diagnose_loeschen.role == google_project_iam_custom_role.objekte_loeschen.name && google_storage_bucket_iam_member.server_diagnose_loeschen.bucket == "test-projekt-diagnose"
+    error_message = "Der Server darf Diagnosen nicht oder mit zu viel Rechten löschen."
+  }
+  assert {
+    condition     = google_cloud_run_v2_job.aufraeumen.template[0].template[0].service_account == google_service_account.aufraeumen.email
+    error_message = "Der Job läuft nicht mit seinem eigenen Konto."
+  }
+  assert {
+    condition     = google_cloud_run_v2_job.aufraeumen.template[0].template[0].containers[0].args == tolist(["aufraeumen"])
+    error_message = "Der Job startet nicht den Unterbefehl aufraeumen."
+  }
+  assert {
+    # Ohne Pfeffer: Der Lauf braucht keine Google-Konto-IDs.
+    condition     = length([for e in google_cloud_run_v2_job.aufraeumen.template[0].template[0].containers[0].env : e if e.name == "PFEFFER_SECRET"]) == 0
+    error_message = "Der Job bekommt den Pfeffer."
+  }
+  assert {
+    condition     = google_cloud_run_v2_job_iam_member.planer_aufraeumen.role == "roles/run.invoker" && google_cloud_scheduler_job.aufraeumen.http_target[0].oauth_token[0].service_account_email == google_service_account.planer.email
+    error_message = "Der Scheduler startet den Job nicht mit seinem eigenen Konto."
   }
 }
 
