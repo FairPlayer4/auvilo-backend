@@ -51,7 +51,10 @@ angegeben.
   `infra/`; ein neues Major erst nach Anheben der Grenze in `infra/versionen.tf`.
 - Die Versionen von buf und den beiden Plugins stehen auch in `.github/workflows/ci.yml`
   (Job `proto`). Andere Versionen erzeugen anderen Code; dann meldet die CI „erzeugter
-  Code nicht aktuell“. Beim Aktualisieren beide Stellen ändern.
+  Code nicht aktuell“. Beim Aktualisieren beide Stellen ändern, bei buf auch
+  `BUF_SHA256` (die CI lädt das fertige Programm von der Release-Seite).
+- Emulator-Images (Firestore, fake-gcs-server) stehen mit Prüfsumme in `ci.yml` (Job
+  `server`) und in `werkzeuge/pruefen.sh`; beim Aktualisieren beide Stellen ändern.
 - Nach Änderungen an `.github/workflows/` actionlint ausführen (steckt auch in
   `pruefen.sh voll`, nicht in der CI), im Wurzelverzeichnis des Repos in Git Bash:
   `MSYS_NO_PATHCONV=1 docker run --rm -v "$(pwd -W):/repo" -w /repo rhysd/actionlint:1.7.12 -no-color -oneline`

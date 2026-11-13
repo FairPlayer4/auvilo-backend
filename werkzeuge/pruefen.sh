@@ -50,7 +50,7 @@ go_v="$(sed -n 's/^go \([0-9.]*\)$/\1/p' server/go.mod)"
 go_image="golang:$go_v"
 lint_image=golangci/golangci-lint:v2.15.0
 tofu_image=ghcr.io/opentofu/opentofu:1.13.1
-fs_image=google/cloud-sdk:591.0.0-emulators
+fs_image=google/cloud-sdk:591.0.0-emulators@sha256:9e5a9baf12623ab50709909aea09ea1328b6674a25a7787da38a168a6d0db309
 gcs_image=fsouza/fake-gcs-server:1.56.1@sha256:797ce226d62f947c009dc40246b30cfb456b8473d8241407f9d6f2c04e4d69ef
 netz=avlreminder-pruefen
 

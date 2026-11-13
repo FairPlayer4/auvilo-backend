@@ -48,50 +48,41 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false # kein GitHub-Token in .git/config für Tests und Werkzeuge
+      # Der Server testet seinen Speicher gegen den Firestore-Emulator und einen
+      # Nachbau von Cloud Storage (Vertragstests). Beide laufen als Container, wie
+      # lokal in werkzeuge/pruefen.sh; Images fest mit Prüfsumme, wie die Actions.
+      # Gestartet wird im Hintergrund: Das Laden des Emulator-Images (etwa 450 MB)
+      # läuft parallel zu setup-go, gofmt und vet. Früher kam der Emulator per apt
+      # (mit Java 25) und kostete jedes Mal gut 2 Minuten.
+      - name: Emulatoren im Hintergrund starten
+        run: |
+          nohup sh -c '
+            docker run -d --name fakegcs -p 4443:4443 \
+              fsouza/fake-gcs-server:1.56.1@sha256:797ce226d62f947c009dc40246b30cfb456b8473d8241407f9d6f2c04e4d69ef \
+              -scheme http -port 4443 -backend memory
+            docker run -d --name firestore -p 8086:8086 \
+              google/cloud-sdk:591.0.0-emulators@sha256:9e5a9baf12623ab50709909aea09ea1328b6674a25a7787da38a168a6d0db309 \
+              gcloud emulators firestore start --host-port=0.0.0.0:8086
+          ' > "$RUNNER_TEMP/emulatoren.log" 2>&1 &
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: server/go.mod
           cache-dependency-path: server/go.sum
-      # Der Server testet seinen Speicher auch gegen den Firestore-Emulator
-      # (Vertragstests). Die Google Cloud CLI ist auf dem Runner schon da, aber
-      # das Runner-Image entfernt Googles apt-Quelle nach der Installation wieder;
-      # deshalb wird sie hier neu eingetragen.
-      # Der Emulator aus apt braucht inzwischen Java 25 (Klassendateien Version 69);
-      # das Runner-Image hat nur bis Java 21 als Vorgabe.
-      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
-        with:
-          distribution: temurin
-          java-version: 25
-      - name: Firestore-Emulator starten
-        run: |
-          curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo gpg --dearmor --yes -o /usr/share/keyrings/cloud.google.gpg
-          echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee /etc/apt/sources.list.d/google-cloud-sdk.list > /dev/null
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq google-cloud-cli-firestore-emulator
-          gcloud emulators firestore start --host-port=localhost:8086 > "$RUNNER_TEMP/emulator.log" 2>&1 &
-          for _ in $(seq 60); do
-            curl -sf http://localhost:8086/ > /dev/null && exit 0
-            sleep 1
-          done
-          cat "$RUNNER_TEMP/emulator.log"
-          exit 1
-      # Nachbau von Cloud Storage für die Ablage der Datensicherungen
-      # (Vertragstests). Image fest mit Prüfsumme, wie die Actions oben.
-      - name: fake-gcs-server starten
-        run: |
-          docker run -d --name fakegcs -p 4443:4443 \
-            fsouza/fake-gcs-server:1.56.1@sha256:797ce226d62f947c009dc40246b30cfb456b8473d8241407f9d6f2c04e4d69ef \
-            -scheme http -port 4443 -backend memory
-          for _ in $(seq 30); do
-            curl -sf http://localhost:4443/storage/v1/b > /dev/null && exit 0
-            sleep 1
-          done
-          docker logs fakegcs
-          exit 1
       - name: Formatierung
         run: test -z "$(gofmt -l .)" || (gofmt -l . && exit 1)
       - name: go vet
         run: go vet ./...
+      - name: Auf Emulatoren warten
+        run: |
+          for _ in $(seq 180); do
+            curl -sf http://localhost:8086/ > /dev/null &&
+              curl -sf http://localhost:4443/storage/v1/b > /dev/null && exit 0
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/emulatoren.log"
+          docker logs firestore || true
+          docker logs fakegcs || true
+          exit 1
       # -race braucht cgo; das gibt es unter Linux ohne Weiteres (lokal unter
       # Windows nur über werkzeuge/pruefen.sh, das dafür einen Linux-Container nutzt).
       - name: Tests mit Race-Detector
@@ -119,8 +110,11 @@ jobs:
     timeout-minutes: 15
     # Versionen wie lokal (werkzeuge/buf.sh liest sie hier aus). Andere Versionen der
     # Plugins erzeugen anderen Code, dann schlüge die Prüfung unten fehl.
+    # Neue buf-Version: auch BUF_SHA256 anheben (Zeile "buf-Linux-x86_64" aus
+    # sha256.txt der Release-Seite).
     env:
       BUF_VERSION: v1.75.0
+      BUF_SHA256: fad1e38d6909bbb583a4da81d8c02a01046e2cd663bde7e337dd24277393764b
       PROTOC_GEN_GO_VERSION: v1.36.12
       PROTOC_GEN_CONNECT_GO_VERSION: v1.21.1
     steps:
@@ -153,9 +147,16 @@ jobs:
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
 
       # --- Schnittstelle (proto) ---
+      # buf als fertiges Programm von der Release-Seite (mit Prüfsumme) statt es mit
+      # go install zu bauen (ohne Cache gut 1,5 Minuten). Die beiden Plugins sind klein.
       - name: "buf: Werkzeuge installieren"
         run: |
-          go install github.com/bufbuild/buf/cmd/buf@"$BUF_VERSION"
+          ziel="$(go env GOPATH)/bin"
+          mkdir -p "$ziel"
+          curl -fsSL -o "$RUNNER_TEMP/buf" "https://github.com/bufbuild/buf/releases/download/$BUF_VERSION/buf-Linux-x86_64"
+          echo "$BUF_SHA256  $RUNNER_TEMP/buf" | sha256sum -c -
+          install -m 755 "$RUNNER_TEMP/buf" "$ziel/buf"
+          buf --version
           go install google.golang.org/protobuf/cmd/protoc-gen-go@"$PROTOC_GEN_GO_VERSION"
           go install connectrpc.com/connect/cmd/protoc-gen-connect-go@"$PROTOC_GEN_CONNECT_GO_VERSION"
       - name: "buf: Lint und Formatierung"
