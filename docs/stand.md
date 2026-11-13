@@ -129,8 +129,8 @@ Einzelheiten stehen in den Entwürfen, in git und in den Review-Berichten
 | B2b | Daten-Backup einer Person: Datensicherung in Cloud Storage, Freischaltung neuer Geräte (E-B2b-13), Tageslimits, Fassungen (R-4), Diagnose-Log ([b2b-entwurf.md](b2b-entwurf.md), [diagnose-entwurf.md](diagnose-entwurf.md)) | Server und Client fertig, zuletzt in der Cloud getestet am 2026-11-10 (Limits, Fassungen, Trennen ab 150 %); App-Einbindung: App-Repo `docs/stand.md` |
 | B3 | Teilen zwischen Personen | nicht begonnen; Vorgaben in [anforderungen.md](anforderungen.md) Kap. 4.6; davor die Sicherheitsphase |
 
-Letzter Deploy: PR #20 am 2026-11-11 (Phase D: Richtlinie je Prozedur, ein Typ je
-Dienst, Speicher-Entscheidungen, Begriffe), Revision `server-00018-fc4`, bereit.
+Letzter Deploy: PR #21 am 2026-11-13 (Konto löschen: Server, Client, täglicher Lauf),
+Revision `server-00019-pw8`, bereit; der Job `aufraeumen` hat dasselbe Image.
 
 ## Offen
 1. **Eigenbetrieb** seit 2026-11-07: Die App sichert Kevins echte Daten in der Cloud;
@@ -142,11 +142,10 @@ Dienst, Speicher-Entscheidungen, Begriffe), Revision `server-00018-fc4`, bereit.
    A-15 neu in der App, Dokumente. **Konto löschen:** Server und Client fertig
    (2026-11-12, noch nicht deployt). Die Infrastruktur steht in `infra/aufraeumen.tf`
    (Cloud Run Job `aufraeumen`, täglich 4 Uhr per Cloud Scheduler, Rolle
-   „Objekte auflisten und löschen“ ohne Lesen, Alarm), **angewendet am
-   2026-11-13**. Der Job hat noch das alte Server-Image ohne den Unterbefehl:
-   Bis der PR nach `main` deployt ist, hängt ein Lauf bis zum Timeout und löst
-   den Alarm aus. Danach einmal `gcloud run jobs execute aufraeumen
-   --region=europe-west1` und die Logs prüfen. Offen danach: die App. Ergebnis der Prüfung: Nach der Rotation ist die
+   „Objekte auflisten und löschen“ ohne Lesen, Alarm), angewendet und deployt am
+   2026-11-13; ein Lauf von Hand endete ohne Fehler („Aufräumen beendet“, 0 Konten).
+   Noch nicht in der Cloud getestet: ein echtes Löschen (sofort und als Antrag)
+   mit dem Test-Client. Offen danach: die App. Ergebnis der Prüfung: Nach der Rotation ist die
    Sicherung für eine Person sicher; für die DSGVO fehlen vor allem Konto löschen
    und Fristen ([anforderungen.md](anforderungen.md) Kap. 4.4, 4.5, 11).
 2. **App-Einbindung** (Schritte 1–5, Wiederherstellen R-1…R-6): App-Repo
