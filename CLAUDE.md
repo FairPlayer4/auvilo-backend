@@ -87,7 +87,9 @@ Kommunikation auf **Deutsch, mit ß**.
 - Commit-Nachrichten auf Deutsch.
 - Vor Commit/Push fragen, solange Kevin das nicht anders sagt (er schaut vorher drüber).
 - CI läuft nur auf `main` (GitHub-Minuten, Entscheidung 2026-11-13), nicht auf
-  `develop` und nicht bei PRs. Deshalb vor jedem Push `werkzeuge/pruefen.sh` und vor
-  einem PR nach `main` (auch Dependabot-Branches) `werkzeuge/pruefen.sh voll`, beide
-  grün. Nach dem Merge die CI auf `main` ansehen; ist sie rot, folgt kein Deploy.
+  `develop` und nicht bei PRs. Deshalb vor jedem Push mit Code-Änderungen (Go, Kotlin,
+  Proto, OpenTofu, Skripte, CI) `werkzeuge/pruefen.sh` und vor einem PR nach `main`
+  (auch Dependabot-Branches) `werkzeuge/pruefen.sh voll`, beide grün. Reine Doku
+  (Markdown) braucht kein Prüfskript (Kevin, 2026-11-14). Bei kleinen Code-Änderungen
+  darf man abwägen, im Zweifel aber lieber einmal zu viel prüfen. Nach dem Merge die CI auf `main` ansehen; ist sie rot, folgt kein Deploy.
   Wird das Repo öffentlich, wieder auf `develop` und bei PRs prüfen.
