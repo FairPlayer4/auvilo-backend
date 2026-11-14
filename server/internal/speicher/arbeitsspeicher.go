@@ -17,6 +17,8 @@ type Arbeitsspeicher struct {
 	geraete   map[string]Geraet // Geräte-ID → Gerät
 	sitzungen map[string]Sitzung
 	backups   map[string]Backup // Konto-ID → Backup
+	// grabsteine: begrabene Geräte, Geräte-ID → Konto-ID (GeraetBegraben).
+	grabsteine map[string]string
 }
 
 // NeuerArbeitsspeicher legt einen leeren Speicher an.
@@ -27,12 +29,15 @@ func NeuerArbeitsspeicher() *Arbeitsspeicher {
 		geraete:   map[string]Geraet{},
 		sitzungen: map[string]Sitzung{},
 		backups:   map[string]Backup{},
+
+		grabsteine: map[string]string{},
 	}
 }
 
 // konto: was der Arbeitsspeicher zu einem Konto hält.
 type konto struct {
-	loeschenAb time.Time // Nullwert = keine Löschung beantragt
+	loeschenAb   time.Time // Nullwert = keine Löschung beantragt
+	zuletztAktiv time.Time // nur der Tag (aktivTag)
 }
 
 // Prüft beim Übersetzen, dass Arbeitsspeicher die Schnittstelle erfüllt.
@@ -42,10 +47,17 @@ func (a *Arbeitsspeicher) Anmelden(_ context.Context, kennung string, g Geraet, 
 	a.mu.Lock()
 	defer a.mu.Unlock() // defer: läuft beim Verlassen der Methode (wie finally)
 
+	angemeldet := g.Erstellt // Zeitpunkt der Anmeldung; g wird unten ersetzt
 	kontoID, gibtEs := a.kennungen[kennung]
 	neu := !gibtEs
 	if neu {
 		kontoID = neueKontoID()
+	}
+	if grabKonto, ok := a.grabsteine[g.ID]; ok {
+		if grabKonto != kontoID {
+			return AnmeldeErgebnis{}, ErrGeraetFremd
+		}
+		return AnmeldeErgebnis{}, ErrGeraetGesperrt
 	}
 	if vorhanden, ok := a.geraete[g.ID]; ok {
 		if vorhanden.KontoID != kontoID {
@@ -73,8 +85,20 @@ func (a *Arbeitsspeicher) Anmelden(_ context.Context, kennung string, g Geraet, 
 	if neu {
 		a.konten[kontoID] = konto{}
 	}
+	a.merkeAktivitaet(kontoID, angemeldet)
 	a.sitzungen[s.Hash] = Sitzung{Hash: s.Hash, KontoID: kontoID, GeraetID: g.ID, LaeuftAb: s.LaeuftAb.UTC().Truncate(time.Millisecond)}
 	return AnmeldeErgebnis{KontoID: kontoID, NeuesKonto: neu, Freigeschaltet: g.Freigeschaltet}, nil
+}
+
+// merkeAktivitaet setzt den Tag der letzten Aktivität eines vorhandenen
+// Kontos. Aufruf nur mit mu.
+func (a *Arbeitsspeicher) merkeAktivitaet(kontoID string, jetzt time.Time) {
+	k, ok := a.konten[kontoID]
+	if !ok || !mussAktivSchreiben(k.zuletztAktiv, aktivTag(jetzt)) {
+		return
+	}
+	k.zuletztAktiv = aktivTag(jetzt)
+	a.konten[kontoID] = k
 }
 
 // geraeteVon liefert die Geräte eines Kontos (unsortiert). Aufruf nur mit mu.
@@ -92,10 +116,13 @@ func (a *Arbeitsspeicher) Geraet(_ context.Context, geraetID string) (Geraet, er
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	g, ok := a.geraete[geraetID]
-	if !ok {
-		return Geraet{}, ErrNichtGefunden
+	if ok {
+		return g, nil
 	}
-	return g, nil
+	if kontoID, ok := a.grabsteine[geraetID]; ok {
+		return begraben(geraetID, kontoID), nil
+	}
+	return Geraet{}, ErrNichtGefunden
 }
 
 func (a *Arbeitsspeicher) KennungVon(_ context.Context, kontoID string) (string, error) {
@@ -109,7 +136,7 @@ func (a *Arbeitsspeicher) KennungVon(_ context.Context, kontoID string) (string,
 	return "", ErrNichtGefunden
 }
 
-func (a *Arbeitsspeicher) SitzungAnlegen(_ context.Context, geraetID string, s NeueSitzung) (string, error) {
+func (a *Arbeitsspeicher) SitzungAnlegen(_ context.Context, geraetID string, s NeueSitzung, jetzt time.Time) (string, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	g, ok := a.geraete[geraetID]
@@ -120,6 +147,7 @@ func (a *Arbeitsspeicher) SitzungAnlegen(_ context.Context, geraetID string, s N
 		return "", ErrGeraetGesperrt
 	}
 	a.sitzungen[s.Hash] = Sitzung{Hash: s.Hash, KontoID: g.KontoID, GeraetID: g.ID, LaeuftAb: s.LaeuftAb.UTC().Truncate(time.Millisecond)}
+	a.merkeAktivitaet(g.KontoID, jetzt)
 	return g.KontoID, nil
 }
 
@@ -257,11 +285,7 @@ func (a *Arbeitsspeicher) FaelligeLoeschungen(_ context.Context, jetzt time.Time
 			ids = append(ids, id)
 		}
 	}
-	slices.Sort(ids) // Maps haben keine feste Reihenfolge
-	if len(ids) > max {
-		ids = ids[:max]
-	}
-	return ids, nil
+	return ersteN(ids, max), nil
 }
 
 // faellig prüft, ob ein Konto entfernt werden darf (gibtEs = es gibt das
@@ -310,10 +334,79 @@ func (a *Arbeitsspeicher) KontoEntfernen(_ context.Context, kontoID string, jetz
 			delete(a.geraete, id)
 		}
 	}
+	for id, k := range a.grabsteine {
+		if k == kontoID {
+			delete(a.grabsteine, id)
+		}
+	}
 	a.loescheSitzungenVon(kontoID)
 	delete(a.backups, kontoID)
 	delete(a.konten, kontoID)
 	return nil
+}
+
+func (a *Arbeitsspeicher) InaktiveKonten(_ context.Context, grenze time.Time, max int) ([]string, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	var ids []string
+	for id, k := range a.konten {
+		if istInaktiv(k.zuletztAktiv, grenze) {
+			ids = append(ids, id)
+		}
+	}
+	return ersteN(ids, max), nil
+}
+
+func (a *Arbeitsspeicher) InaktivesKontoVormerken(_ context.Context, kontoID string, grenze, ab time.Time) (bool, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	k, ok := a.konten[kontoID]
+	if !ok || !istInaktiv(k.zuletztAktiv, grenze) {
+		return false, nil
+	}
+	termin := frueherTermin(k.loeschenAb, ab.UTC().Truncate(time.Millisecond))
+	if termin.Equal(k.loeschenAb) {
+		return false, nil
+	}
+	k.loeschenAb = termin
+	a.konten[kontoID] = k
+	return true, nil
+}
+
+func (a *Arbeitsspeicher) LangeGesperrteGeraete(_ context.Context, grenze time.Time, max int) ([]string, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	var ids []string
+	for id, g := range a.geraete {
+		if darfBegraben(g, grenze) == nil {
+			ids = append(ids, id)
+		}
+	}
+	return ersteN(ids, max), nil
+}
+
+func (a *Arbeitsspeicher) GeraetBegraben(_ context.Context, geraetID string, grenze time.Time) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	g, ok := a.geraete[geraetID]
+	if !ok {
+		return nil
+	}
+	if err := darfBegraben(g, grenze); err != nil {
+		return err
+	}
+	a.grabsteine[geraetID] = g.KontoID
+	delete(a.geraete, geraetID)
+	return nil
+}
+
+// ersteN sortiert (Maps haben keine feste Reihenfolge) und kürzt auf max.
+func ersteN(ids []string, max int) []string {
+	slices.Sort(ids)
+	if len(ids) > max {
+		ids = ids[:max]
+	}
+	return ids
 }
 
 // loescheKennungenVon löscht die Kennungen eines Kontos. Aufruf nur mit mu.

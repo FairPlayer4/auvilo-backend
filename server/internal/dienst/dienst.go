@@ -152,7 +152,7 @@ type anmeldeSpeicher interface {
 	loeschenAbLesen
 	Anmelden(ctx context.Context, kennung string, geraet speicher.Geraet, sitzung speicher.NeueSitzung) (speicher.AnmeldeErgebnis, error)
 	KennungVon(ctx context.Context, kontoID string) (string, error)
-	SitzungAnlegen(ctx context.Context, geraetID string, sitzung speicher.NeueSitzung) (kontoID string, err error)
+	SitzungAnlegen(ctx context.Context, geraetID string, sitzung speicher.NeueSitzung, jetzt time.Time) (kontoID string, err error)
 }
 
 type geraeteSpeicher interface {
@@ -348,7 +348,7 @@ func (d *anmeldeDienst) SitzungErneuern(ctx context.Context, req *connect.Reques
 	token, neueSitzung := d.aussteller.Neu(jetzt)
 	// SitzungAnlegen prüft die Sperre noch einmal in derselben Transaktion –
 	// falls das Gerät gerade eben gesperrt wurde.
-	kontoID, err := d.speicher.SitzungAnlegen(ctx, geraetID, neueSitzung)
+	kontoID, err := d.speicher.SitzungAnlegen(ctx, geraetID, neueSitzung, jetzt)
 	if err != nil {
 		if errors.Is(err, speicher.ErrGeraetGesperrt) {
 			return nil, errGesperrt()

@@ -12,7 +12,8 @@ Nutzer“). Einzelheiten stehen in den verlinkten Entwürfen und im Code (`// KR
   ihre Kennung (HMAC-SHA256 mit geheimem Pfeffer im Secret Manager). Konto-IDs sind
   Zufallswerte. Keine E-Mail-Adresse, kein Name.
 - **Transport:** nur HTTPS (Cloud Run). Google verschlüsselt alle Daten im Ruhezustand.
-- **Datenminimierung:** Konto mit Erstellungstag statt Zeitpunkt; Logs ohne Inhalte;
+- **Datenminimierung:** Konto mit Erstellungstag und Tag der letzten Aktivität statt
+  Zeitpunkten; nach 90 Tagen Sperre bleibt vom Gerät nur ein Grabstein; Logs ohne Inhalte;
   Diagnose-Logger nimmt keine freien Zeichenketten an.
 - **Offen:** Format v2 mit HKDF-Labels (SE6).
 
@@ -65,7 +66,10 @@ Nutzer“). Einzelheiten stehen in den verlinkten Entwürfen und im Code (`// KR
 - Konto löschen mit vollständigem, wiederholbarem Löschweg und täglichem Lauf;
   Buckets ohne Soft Delete; Lebenszyklusregeln (Fassungen 7 Tage, Diagnosen 14 Tage);
   Logs 30 Tage; TTL für Sitzungen und Zähler.
-- **Offen:** Konto löschen in der App; Fristen aus P5 ([README.md](README.md), K1, K2).
+- Fristen aus P5 im täglichen Lauf: Konten nach 24 Monaten ohne Anmeldung oder
+  Erneuerung (Termin in 7 Tagen, dann der Löschweg), gesperrte Geräte nach 90 Tagen
+  (Grabstein). Tests im Vertragstest des Speichers und in `dienst/aufraeumen_test.go`.
+- **Offen:** Konto löschen in der App ([README.md](README.md), K1).
 
 ## Überprüfung und Organisation (lit. d)
 - Lokales Prüfskript wie die CI (`werkzeuge/pruefen.sh`), CI auf `main`, Tests in der

@@ -114,8 +114,11 @@ in dieser Reihenfolge (`dienst.Loescher`):
    dem Termin.
 
 Jeder Schritt ist wiederholbar. Bricht einer ab, bleibt der Termin, und der
-regelmäßige Lauf (`server aufraeumen`, später auch für die Fristen aus P5) holt das
-Konto nach. Deshalb lehnt `KontoLoeschenAbbrechen` ab dem Termin ab. Die App verwirft
+regelmäßige Lauf (`server aufraeumen`, täglich) holt das Konto nach. Derselbe Lauf
+setzt die Fristen aus P5 um: Er ersetzt Geräte, die seit 90 Tagen gesperrt sind,
+durch einen Grabstein (Geräte-ID und Konto bleiben, die Sperre auch) und merkt
+Konten, die sich 24 Monate weder angemeldet noch eine Sitzung erneuert haben
+(`zuletzt_aktiv`), zur Löschung in 7 Tagen vor; dann löscht er sie wie oben. Deshalb lehnt `KontoLoeschenAbbrechen` ab dem Termin ab. Die App verwirft
 Sitzung, Geräteschlüssel und Schlüssel nur nach `geloescht = true`
 (`protokoll.KontoLoeschen`); bei einem Antrag zeigt sie den Termin, den alle Geräte
 in Anmelden, SitzungErneuern und GeraeteAuflisten sehen. Test-Client:
@@ -210,7 +213,7 @@ gleich danach neu sichern. Checkliste:
    `werkzeuge/diagnose-holen.sh` einmal laufen lassen: Die lokale Kopie in
    `.diagnose/` folgt dem leeren Bucket.
 2. **Firestore leeren:** die Sammlungen `konten`, `google_kennungen`, `geraete`,
-   `sitzungen`, `backups` und `kontingente`. Mit dem neuen Pfeffer (Punkt 3)
+   `geraete_grabsteine`, `sitzungen`, `backups` und `kontingente`. Mit dem neuen Pfeffer (Punkt 3)
    entstehen ohnehin neue Konto-IDs; die alten Dokumente wären verwaist.
 3. **Neuer Pfeffer:** Kevin legt allein eine neue Version an, der Server liest fest
    die neue Version (Änderung in `infra/server.tf`, tofu-Test anpassen), die alte

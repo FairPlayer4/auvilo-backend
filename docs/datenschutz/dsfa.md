@@ -49,7 +49,7 @@ mittel / hoch, **nach** den Maßnahmen aus [toms.md](toms.md).
 | R4 | Fehler in der Kryptografie | Tink statt Eigenbau, feste Testvektoren, Reviews, Format v2 (SE6, offen) | gering | hoch |
 | R5 | Metadaten verraten Nutzungsmuster (Größe, Zeitpunkt, IP-Adresse) | 30 Tage Logs, Zugriff nur Kevin, kein Profil | mittel | gering |
 | R6 | Datenverlust (Kill-Switch, Löschung durch Fremden mit entsperrtem Handy, Fehler) | lokal-first, ältere Fassungen 7 Tage, lokales Backup; Displaysperre (SE5, offen) | mittel | mittel |
-| R7 | Daten bleiben unbegrenzt, wenn die Person ihr Google-Konto verliert | Frist 24 Monate ohne Anmeldung (P5) | **hoch, solange die Frist fehlt** | gering (nur Chiffrate) |
+| R7 | Daten bleiben unbegrenzt, wenn die Person ihr Google-Konto verliert | Frist 24 Monate ohne Anmeldung oder Erneuerung (P5, seit 2026-11-14): Termin in 7 Tagen, dann Löschung wie B1; gesperrte Geräte nach 90 Tagen nur noch als Grabstein | gering | gering (nur Chiffrate) |
 | R8 | Diagnose enthält doch einen Inhalt und geht an Anthropic | Logger ohne freie Zeichenketten; nur Kevins Konto (P9); 14 Tage | gering | mittel |
 | R9 | Zugriff von Behörden auf Google (auch aus Drittländern) | EU-Region; nur Chiffrate und pseudonyme Metadaten | gering | gering |
 | R10 | Verwechslung oder falsche Löschung eines Kontos | Löschen nur mit fälligem Termin (`ErrNichtFaellig`), Tests | gering | mittel |
@@ -58,7 +58,8 @@ mittel / hoch, **nach** den Maßnahmen aus [toms.md](toms.md).
 **Vorläufig:** Das Restrisiko ist gering, weil der Betreiber die Inhalte nicht lesen
 kann. Zwei Punkte müssen vor dem ersten weiteren Nutzer erledigt sein, damit das
 gilt:
-- **R7:** Frist aus P5 mit `zuletzt_aktiv` ([README.md](README.md), K2).
+- ~~**R7:** Frist aus P5 mit `zuletzt_aktiv` ([README.md](README.md), K2).~~
+  Umgesetzt 2026-11-14 (wirkt nach dem Deploy).
 - **R2/R6:** Displaysperre (SE5) und A-15 neu (Papier als Standard) in der App.
 
 Danach Ergebnis hier mit Datum eintragen. Keine Konsultation der Aufsichtsbehörde
@@ -68,3 +69,4 @@ nötig (Art. 36), solange kein hohes Restrisiko bleibt.
 | Datum | Anlass | Ergebnis |
 |---|---|---|
 | 2026-11-14 | Entwurf | vorläufig, siehe 5 |
+| 2026-11-14 | Fristen aus P5 umgesetzt (K2) | R7 gering; weiter vorläufig wegen SE5 und A-15 |

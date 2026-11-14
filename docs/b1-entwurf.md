@@ -136,14 +136,16 @@ dazu (nur die eigenen Geräte können ihn lesen).
 | Sammlung | Dokument-ID | Felder |
 |---|---|---|
 | `google_kennungen` | HMAC(Pfeffer, `sub`) | `konto_id` |
-| `konten` | zufällige Konto-ID | `erstellt` (Tag) |
+| `konten` | zufällige Konto-ID | `erstellt` (Tag), `zuletzt_aktiv` (Tag, für P5), `loeschen_ab` (Termin der Löschung) |
 | `geraete` | Geräte-ID (aus dem Schlüssel) | `konto_id`, `schluessel` (öffentlich), `gesperrt`, `erstellt`, `gesperrt_am` |
 | `sitzungen` | SHA-256 des Tokens | `konto_id`, `geraet_id`, `laeuft_ab` (TTL-Feld: Firestore löscht abgelaufene) |
+| `geraete_grabsteine` | Geräte-ID eines Geräts, das 90 Tage gesperrt war | `konto_id` (bis das Konto gelöscht wird) |
 
 `geraete` liegt auf oberster Ebene (nicht unter `konten/{id}`): Beim Erneuern kennt
 der Server nur die Geräte-ID und liest das Gerät direkt; das Konto steht im Feld
 `konto_id`. Konto und Kennung entstehen in einer Transaktion. Bewusst **nicht** gespeichert:
-E-Mail, Name, IP-Adressen, „zuletzt gesehen“.
+E-Mail, Name, IP-Adressen, die Uhrzeit der letzten Aktivität (nur der Tag, für die
+Frist aus P5).
 
 ## Code (`server/`, eigenes Go-Modul)
 

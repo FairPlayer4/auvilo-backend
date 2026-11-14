@@ -250,9 +250,9 @@ func TestAntragAbbrechen(t *testing.T) {
 		if ab := lt.loeschenAbInListe(t, lt.k.handySitzung); !ab.IsZero() {
 			t.Errorf("Termin nach dem Abbrechen = %v", ab)
 		}
-		n, err := lt.loescher.Aufraeumen(context.Background(), start.Add(30*24*time.Hour))
-		if err != nil || n != 0 {
-			t.Fatalf("Lauf: %d gelöscht, Fehler %v", n, err)
+		e, err := lt.loescher.Aufraeumen(context.Background(), start.Add(30*24*time.Hour))
+		if err != nil || e.Geloescht != 0 {
+			t.Fatalf("Lauf: %d gelöscht, Fehler %v", e.Geloescht, err)
 		}
 		lt.erwarteUnveraendert(t, lt.k)
 	})
@@ -284,15 +284,15 @@ func TestLaufLoeschtBeantragteKontenAmTermin(t *testing.T) {
 	termin := start.Add(7 * 24 * time.Hour)
 	ctx := context.Background()
 
-	n, err := lt.loescher.Aufraeumen(ctx, termin.Add(-time.Millisecond))
-	if err != nil || n != 0 {
-		t.Fatalf("vor dem Termin: %d gelöscht, Fehler %v", n, err)
+	e, err := lt.loescher.Aufraeumen(ctx, termin.Add(-time.Millisecond))
+	if err != nil || e.Geloescht != 0 {
+		t.Fatalf("vor dem Termin: %d gelöscht, Fehler %v", e.Geloescht, err)
 	}
 	lt.erwarteUnveraendert(t, lt.k)
 
-	n, err = lt.loescher.Aufraeumen(ctx, termin)
-	if err != nil || n != 1 {
-		t.Fatalf("am Termin: %d gelöscht, Fehler %v", n, err)
+	e, err = lt.loescher.Aufraeumen(ctx, termin)
+	if err != nil || e.Geloescht != 1 {
+		t.Fatalf("am Termin: %d gelöscht, Fehler %v", e.Geloescht, err)
 	}
 	lt.erwarteKevinGeloescht(t)
 	lt.erwarteAnnaUnberuehrt(t)
@@ -309,9 +309,9 @@ func TestAbgebrochenesLoeschenHoltDerLaufNach(t *testing.T) {
 	erwarteCode(t, err, connect.CodeUnauthenticated)
 
 	// Der Lauf scheitert ebenso, meldet den Fehler und lässt das Konto fällig.
-	n, err := lt.loescher.Aufraeumen(context.Background(), start)
-	if err == nil || n != 0 {
-		t.Fatalf("Lauf mit kaputter Ablage: %d gelöscht, Fehler %v", n, err)
+	e, err := lt.loescher.Aufraeumen(context.Background(), start)
+	if err == nil || e.Geloescht != 0 {
+		t.Fatalf("Lauf mit kaputter Ablage: %d gelöscht, Fehler %v", e.Geloescht, err)
 	}
 	ids, err := lt.speicher.FaelligeLoeschungen(context.Background(), start, 10)
 	if err != nil || len(ids) != 1 || ids[0] != lt.k.kontoID {
@@ -319,9 +319,9 @@ func TestAbgebrochenesLoeschenHoltDerLaufNach(t *testing.T) {
 	}
 
 	lt.ablage.kaputt = false
-	n, err = lt.loescher.Aufraeumen(context.Background(), start)
-	if err != nil || n != 1 {
-		t.Fatalf("Lauf danach: %d gelöscht, Fehler %v", n, err)
+	e, err = lt.loescher.Aufraeumen(context.Background(), start)
+	if err != nil || e.Geloescht != 1 {
+		t.Fatalf("Lauf danach: %d gelöscht, Fehler %v", e.Geloescht, err)
 	}
 	lt.erwarteKevinGeloescht(t)
 	lt.erwarteAnnaUnberuehrt(t)
@@ -340,9 +340,9 @@ func TestLaufMachtNachEinemFehlerWeiter(t *testing.T) {
 	}
 	kaputt := &kaputteAblageFuer{lt.ablage, lt.annaID}
 	loescher := NeuerLoescher(lt.speicher, kaputt, lt.diagnosen)
-	n, err := loescher.Aufraeumen(ctx, start.Add(7*24*time.Hour))
-	if err == nil || n != 1 {
-		t.Fatalf("%d gelöscht, Fehler %v; erwartet 1 und einen Fehler", n, err)
+	e, err := loescher.Aufraeumen(ctx, start.Add(7*24*time.Hour))
+	if err == nil || e.Geloescht != 1 {
+		t.Fatalf("%d gelöscht, Fehler %v; erwartet 1 und einen Fehler", e.Geloescht, err)
 	}
 	lt.erwarteKevinGeloescht(t)
 	ids, err := lt.speicher.FaelligeLoeschungen(ctx, start.Add(7*24*time.Hour), 10)

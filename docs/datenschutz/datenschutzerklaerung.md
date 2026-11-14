@@ -44,8 +44,8 @@ Google-Konto zurückführen. Für die Anmeldung selbst ist Google verantwortlich
 (Datenschutzerklärung von Google).
 
 **Was wir speichern:**
-- eine zufällige Konto-ID, den Tag, an dem du das Konto angelegt hast, [und den Tag
-  deiner letzten Anmeldung – nach README K2];
+- eine zufällige Konto-ID, den Tag, an dem du das Konto angelegt hast, und den Tag,
+  an dem sich zuletzt eins deiner Geräte angemeldet hat (nur der Tag, ohne Uhrzeit);
 - je Gerät eine zufällige Geräte-ID und einen öffentlichen Schlüssel, mit dem sich
   das Gerät ausweist; ob es gesperrt ist;
 - Sitzungen (eine Stunde gültig);
@@ -63,9 +63,12 @@ Abs. 2 lit. a beim Einschalten – vor B6 klären, vvt.md V3]
 **Zweck und Rechtsgrundlage:** Bereitstellung des Backups, das du eingeschaltet hast
 (Art. 6 Abs. 1 lit. b DSGVO).
 
-**Wie lange:** bis du die Sicherung oder dein Konto löschst. Ein Konto, mit dem du dich
-**24 Monate** nicht angemeldet hast, löschen wir mit allen Daten; gesperrte Geräte
-nach 90 Tagen. [Erst eintragen, wenn umgesetzt – README K2]
+**Wie lange:** bis du die Sicherung oder dein Konto löschst. Hat sich **24 Monate**
+keins deiner Geräte angemeldet, löschen wir das Konto mit allen Daten sieben Tage
+später; meldest du dich in diesen sieben Tagen an, zeigt die App den Termin, und du
+kannst ihn von einem eingerichteten Gerät aus abbrechen. Von einem gesperrten Gerät
+löschen wir nach **90 Tagen** den Schlüssel und alle Zeitpunkte; nur seine Geräte-ID
+bleibt bis zum Löschen des Kontos, damit es gesperrt bleibt.
 
 **Wer hat Zugriff?** Nur der Betreiber, und nur auf die oben genannten Daten, nicht auf
 Inhalte. Wir geben nichts weiter und verkaufen nichts.

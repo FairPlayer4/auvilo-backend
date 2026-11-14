@@ -13,7 +13,7 @@ in der veröffentlichten Fassung ersetzt werden.
 |---|---|---|
 | [vvt.md](vvt.md) – Verzeichnis der Verarbeitungstätigkeiten, mit Löschfristen und Empfängern | Art. 30 | Entwurf; CDPA akzeptiert 2026-11-14 |
 | [toms.md](toms.md) – technische und organisatorische Maßnahmen | Art. 32 | Entwurf |
-| [dsfa.md](dsfa.md) – Datenschutz-Folgenabschätzung | Art. 35 (P7) | Entwurf, Ergebnis offen bis K2 |
+| [dsfa.md](dsfa.md) – Datenschutz-Folgenabschätzung | Art. 35 (P7) | Entwurf, Ergebnis vorläufig |
 | [datenschutzerklaerung.md](datenschutzerklaerung.md) – Datenschutzerklärung und Testerinformation | Art. 13, Play Store | Entwurf mit Platzhaltern |
 | [betroffenenrechte.md](betroffenenrechte.md) – Abläufe für Auskunft, Löschung, Widerspruch | Art. 12–22 | Entwurf |
 | [datenpannen.md](datenpannen.md) – Ablauf bei Datenpannen, Pannenliste | Art. 33/34 | Entwurf |
@@ -41,7 +41,7 @@ Geprüft: `server/internal/dienst/konto.go`, `server/internal/speicher/firestore
 | Nr. | Lücke | Gewicht | Empfehlung |
 |---|---|---|---|
 | K1 | Die **App** kann das Konto noch nicht löschen; nur der Test-Client kann es. | vor dem ersten Tester Pflicht | wie geplant (App-Repo `docs/stand.md`) |
-| K2 | **Die Frist aus P5 lässt sich nicht umsetzen:** Das Konto speichert nur `erstellt` und `loeschen_ab`, keine letzte Aktivität. Ohne sie gibt es weder „24 Monate ohne Anmeldung“ noch einen Löschweg für Konten, deren Google-Konto weg ist. Die Begründung mit Art. 11 (Kap. 11, 2026-11-12) stützt sich aber genau auf diese Frist. Je später das Feld kommt, desto später greift die Frist. | hoch | Feld `zuletzt_aktiv` (nur der Tag, wie `erstellt`) jetzt einführen, gesetzt beim Anmelden und Erneuern, höchstens ein Schreibvorgang je Konto und Tag. Die beiden Fristen (24 Monate, gesperrte Geräte 90 Tage über `gesperrt_am`) in `aufraeumen` **vor dem ersten Tester** statt zu B6. |
+| K2 | ~~**Die Frist aus P5 lässt sich nicht umsetzen:** keine letzte Aktivität im Konto.~~ **Erledigt 2026-11-14:** `zuletzt_aktiv` (nur der Tag) beim Anmelden und Erneuern; der tägliche Lauf `aufraeumen` merkt Konten nach 24 Monaten ohne Aktivität zur Löschung in 7 Tagen vor und ersetzt Geräte, die seit 90 Tagen gesperrt sind, durch einen Grabstein ([anforderungen.md](../anforderungen.md) Kap. 11). | – | Wirkt erst nach dem Deploy (PR nach `main`). Konten von vor dem Deploy erfasst die Frist erst nach ihrer nächsten Anmeldung. |
 | K3 | Die **Kennung bleibt auf der Freigabeliste** (`freigegebene_kennungen` in `werte.auto.tfvars`, Umgebungsvariable des Dienstes, auch in alten Revisionen). Sie ist ein Pseudonym der Person; meldet sie sich neu an, ist sie sofort wieder zugelassen. | mittel | Die Liste ist eine eigene Verarbeitung (Zugangsverwaltung, [vvt.md](vvt.md) V1). Austragen, wenn jemand nicht mehr teilnimmt oder es verlangt; alte Revisionen dann löschen. In der Datenschutzerklärung nennen. |
 | K4 | **Logs** (Konto-ID, Geräte-ID, IP-Adresse) bleiben bis 30 Tage nach dem Löschen. | bewusst | So entschieden (Kap. 11, 2026-11-01); steht in der Datenschutzerklärung. |
 | K5 | **Tageszähler** (`kontingente`, Konto-ID in der Dokument-ID) verschwinden erst mit der TTL. Firestore löscht abgelaufene Dokumente verzögert, laut Google in der Regel innerhalb von 24 Stunden; „höchstens zwei Tage“ in B1 ist also zu knapp. | gering | In B1 und Datenschutzerklärung „wenige Tage“ schreiben. |
@@ -58,7 +58,8 @@ Angaben, Entscheidung).
    2026-11-14 ([vvt.md](vvt.md)). Offen nur: Vertragspartner auf der nächsten Rechnung
    bestätigen.
 2. **Konto löschen in der App** (K1).
-3. **`zuletzt_aktiv` und die Fristen aus P5** (K2). Empfehlung: vorziehen.
+3. ~~**`zuletzt_aktiv` und die Fristen aus P5** (K2)~~ – umgesetzt 2026-11-14; offen
+   nur der Deploy.
 4. **Freigabeliste pflegen** (K3): Ablauf in [betroffenenrechte.md](betroffenenrechte.md).
 5. **Auskunft** (Art. 15, B2): Die App braucht eine Anzeige der eigenen Konto-ID, damit
    Kevin eine Anfrage zuordnen kann; den Rest erledigt er nach
@@ -67,7 +68,8 @@ Angaben, Entscheidung).
 6. **Testerinformation** aus [datenschutzerklaerung.md](datenschutzerklaerung.md):
    Platzhalter füllen, Mindestalter 16 (P8), Abschnitt Diagnose nur, wenn der Tester
    eine Diagnose-Erlaubnis bekommt (P9). Dem Tester vor der Freigabe geben.
-7. **DSFA abschließen** ([dsfa.md](dsfa.md)): Ergebnis bestätigen, sobald K2 umgesetzt ist.
+7. **DSFA abschließen** ([dsfa.md](dsfa.md)): R7 ist mit K2 erledigt; Ergebnis
+   bestätigen, sobald auch SE5 und A-15 in der App sind.
 8. **TOMs nachziehen:** Displaysperre (SE5), Format v2 (SE6) (GitHub mit Passkey
    erledigt 2026-11-14); die
    Liste in [toms.md](toms.md) markiert sie als offen.

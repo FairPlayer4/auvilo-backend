@@ -316,8 +316,10 @@ func starte() error {
 }
 
 // aufraeumen ist ein Durchgang des regelmäßigen Laufs (Cloud Run Job, von
-// Cloud Scheduler gestartet). Scheitert ein Konto, laufen die übrigen weiter;
-// der Lauf endet dann mit Fehler, und das Konto bleibt für den nächsten fällig.
+// Cloud Scheduler gestartet): gesperrte Geräte begraben, inaktive Konten
+// vormerken, fällige Konten löschen (dienst.Loescher.Aufraeumen). Scheitert
+// ein Konto, laufen die übrigen weiter; der Lauf endet dann mit Fehler, und das
+// Konto bleibt für den nächsten fällig.
 func aufraeumen() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -340,8 +342,9 @@ func aufraeumen() error {
 	loescher := dienst.NeuerLoescher(speicher.NeuerFirestore(fs),
 		datensicherung.NeuesCloudStorage(gcs, k.sicherungBucket),
 		diagnose.NeuesCloudStorage(gcs, k.diagnoseBucket))
-	n, err := loescher.Aufraeumen(ctx, time.Now())
-	slog.Info("Aufräumen beendet", "geloeschte_konten", n)
+	e, err := loescher.Aufraeumen(ctx, time.Now())
+	slog.Info("Aufräumen beendet", "begrabene_geraete", e.Begraben,
+		"vorgemerkte_konten", e.Vorgemerkt, "geloeschte_konten", e.Geloescht)
 	return err
 }
 

@@ -112,7 +112,7 @@ func TestInterceptorLiestSpeicherNurMitEchtemToken(t *testing.T) {
 		t.Fatal(err)
 	}
 	fremd, s2 := fremderAussteller.Neu(jetzt)
-	if _, err := sp.SitzungAnlegen(ctx, "geraet-1", s2); err != nil {
+	if _, err := sp.SitzungAnlegen(ctx, "geraet-1", s2, jetzt); err != nil {
 		t.Fatal(err)
 	}
 	faelle := []struct {
@@ -243,7 +243,7 @@ func TestInterceptor(t *testing.T) {
 		t.Fatal(err)
 	}
 	abgelaufen, s2 := testAussteller.Neu(jetzt.Add(-time.Hour)) // läuft genau jetzt ab (Sitzung gilt 1 Stunde)
-	if _, err := sp.SitzungAnlegen(ctx, "geraet-1", s2); err != nil {
+	if _, err := sp.SitzungAnlegen(ctx, "geraet-1", s2, jetzt); err != nil {
 		t.Fatal(err)
 	}
 	konto, _ := sp.Geraet(ctx, "geraet-1")
@@ -332,7 +332,7 @@ func TestVorDemLesen(t *testing.T) {
 		t.Fatal(err)
 	}
 	abgelaufen, s2 := testAussteller.Neu(jetzt.Add(-time.Hour)) // läuft genau jetzt ab
-	if _, err := sp.SitzungAnlegen(ctx, "geraet-1", s2); err != nil {
+	if _, err := sp.SitzungAnlegen(ctx, "geraet-1", s2, jetzt); err != nil {
 		t.Fatal(err)
 	}
 

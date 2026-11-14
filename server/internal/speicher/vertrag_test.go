@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -210,7 +211,7 @@ func pruefeVertrag(t *testing.T, neu func(t *testing.T) Speicher) {
 	t.Run("SitzungAnlegen stellt Sitzung für aktives Gerät aus", func(t *testing.T) {
 		s := neu(t)
 		e := anmelden(t, s, "kennung-a", "geraet-1", "hash-1", 0)
-		kontoID, err := s.SitzungAnlegen(ctx, "geraet-1", sitzung("hash-2"))
+		kontoID, err := s.SitzungAnlegen(ctx, "geraet-1", sitzung("hash-2"), t0)
 		muss(t, err)
 		if kontoID != e.KontoID {
 			t.Errorf("Konto = %q, erwartet %q", kontoID, e.KontoID)
@@ -226,7 +227,7 @@ func pruefeVertrag(t *testing.T, neu func(t *testing.T) Speicher) {
 		s := neu(t)
 		e := anmelden(t, s, "kennung-a", "geraet-1", "hash-1", 0)
 		muss(t, s.GeraetSperren(ctx, e.KontoID, "geraet-1", t0))
-		if _, err := s.SitzungAnlegen(ctx, "geraet-1", sitzung("hash-2")); !errors.Is(err, ErrGeraetGesperrt) {
+		if _, err := s.SitzungAnlegen(ctx, "geraet-1", sitzung("hash-2"), t0); !errors.Is(err, ErrGeraetGesperrt) {
 			t.Fatalf("Fehler = %v, erwartet ErrGeraetGesperrt", err)
 		}
 		if _, err := s.Sitzung(ctx, "hash-2"); !errors.Is(err, ErrNichtGefunden) {
@@ -236,7 +237,7 @@ func pruefeVertrag(t *testing.T, neu func(t *testing.T) Speicher) {
 
 	t.Run("SitzungAnlegen lehnt unbekanntes Gerät ab", func(t *testing.T) {
 		s := neu(t)
-		if _, err := s.SitzungAnlegen(ctx, "gibt-es-nicht", sitzung("hash-1")); !errors.Is(err, ErrNichtGefunden) {
+		if _, err := s.SitzungAnlegen(ctx, "gibt-es-nicht", sitzung("hash-1"), t0); !errors.Is(err, ErrNichtGefunden) {
 			t.Fatalf("Fehler = %v, erwartet ErrNichtGefunden", err)
 		}
 	})
@@ -245,7 +246,7 @@ func pruefeVertrag(t *testing.T, neu func(t *testing.T) Speicher) {
 		s := neu(t)
 		e := anmelden(t, s, "kennung-a", "geraet-1", "hash-1", 0)
 		anmelden(t, s, "kennung-a", "geraet-2", "hash-2", 1)
-		_, err := s.SitzungAnlegen(ctx, "geraet-1", sitzung("hash-3"))
+		_, err := s.SitzungAnlegen(ctx, "geraet-1", sitzung("hash-3"), t0)
 		muss(t, err)
 
 		muss(t, s.GeraetSperren(ctx, e.KontoID, "geraet-1", t0.Add(time.Minute)))
@@ -309,7 +310,7 @@ func pruefeVertrag(t *testing.T, neu func(t *testing.T) Speicher) {
 		e := anmelden(t, s, "kennung-a", "geraet-1", "hash-1", 0)
 		anmelden(t, s, "kennung-a", "geraet-2", "hash-2", 1)
 		for i := range 450 {
-			_, err := s.SitzungAnlegen(ctx, "geraet-1", sitzung(fmt.Sprintf("viele-%d", i)))
+			_, err := s.SitzungAnlegen(ctx, "geraet-1", sitzung(fmt.Sprintf("viele-%d", i)), t0)
 			muss(t, err)
 		}
 		muss(t, s.GeraetSperren(ctx, e.KontoID, "geraet-1", t0))
@@ -788,7 +789,7 @@ func pruefeVertrag(t *testing.T, neu func(t *testing.T) Speicher) {
 		t.Helper()
 		a = anmelden(t, s, "kennung-a", "geraet-1", "hash-1", 0).KontoID
 		anmelden(t, s, "kennung-a", "geraet-2", "hash-2", 1)
-		_, err := s.SitzungAnlegen(ctx, "geraet-2", sitzung("hash-3"))
+		_, err := s.SitzungAnlegen(ctx, "geraet-2", sitzung("hash-3"), t0)
 		muss(t, err)
 		b = anmelden(t, s, "kennung-b", "geraet-b", "hash-b", 0).KontoID
 		for _, k := range []string{a, b} {
@@ -902,6 +903,295 @@ func pruefeVertrag(t *testing.T, neu func(t *testing.T) Speicher) {
 		muss(t, s.KontoSperren(ctx, "gibt-es-nicht", t0))
 	})
 
+	// --- Fristen aus P5: letzte Aktivität, inaktive Konten, Grabsteine ---
+
+	heute := t0.Truncate(tag) // Tag von t0 (zuletzt_aktiv speichert nur den Tag)
+	inaktiv := func(t *testing.T, s Speicher, grenze time.Time) []string {
+		t.Helper()
+		ids, err := s.InaktiveKonten(ctx, grenze, 10)
+		muss(t, err)
+		return ids
+	}
+	// istInaktiv prüft, ob InaktiveKonten das Konto zur Grenze findet.
+	istInaktiv := func(t *testing.T, s Speicher, kontoID string, grenze time.Time, want bool) {
+		t.Helper()
+		ids := inaktiv(t, s, grenze)
+		if slices.Contains(ids, kontoID) != want {
+			t.Errorf("inaktiv vor %v = %v, erwartet Konto dabei: %v", grenze, ids, want)
+		}
+	}
+
+	t.Run("neues Konto ist ab dem Tag der Anmeldung aktiv, nur der Tag zählt", func(t *testing.T) {
+		s := neu(t)
+		e := anmelden(t, s, "kennung-a", "geraet-1", "hash-1", 0)
+		istInaktiv(t, s, e.KontoID, heute, false)
+		istInaktiv(t, s, e.KontoID, heute.Add(time.Millisecond), true)
+	})
+
+	// Was als Aktivität zählt: jede gelungene Anmeldung und Erneuerung, 30 Tage
+	// nach dem Anlegen. Danach ist das Konto vor dem nächsten Tag nicht mehr
+	// inaktiv, wohl aber vor dem Tag danach (es zählt der neue Tag, nicht mehr).
+	spaeter := 30 * tag
+	aktivitaeten := []struct {
+		name string
+		tun  func(t *testing.T, s Speicher)
+	}{
+		{"erneutes Anmelden desselben Geräts", func(t *testing.T, s Speicher) {
+			anmelden(t, s, "kennung-a", "geraet-1", "hash-2", int(spaeter/time.Minute))
+		}},
+		{"Anmelden eines neuen Geräts", func(t *testing.T, s Speicher) {
+			anmelden(t, s, "kennung-a", "geraet-2", "hash-2", int(spaeter/time.Minute))
+		}},
+		{"Erneuern (SitzungAnlegen)", func(t *testing.T, s Speicher) {
+			_, err := s.SitzungAnlegen(ctx, "geraet-1", sitzung("hash-2"), t0.Add(spaeter))
+			muss(t, err)
+		}},
+	}
+	for _, a := range aktivitaeten {
+		t.Run("Aktivität zählt: "+a.name, func(t *testing.T) {
+			s := neu(t)
+			e := anmelden(t, s, "kennung-a", "geraet-1", "hash-1", 0)
+			a.tun(t, s)
+			istInaktiv(t, s, e.KontoID, heute.Add(spaeter), false)
+			istInaktiv(t, s, e.KontoID, heute.Add(spaeter+time.Millisecond), true)
+		})
+	}
+
+	// Gegenproben: Was abgelehnt wird, zählt nicht, und eine ältere Aktivität
+	// setzt den Tag nicht zurück.
+	t.Run("abgelehnte Anmeldung und Erneuerung eines gesperrten Geräts zählen nicht", func(t *testing.T) {
+		s := neu(t)
+		e := anmelden(t, s, "kennung-a", "geraet-1", "hash-1", 0)
+		muss(t, s.GeraetSperren(ctx, e.KontoID, "geraet-1", t0))
+		if _, err := s.Anmelden(ctx, "kennung-a", geraet("geraet-1", int(spaeter/time.Minute)), sitzung("hash-2")); !errors.Is(err, ErrGeraetGesperrt) {
+			t.Fatalf("Anmelden: Fehler = %v, erwartet ErrGeraetGesperrt", err)
+		}
+		if _, err := s.SitzungAnlegen(ctx, "geraet-1", sitzung("hash-3"), t0.Add(spaeter)); !errors.Is(err, ErrGeraetGesperrt) {
+			t.Fatalf("SitzungAnlegen: Fehler = %v, erwartet ErrGeraetGesperrt", err)
+		}
+		istInaktiv(t, s, e.KontoID, heute.Add(time.Millisecond), true)
+	})
+
+	t.Run("ältere Aktivität setzt den Tag nicht zurück", func(t *testing.T) {
+		s := neu(t)
+		e := anmelden(t, s, "kennung-a", "geraet-1", "hash-1", 0)
+		_, err := s.SitzungAnlegen(ctx, "geraet-1", sitzung("hash-2"), t0.Add(spaeter))
+		muss(t, err)
+		_, err = s.SitzungAnlegen(ctx, "geraet-1", sitzung("hash-3"), t0)
+		muss(t, err)
+		istInaktiv(t, s, e.KontoID, heute.Add(spaeter), false)
+	})
+
+	t.Run("inaktive Konten: höchstens max", func(t *testing.T) {
+		s := neu(t)
+		for i := range 3 {
+			anmelden(t, s, fmt.Sprintf("kennung-%d", i), fmt.Sprintf("geraet-%d", i), fmt.Sprintf("hash-%d", i), 0)
+		}
+		if ids := inaktiv(t, s, heute.Add(tag)); len(ids) != 3 {
+			t.Errorf("inaktiv = %v, erwartet 3", ids)
+		}
+		ids, err := s.InaktiveKonten(ctx, heute.Add(tag), 2)
+		muss(t, err)
+		if len(ids) != 2 {
+			t.Errorf("mit max 2: %v", ids)
+		}
+	})
+
+	t.Run("Vormerken setzt den Termin eines inaktiven Kontos, ein zweites ändert nichts", func(t *testing.T) {
+		s := neu(t)
+		e := anmelden(t, s, "kennung-a", "geraet-1", "hash-1", 0)
+		grenze := heute.Add(tag)
+		geaendert, err := s.InaktivesKontoVormerken(ctx, e.KontoID, grenze, t0.Add(7*tag))
+		muss(t, err)
+		if !geaendert {
+			t.Error("erstes Vormerken: nicht geändert")
+		}
+		loeschenAbPruefen(t, s, e.KontoID, t0.Add(7*tag))
+		if ids, err := s.FaelligeLoeschungen(ctx, t0.Add(7*tag), 10); err != nil || len(ids) != 1 || ids[0] != e.KontoID {
+			t.Errorf("fällig = %v, Fehler %v", ids, err)
+		}
+		// Ein späterer Lauf schiebt den Termin nicht hinaus.
+		geaendert, err = s.InaktivesKontoVormerken(ctx, e.KontoID, grenze, t0.Add(8*tag))
+		muss(t, err)
+		if geaendert {
+			t.Error("zweites Vormerken: geändert")
+		}
+		loeschenAbPruefen(t, s, e.KontoID, t0.Add(7*tag))
+	})
+
+	t.Run("Vormerken schiebt einen beantragten früheren Termin nicht hinaus", func(t *testing.T) {
+		s := neu(t)
+		konto := beantragt(t, s, 3*tag)
+		geaendert, err := s.InaktivesKontoVormerken(ctx, konto, heute.Add(tag), t0.Add(7*tag))
+		muss(t, err)
+		if geaendert {
+			t.Error("geändert, erwartet unverändert")
+		}
+		loeschenAbPruefen(t, s, konto, t0.Add(3*tag))
+	})
+
+	// KRITISCH: Ein aktives Konto bekommt nie einen Termin, auch wenn es eben
+	// noch inaktiv war: Das Vormerken prüft die Aktivität selbst.
+	t.Run("lehnt Vormerken eines aktiven Kontos ab", func(t *testing.T) {
+		s := neu(t)
+		e := anmelden(t, s, "kennung-a", "geraet-1", "hash-1", 0)
+		grenze := heute.Add(tag)
+		istInaktiv(t, s, e.KontoID, grenze, true)
+		// Zwischen Abfrage und Vormerken erneuert das Gerät seine Sitzung.
+		_, err := s.SitzungAnlegen(ctx, "geraet-1", sitzung("hash-2"), t0.Add(tag))
+		muss(t, err)
+		geaendert, err := s.InaktivesKontoVormerken(ctx, e.KontoID, grenze, t0.Add(7*tag))
+		muss(t, err)
+		if geaendert {
+			t.Error("aktives Konto vorgemerkt")
+		}
+		loeschenAbPruefen(t, s, e.KontoID, time.Time{})
+	})
+
+	t.Run("Vormerken eines unbekannten Kontos ist kein Fehler", func(t *testing.T) {
+		geaendert, err := neu(t).InaktivesKontoVormerken(ctx, "gibt-es-nicht", heute.Add(tag), t0)
+		if err != nil || geaendert {
+			t.Errorf("geändert %v, Fehler %v", geaendert, err)
+		}
+	})
+
+	// gesperrtesZweitgeraet: Konto kennung-a mit geraet-1 (aktiv) und geraet-2,
+	// gesperrt um t0 + 1 Tag. Die Grenze, ab der geraet-2 begraben werden darf,
+	// ist alles nach diesem Zeitpunkt.
+	gesperrtAm := t0.Add(tag)
+	gesperrtesZweitgeraet := func(t *testing.T, s Speicher) string {
+		t.Helper()
+		konto := anmelden(t, s, "kennung-a", "geraet-1", "hash-1", 0).KontoID
+		anmelden(t, s, "kennung-a", "geraet-2", "hash-2", 1)
+		muss(t, s.GeraetSperren(ctx, konto, "geraet-2", gesperrtAm))
+		return konto
+	}
+	nachDerSperre := gesperrtAm.Add(time.Millisecond)
+
+	t.Run("lange gesperrte Geräte: nur vor der Grenze gesperrte", func(t *testing.T) {
+		s := neu(t)
+		gesperrtesZweitgeraet(t, s)
+		for _, fall := range []struct {
+			grenze time.Time
+			max    int
+			want   []string
+		}{
+			{gesperrtAm, 10, nil},
+			{nachDerSperre, 10, []string{"geraet-2"}},
+		} {
+			ids, err := s.LangeGesperrteGeraete(ctx, fall.grenze, fall.max)
+			muss(t, err)
+			if !slices.Equal(ids, fall.want) { // nil und leer gelten als gleich
+				t.Errorf("Grenze %v, max %d: %v, erwartet %v", fall.grenze, fall.max, ids, fall.want)
+			}
+		}
+	})
+
+	t.Run("Begraben ersetzt ein lange gesperrtes Gerät durch einen Grabstein", func(t *testing.T) {
+		s := neu(t)
+		konto := gesperrtesZweitgeraet(t, s)
+		muss(t, s.GeraetBegraben(ctx, "geraet-2", nachDerSperre))
+		g, err := s.Geraet(ctx, "geraet-2")
+		muss(t, err)
+		if !g.Gesperrt || g.KontoID != konto || len(g.Schluessel) != 0 || !g.Erstellt.IsZero() || !g.GesperrtAm.IsZero() {
+			t.Errorf("Grabstein = %+v, erwartet gesperrt, Konto, ohne Schlüssel und Zeitpunkte", g)
+		}
+		liste, err := s.Geraete(ctx, konto)
+		muss(t, err)
+		if len(liste) != 1 || liste[0].ID != "geraet-1" {
+			t.Errorf("Geräte = %v, erwartet nur geraet-1", liste)
+		}
+		if ids, err := s.LangeGesperrteGeraete(ctx, nachDerSperre, 10); err != nil || len(ids) != 0 {
+			t.Errorf("noch lange gesperrt: %v, Fehler %v", ids, err)
+		}
+		// Wiederholen und ein unbekanntes Gerät sind kein Fehler.
+		muss(t, s.GeraetBegraben(ctx, "geraet-2", nachDerSperre))
+		muss(t, s.GeraetBegraben(ctx, "gibt-es-nicht", nachDerSperre))
+	})
+
+	// KRITISCH: Begraben nur, wenn das Gerät lange genug gesperrt ist; sonst
+	// bleibt es, wie es ist.
+	for _, fall := range []struct {
+		name   string
+		geraet string
+		grenze time.Time
+	}{
+		{"ungesperrtes Gerät", "geraet-1", nachDerSperre},
+		{"genau an der Grenze gesperrtes Gerät", "geraet-2", gesperrtAm},
+		{"nach der Grenze gesperrtes Gerät", "geraet-2", t0},
+	} {
+		t.Run("lehnt Begraben ab: "+fall.name, func(t *testing.T) {
+			s := neu(t)
+			gesperrtesZweitgeraet(t, s)
+			if err := s.GeraetBegraben(ctx, fall.geraet, fall.grenze); !errors.Is(err, ErrNichtFaellig) {
+				t.Fatalf("Fehler = %v, erwartet ErrNichtFaellig", err)
+			}
+			g, err := s.Geraet(ctx, fall.geraet)
+			muss(t, err)
+			if string(g.Schluessel) != "schluessel-"+fall.geraet {
+				t.Errorf("Gerät verändert: %+v", g)
+			}
+		})
+	}
+
+	// KRITISCH: Ein begrabenes Gerät bleibt draußen. Die Geräte-ID folgt aus dem
+	// Schlüssel; ein gestohlenes Handy käme sonst als neues Gerät wieder herein.
+	t.Run("Grabstein: gestohlenes Gerät bleibt beim Anmelden gesperrt", func(t *testing.T) {
+		s := neu(t)
+		konto := gesperrtesZweitgeraet(t, s)
+		muss(t, s.GeraetBegraben(ctx, "geraet-2", nachDerSperre))
+		if _, err := s.Anmelden(ctx, "kennung-a", geraet("geraet-2", 5), sitzung("hash-3")); !errors.Is(err, ErrGeraetGesperrt) {
+			t.Errorf("Anmelden im eigenen Konto: Fehler = %v, erwartet ErrGeraetGesperrt", err)
+		}
+		if _, err := s.Anmelden(ctx, "kennung-b", geraet("geraet-2", 5), sitzung("hash-4")); !errors.Is(err, ErrGeraetFremd) {
+			t.Errorf("Anmelden mit anderem Google-Konto: Fehler = %v, erwartet ErrGeraetFremd", err)
+		}
+		if _, err := s.SitzungAnlegen(ctx, "geraet-2", sitzung("hash-5"), t0); !errors.Is(err, ErrNichtGefunden) {
+			t.Errorf("SitzungAnlegen: Fehler = %v, erwartet ErrNichtGefunden", err)
+		}
+		if err := s.GeraetFreischalten(ctx, konto, "geraet-2"); !errors.Is(err, ErrNichtGefunden) {
+			t.Errorf("Freischalten: Fehler = %v, erwartet ErrNichtGefunden", err)
+		}
+		for _, hash := range []string{"hash-3", "hash-4", "hash-5"} {
+			if _, err := s.Sitzung(ctx, hash); !errors.Is(err, ErrNichtGefunden) {
+				t.Errorf("Sitzung %s angelegt: %v", hash, err)
+			}
+		}
+		// Kein neues Gerät, und kennung-b hat kein Konto bekommen.
+		if g, err := s.Geraet(ctx, "geraet-2"); err != nil || len(g.Schluessel) != 0 || !g.Gesperrt {
+			t.Errorf("Gerät nach den Versuchen = %+v, Fehler %v", g, err)
+		}
+		if e := anmelden(t, s, "kennung-b", "geraet-b", "hash-b", 5); !e.NeuesKonto {
+			t.Errorf("kennung-b hat schon ein Konto: %+v", e)
+		}
+	})
+
+	// KRITISCH: Mit dem Konto verschwinden auch seine Grabsteine, die anderer
+	// Konten bleiben.
+	t.Run("Entfernen löscht die Grabsteine des Kontos und nur diese", func(t *testing.T) {
+		s := neu(t)
+		a := gesperrtesZweitgeraet(t, s)
+		b := anmelden(t, s, "kennung-b", "geraet-b1", "hash-b1", 0).KontoID
+		anmelden(t, s, "kennung-b", "geraet-b2", "hash-b2", 1)
+		muss(t, s.GeraetSperren(ctx, b, "geraet-b2", gesperrtAm))
+		for _, id := range []string{"geraet-2", "geraet-b2"} {
+			muss(t, s.GeraetBegraben(ctx, id, nachDerSperre))
+		}
+		_, err := s.LoeschungBeantragen(ctx, a, t0)
+		muss(t, err)
+		muss(t, s.KontoEntfernen(ctx, a, t0))
+
+		if _, err := s.Geraet(ctx, "geraet-2"); !errors.Is(err, ErrNichtGefunden) {
+			t.Errorf("Grabstein von Konto a noch da: %v", err)
+		}
+		if e := anmelden(t, s, "kennung-a", "geraet-2", "hash-6", 5); !e.NeuesKonto || e.KontoID == a {
+			t.Errorf("Anmelden danach = %+v, erwartet neues Konto", e)
+		}
+		if _, err := s.Anmelden(ctx, "kennung-b", geraet("geraet-b2", 5), sitzung("hash-7")); !errors.Is(err, ErrGeraetGesperrt) {
+			t.Errorf("Grabstein von Konto b: Fehler = %v, erwartet ErrGeraetGesperrt", err)
+		}
+	})
+
 	// KRITISCH: Ein nicht freigeschaltetes Gerät (ungeschuetztFuer) legt das
 	// erste Backup nur an, wenn das Konto kein freigeschaltetes, ungesperrtes
 	// Gerät hat, und ist danach freigeschaltet. Die Version wird vorher
@@ -1001,7 +1291,7 @@ func pruefeVertrag(t *testing.T, neu func(t *testing.T) Speicher) {
 		aufruf func(s Speicher, hash string) error // legt eine Sitzung für geraet-1 an
 	}{
 		{"Erneuern", func(s Speicher, hash string) error {
-			_, err := s.SitzungAnlegen(ctx, "geraet-1", sitzung(hash))
+			_, err := s.SitzungAnlegen(ctx, "geraet-1", sitzung(hash), t0)
 			return err
 		}},
 		{"Anmelden", func(s Speicher, hash string) error {
@@ -1092,6 +1382,38 @@ func pruefeVertrag(t *testing.T, neu func(t *testing.T) Speicher) {
 		}
 		if erfolge.Load() == 0 {
 			t.Fatal("kein einziges Freischalten gelungen – das Rennen hat nie stattgefunden")
+		}
+	})
+
+	// KRITISCH: Begraben und Anmelden überschneiden sich. Zu keinem Zeitpunkt
+	// fehlen Gerät und Grabstein zugleich; sonst legte das Anmelden das
+	// gestohlene Gerät neu an. Kein Anmelden darf gelingen.
+	t.Run("Begraben lässt gleichzeitiges Anmelden nie durch", func(t *testing.T) {
+		for runde := range gleichzeitigRunden {
+			s := neu(t)
+			gesperrtesZweitgeraet(t, s)
+			var wg sync.WaitGroup
+			var begrabFehler error
+			for i := range gleichzeitigAufrufe {
+				hash := fmt.Sprintf("hash-%d-%d", runde, i)
+				wg.Go(func() {
+					_, err := s.Anmelden(ctx, "kennung-a", geraet("geraet-2", 5), sitzung(hash))
+					if err == nil {
+						t.Errorf("Runde %d: Anmelden des gesperrten Geräts gelungen", runde)
+					}
+				})
+				if i == gleichzeitigAufrufe/2 {
+					wg.Go(func() { begrabFehler = s.GeraetBegraben(ctx, "geraet-2", nachDerSperre) })
+				}
+			}
+			wg.Wait()
+
+			muss(t, begrabFehler)
+			g, err := s.Geraet(ctx, "geraet-2")
+			muss(t, err)
+			if !g.Gesperrt || len(g.Schluessel) != 0 {
+				t.Fatalf("Runde %d: Gerät = %+v, erwartet Grabstein", runde, g)
+			}
 		}
 	})
 

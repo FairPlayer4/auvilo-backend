@@ -32,8 +32,9 @@ Damit die Tätigkeiten unten kurz bleiben, hier einmal, was wo liegt.
 | Ort | Inhalt | Personenbezug | Frist |
 |---|---|---|---|
 | Firestore `google_kennungen` | Kennung (HMAC-SHA256 aus Pfeffer und Google-Konto-ID), Konto-ID | Pseudonym | bis Konto löschen |
-| Firestore `konten` | Konto-ID (128 Bit Zufall), Tag der Erstellung, Termin einer beantragten Löschung | Pseudonym | bis Konto löschen; P5: 24 Monate ohne Anmeldung (offen, README K2) |
-| Firestore `geraete` | Geräte-ID, Konto-ID, öffentlicher Geräteschlüssel, gesperrt/freigeschaltet, Zeitpunkte | Pseudonym | bis Konto löschen; P5: gesperrt 90 Tage (offen) |
+| Firestore `konten` | Konto-ID (128 Bit Zufall), Tag der Erstellung, Tag der letzten Anmeldung oder Erneuerung, Termin einer beantragten Löschung | Pseudonym | bis Konto löschen; P5: nach 24 Monaten ohne Anmeldung Termin in 7 Tagen, dann gelöscht |
+| Firestore `geraete` | Geräte-ID, Konto-ID, öffentlicher Geräteschlüssel, gesperrt/freigeschaltet, Zeitpunkte | Pseudonym | bis Konto löschen; P5: 90 Tage nach dem Sperren durch einen Grabstein ersetzt |
+| Firestore `geraete_grabsteine` | Geräte-ID und Konto-ID eines Geräts, das 90 Tage gesperrt war | Pseudonym | bis Konto löschen (hält das gestohlene Gerät gesperrt) |
 | Firestore `sitzungen` | Hash des Tokens, Konto-ID, Geräte-ID, Ablauf | Pseudonym | 1 Stunde, dann TTL |
 | Firestore `backups` | Schlüssel-Backup (Chiffrat), Version, öffentlicher Freischaltschlüssel | Pseudonym, Inhalt verschlüsselt | bis Konto oder Backup löschen |
 | Firestore `kontingente` | Zähler je Art, Tag und Konto | Pseudonym | TTL nach etwa 2 Tagen, dann wenige Tage Verzögerung |
