@@ -71,14 +71,9 @@ var ErrKostenFehlen = errors.New("Budget-Meldung ohne costAmount")
 // Jeder Fehler – auch ein früher beim Lesen der Meldung – landet als ERROR im
 // Log, damit er in der Console auffällt.
 func Verarbeite(ctx context.Context, daten []byte, s Schwellen, p Plattform) (Ergebnis, error) {
-	m, err := leseMeldung(daten)
+	a, art, felder, err := entscheideMeldung(daten, s)
 	if err != nil {
-		slog.ErrorContext(ctx, "Budget-Meldung abgelehnt", "fehler", err.Error())
-		return Ergebnis{}, err
-	}
-	a, err := Entscheide(m, s)
-	if err != nil {
-		slog.ErrorContext(ctx, "Budget-Meldung abgelehnt", "fehler", err.Error())
+		slog.ErrorContext(ctx, art+" abgelehnt", "fehler", err.Error())
 		return Ergebnis{}, err
 	}
 	erg, err := Ausfuehren(ctx, a, p)
@@ -94,18 +89,53 @@ func Verarbeite(ctx context.Context, daten []byte, s Schwellen, p Plattform) (Er
 		// bleibt es bei INFO, damit nicht jede Meldung eine Mail schickt.
 		stufe = slog.LevelWarn
 	}
-	slog.Log(ctx, stufe, "Budget-Meldung verarbeitet",
-		"budget", m.BudgetDisplayName,
-		"kosten", m.CostAmount,
-		"betrag", m.BudgetAmount,
-		"waehrung", m.CurrencyCode,
+	slog.Log(ctx, stufe, art+" verarbeitet", append(felder,
 		"aktion", erg.Aktion.String(),
 		"gefundeneDienste", erg.GefundeneDienste,
 		"gesperrteDienste", erg.GesperrteDienste,
 		"abrechnungGetrennt", erg.AbrechnungGetrennt,
 		"fehler", fehlerText(err),
-	)
+	)...)
 	return erg, err
+}
+
+// entscheideMeldung erkennt die Art der Meldung (Alarm von Cloud Monitoring
+// oder Budget), entscheidet und liefert die Felder fürs Log.
+func entscheideMeldung(daten []byte, s Schwellen) (a Aktion, art string, felder []any, err error) {
+	alarm, istAlarm, err := leseAlarm(daten)
+	if err != nil {
+		return Nichts, "Meldung", nil, err
+	}
+	if istAlarm {
+		a, err = EntscheideAlarm(alarm)
+		return a, "Alarm-Meldung", []any{"richtlinie", alarm.PolicyName, "zustand", alarm.State}, err
+	}
+	m, err := leseMeldung(daten)
+	if err != nil {
+		return Nichts, "Budget-Meldung", nil, err
+	}
+	a, err = Entscheide(m, s)
+	return a, "Budget-Meldung", []any{
+		"budget", m.BudgetDisplayName,
+		"kosten", m.CostAmount,
+		"betrag", m.BudgetAmount,
+		"waehrung", m.CurrencyCode,
+	}, err
+}
+
+// leseAlarm erkennt eine Meldung von Cloud Monitoring am Feld "incident".
+// Budget-Meldungen haben es nicht.
+func leseAlarm(daten []byte) (Alarm, bool, error) {
+	var huelle struct {
+		Incident *Alarm `json:"incident"`
+	}
+	if err := json.Unmarshal(daten, &huelle); err != nil {
+		return Alarm{}, false, fmt.Errorf("Meldung lesen: %w", err)
+	}
+	if huelle.Incident == nil {
+		return Alarm{}, false, nil
+	}
+	return *huelle.Incident, true, nil
 }
 
 // leseMeldung liest das JSON und prüft, dass costAmount vorhanden ist. Ein

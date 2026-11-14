@@ -346,6 +346,38 @@ run "alarm_bei_viel_ausgehendem_verkehr" {
   }
 }
 
+# ID8: Eine Flut von Anfragen sperrt den Server über den Kill-Switch, lange
+# bevor das Budget sie bemerkt.
+run "kill_switch_bei_vielen_anfragen" {
+  command = plan
+
+  assert {
+    condition     = strcontains(google_monitoring_alert_policy.anfragen.conditions[0].condition_threshold[0].filter, "request_count") && strcontains(google_monitoring_alert_policy.anfragen.conditions[0].condition_threshold[0].filter, "resource.labels.service_name=\"server\"")
+    error_message = "Der Anfrage-Alarm zählt nicht die Anfragen an den Server."
+  }
+  assert {
+    condition     = google_monitoring_alert_policy.anfragen.conditions[0].condition_threshold[0].threshold_value <= 10000 && google_monitoring_alert_policy.anfragen.conditions[0].condition_threshold[0].aggregations[0].alignment_period == "3600s"
+    error_message = "Der Anfrage-Alarm schlägt erst über 10.000 Anfragen je Stunde an."
+  }
+  assert {
+    condition     = google_monitoring_alert_policy.anfragen.conditions[0].condition_threshold[0].aggregations[0].cross_series_reducer == "REDUCE_SUM"
+    error_message = "Ohne Summe über Revisionen verteilen sich die Anfragen auf mehrere Zeitreihen."
+  }
+  assert {
+    # KRITISCH: Ohne dieses Label sperrt der Kill-Switch nicht.
+    condition     = google_monitoring_alert_policy.anfragen.user_labels["killswitch"] == "sperren"
+    error_message = "Der Anfrage-Alarm sagt dem Kill-Switch nicht, dass er sperren soll."
+  }
+  assert {
+    condition     = google_monitoring_notification_channel.killswitch.type == "pubsub" && length(google_monitoring_alert_policy.anfragen.notification_channels) == 2
+    error_message = "Der Anfrage-Alarm geht nicht an den Kill-Switch und per Mail."
+  }
+  assert {
+    condition     = google_pubsub_topic_iam_member.monitoring_meldet.topic == "budget-meldungen" && google_pubsub_topic_iam_member.monitoring_meldet.role == "roles/pubsub.publisher" && google_pubsub_topic_iam_member.monitoring_meldet.member == "serviceAccount:service-123456789@gcp-sa-monitoring-notification.iam.gserviceaccount.com"
+    error_message = "Cloud Monitoring darf nicht im Thema des Kill-Switch veröffentlichen."
+  }
+}
+
 # Pfeffer: Ohne ihn findet kein Gerät sein Konto, sein Schlüssel-Backup und seine
 # Datensicherung wieder. prevent_destroy prüft OpenTofu selbst; hier nur, was
 # außerhalb von OpenTofu schützt.
@@ -389,7 +421,8 @@ run "diagnosen_sind_geschuetzt_und_kurzlebig" {
   # Ausdrücklich leer: Sonst nähme der Test lokal die Liste aus
   # werte.auto.tfvars und schlüge fehl (in der CI gibt es die Datei nicht).
   variables {
-    diagnose_konten = []
+    diagnose_konten        = []
+    freigegebene_kennungen = []
   }
 
   assert {
@@ -419,6 +452,11 @@ run "diagnosen_sind_geschuetzt_und_kurzlebig" {
     error_message = "Ohne Eintrag in diagnose_konten ist jemand freigeschaltet."
   }
   assert {
+    # KRITISCH (ID7): Ohne Eintrag lässt der Server niemanden zu.
+    condition     = [for e in google_cloud_run_v2_service.server.template[0].containers[0].env : e.value if e.name == "FREIGEGEBENE_KENNUNGEN"] == [""]
+    error_message = "Ohne Eintrag in freigegebene_kennungen ist jemand freigegeben."
+  }
+  assert {
     condition     = google_firestore_field.kontingente_ttl.collection == "kontingente" && google_firestore_field.kontingente_ttl.field == "laeuft_ab" && length(google_firestore_field.kontingente_ttl.ttl_config) == 1
     error_message = "Firestore löscht die Tageszähler nicht."
   }
@@ -445,6 +483,62 @@ run "lehnt_konto_id_mit_tippfehler_ab" {
   }
 
   expect_failures = [var.diagnose_konten]
+}
+
+run "gibt_freigegebene_kennungen_an_den_server" {
+  command = plan
+
+  variables {
+    freigegebene_kennungen = ["0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"]
+  }
+
+  assert {
+    condition     = [for e in google_cloud_run_v2_service.server.template[0].containers[0].env : e.value if e.name == "FREIGEGEBENE_KENNUNGEN"] == ["0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef,fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"]
+    error_message = "Der Server bekommt die freigegebenen Kennungen nicht."
+  }
+}
+
+run "stern_gibt_alle_frei" {
+  command = plan
+
+  variables {
+    freigegebene_kennungen = ["*"]
+  }
+
+  assert {
+    condition     = [for e in google_cloud_run_v2_service.server.template[0].containers[0].env : e.value if e.name == "FREIGEGEBENE_KENNUNGEN"] == ["*"]
+    error_message = "Der Server bekommt den Stern nicht."
+  }
+}
+
+run "lehnt_kennung_mit_tippfehler_ab" {
+  command = plan
+
+  variables {
+    freigegebene_kennungen = ["0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF"]
+  }
+
+  expect_failures = [var.freigegebene_kennungen]
+}
+
+run "lehnt_konto_id_statt_kennung_ab" {
+  command = plan
+
+  variables {
+    freigegebene_kennungen = ["0123456789abcdef0123456789abcdef"]
+  }
+
+  expect_failures = [var.freigegebene_kennungen]
+}
+
+run "lehnt_stern_neben_kennungen_ab" {
+  command = plan
+
+  variables {
+    freigegebene_kennungen = ["*", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"]
+  }
+
+  expect_failures = [var.freigegebene_kennungen]
 }
 
 run "lehnt_zu_kurze_konto_id_ab" {

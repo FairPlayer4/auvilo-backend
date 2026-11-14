@@ -10,6 +10,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -22,9 +23,17 @@ import (
 
 var jetzt = time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)
 
+var (
+	testAussteller = NeuerAussteller([]byte("0123456789abcdef0123456789abcdef"))
+	// Ein Aussteller mit anderem Pfeffer, etwa ein Server nach der Rotation
+	// oder jemand, der den Pfeffer nicht kennt.
+	fremderAussteller = NeuerAussteller([]byte("fedcba9876543210fedcba9876543210"))
+	uebrig, _         = testAussteller.Neu(jetzt)
+)
+
 func TestNeu(t *testing.T) {
-	token, s := Neu(jetzt)
-	anderes, _ := Neu(jetzt)
+	token, s := testAussteller.Neu(jetzt)
+	anderes, _ := testAussteller.Neu(jetzt)
 	if len(token) < 43 {
 		t.Errorf("Token zu kurz: %d Zeichen", len(token))
 	}
@@ -36,6 +45,98 @@ func TestNeu(t *testing.T) {
 	}
 	if !s.LaeuftAb.Equal(jetzt.Add(time.Hour)) { // 1 Stunde laut Entscheidung B1
 		t.Errorf("LaeuftAb = %v", s.LaeuftAb)
+	}
+	if !testAussteller.Echt(token) {
+		t.Error("eigenes Token gilt nicht als echt")
+	}
+}
+
+// KRITISCH (ID8): Echt ist nur, was dieser Aussteller signiert hat.
+func TestEcht(t *testing.T) {
+	echt, _ := testAussteller.Neu(jetzt)
+	fremd, _ := fremderAussteller.Neu(jetzt)
+	zufall, sig, _ := strings.Cut(echt, ".")
+	// Ein Zeichen der Signatur ändern (A und B unterscheiden sich in den
+	// oberen Bits, die base64 im ersten Zeichen kodiert).
+	gekippt := "A" + sig[1:]
+	if sig[0] == 'A' {
+		gekippt = "B" + sig[1:]
+	}
+	faelle := []struct {
+		name  string
+		token string
+		will  bool
+	}{
+		{"eigenes Token ist echt", echt, true},
+		{"lehnt Token eines anderen Pfeffers ab", fremd, false},
+		{"lehnt Token mit geänderter Signatur ab", zufall + "." + gekippt, false},
+		{"lehnt Token mit fremdem Zufall und eigener Signatur ab", strings.Split(fremd, ".")[0] + "." + sig, false},
+		{"lehnt Token ohne Signatur ab", zufall, false},
+		{"lehnt Token mit leerer Signatur ab", zufall + ".", false},
+		{"lehnt gekürzte Signatur ab", zufall + "." + sig[:len(sig)-2], false},
+		{"lehnt Signatur mit Anhang ab", echt + "AA", false},
+		{"lehnt zu kurzen Zufall ab", zufall[:40] + "." + sig, false},
+		{"lehnt Zufall ab, der kein base64url ist", "!" + zufall[1:] + "." + sig, false},
+		{"lehnt leeres Token ab", "", false},
+		{"lehnt den Hash als Token ab", Hash(echt), false},
+	}
+	for _, f := range faelle {
+		t.Run(f.name, func(t *testing.T) {
+			if got := testAussteller.Echt(f.token); got != f.will {
+				t.Errorf("Echt(%q) = %v, erwartet %v", f.token, got, f.will)
+			}
+		})
+	}
+}
+
+// zaehlSpeicher zählt, wie oft der Interceptor Sitzungen liest.
+type zaehlSpeicher struct {
+	SitzungLesen
+	gelesen *int
+}
+
+func (z zaehlSpeicher) Sitzung(ctx context.Context, hash string) (speicher.Sitzung, error) {
+	*z.gelesen++
+	return z.SitzungLesen.Sitzung(ctx, hash)
+}
+
+// KRITISCH (ID8): Tokens ohne gültige Signatur kommen nicht bis zum Speicher,
+// auch wenn eine passende Sitzung darin liegt (sie stammt dann nicht von
+// diesem Server, etwa von vor einer Rotation des Pfeffers).
+func TestInterceptorLiestSpeicherNurMitEchtemToken(t *testing.T) {
+	const geschuetzt = "/test.v1.TestDienst/Geschuetzt"
+	ctx := context.Background()
+	sp := speicher.NeuerArbeitsspeicher()
+	echt, s := testAussteller.Neu(jetzt)
+	if _, err := sp.Anmelden(ctx, "kennung", speicher.Geraet{ID: "geraet-1"}, s); err != nil {
+		t.Fatal(err)
+	}
+	fremd, s2 := fremderAussteller.Neu(jetzt)
+	if _, err := sp.SitzungAnlegen(ctx, "geraet-1", s2); err != nil {
+		t.Fatal(err)
+	}
+	faelle := []struct {
+		name     string
+		token    string
+		wantCode connect.Code
+		gelesen  int
+	}{
+		{"echtes Token wird im Speicher geprüft", echt, 0, 1},
+		{"lehnt Token eines anderen Pfeffers ohne Speicher ab", fremd, connect.CodeUnauthenticated, 0},
+		{"lehnt erfundenes Token ohne Speicher ab", "erfunden", connect.CodeUnauthenticated, 0},
+	}
+	for _, f := range faelle {
+		t.Run(f.name, func(t *testing.T) {
+			gelesen := 0
+			i := NeuerInterceptor(zaehlSpeicher{sp, &gelesen}, testAussteller, nil, func() time.Time { return jetzt })
+			_, err := i.pruefe(ctx, geschuetzt, http.Header{"Authorization": {"Bearer " + f.token}})
+			if (f.wantCode == 0 && err != nil) || (f.wantCode != 0 && connect.CodeOf(err) != f.wantCode) {
+				t.Fatalf("Code = %v (%v), erwartet %v", connect.CodeOf(err), err, f.wantCode)
+			}
+			if gelesen != f.gelesen {
+				t.Errorf("Sitzung %d-mal gelesen, erwartet %d", gelesen, f.gelesen)
+			}
+		})
 	}
 }
 
@@ -102,7 +203,7 @@ func (fehlerSpeicher) Geraet(context.Context, string) (speicher.Geraet, error) {
 	return speicher.Geraet{}, errors.New("Firestore nicht erreichbar")
 }
 
-// uebrigeSitzung hat genau eine gültige Sitzung (Token "uebrig") für
+// uebrigeSitzung hat genau eine gültige Sitzung (Token uebrig) für
 // "geraet-1" in "konto-1"; das Gerät dazu ist so, wie der Fall es vorgibt. So
 // entsteht der Zustand, den GeraetSperren kurz zurücklässt: Gerät gesperrt,
 // Sitzung noch da.
@@ -112,7 +213,7 @@ type uebrigeSitzung struct {
 }
 
 func (u uebrigeSitzung) Sitzung(_ context.Context, hash string) (speicher.Sitzung, error) {
-	if hash != Hash("uebrig") {
+	if hash != Hash(uebrig) {
 		return speicher.Sitzung{}, speicher.ErrNichtGefunden
 	}
 	return speicher.Sitzung{Hash: hash, KontoID: "konto-1", GeraetID: "geraet-1", LaeuftAb: jetzt.Add(time.Hour)}, nil
@@ -137,11 +238,11 @@ func TestInterceptor(t *testing.T) {
 	)
 	ctx := context.Background()
 	sp := speicher.NeuerArbeitsspeicher()
-	gueltig, s := Neu(jetzt.Add(-time.Minute))
+	gueltig, s := testAussteller.Neu(jetzt.Add(-time.Minute))
 	if _, err := sp.Anmelden(ctx, "kennung", speicher.Geraet{ID: "geraet-1"}, s); err != nil {
 		t.Fatal(err)
 	}
-	abgelaufen, s2 := Neu(jetzt.Add(-time.Hour)) // läuft genau jetzt ab (Sitzung gilt 1 Stunde)
+	abgelaufen, s2 := testAussteller.Neu(jetzt.Add(-time.Hour)) // läuft genau jetzt ab (Sitzung gilt 1 Stunde)
 	if _, err := sp.SitzungAnlegen(ctx, "geraet-1", s2); err != nil {
 		t.Fatal(err)
 	}
@@ -155,7 +256,7 @@ func TestInterceptor(t *testing.T) {
 			gesehen, _ = IdentitaetAus(ctx)
 			return connect.NewResponse(&emptypb.Empty{}), nil
 		}
-		i := NeuerInterceptor(lesen, []string{offen}, func() time.Time { return jetzt })
+		i := NeuerInterceptor(lesen, testAussteller, []string{offen}, func() time.Time { return jetzt })
 		mux := http.NewServeMux()
 		mux.Handle(offen, connect.NewUnaryHandler(offen, merke, connect.WithInterceptors(i)))
 		mux.Handle(geschuetzt, connect.NewUnaryHandler(geschuetzt, merke, connect.WithInterceptors(i)))
@@ -184,11 +285,11 @@ func TestInterceptor(t *testing.T) {
 		{"lehnt abgelaufene Sitzung ab", sp, geschuetzt, "Bearer " + abgelaufen, connect.CodeUnauthenticated, ""},
 		{"meldet Speicherausfall als nicht verfügbar, nicht als erlaubt", fehlerSpeicher{}, geschuetzt, "Bearer " + gueltig, connect.CodeUnavailable, ""},
 		// Gerät der Sitzung: Gegenprobe und die Ablehnungen (KRITISCH).
-		{"übrige Sitzung eines aktiven Geräts gilt", geraetAktiv, geschuetzt, "Bearer uebrig", 0, "konto-1"},
-		{"lehnt übrige Sitzung eines gesperrten Geräts ab", geraetGesperrt, geschuetzt, "Bearer uebrig", connect.CodeUnauthenticated, ""},
-		{"lehnt Sitzung ab, deren Gerät zu einem anderen Konto gehört", geraetFremd, geschuetzt, "Bearer uebrig", connect.CodeUnauthenticated, ""},
-		{"lehnt Sitzung ohne Gerät ab", geraetFehlt, geschuetzt, "Bearer uebrig", connect.CodeUnauthenticated, ""},
-		{"meldet Ausfall beim Lesen des Geräts als nicht verfügbar", geraetAusfall, geschuetzt, "Bearer uebrig", connect.CodeUnavailable, ""},
+		{"übrige Sitzung eines aktiven Geräts gilt", geraetAktiv, geschuetzt, "Bearer " + uebrig, 0, "konto-1"},
+		{"lehnt übrige Sitzung eines gesperrten Geräts ab", geraetGesperrt, geschuetzt, "Bearer " + uebrig, connect.CodeUnauthenticated, ""},
+		{"lehnt Sitzung ab, deren Gerät zu einem anderen Konto gehört", geraetFremd, geschuetzt, "Bearer " + uebrig, connect.CodeUnauthenticated, ""},
+		{"lehnt Sitzung ohne Gerät ab", geraetFehlt, geschuetzt, "Bearer " + uebrig, connect.CodeUnauthenticated, ""},
+		{"meldet Ausfall beim Lesen des Geräts als nicht verfügbar", geraetAusfall, geschuetzt, "Bearer " + uebrig, connect.CodeUnavailable, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -226,11 +327,11 @@ func TestVorDemLesen(t *testing.T) {
 	const offen = "/test.v1.TestDienst/Offen"
 	ctx := context.Background()
 	sp := speicher.NeuerArbeitsspeicher()
-	gueltig, s := Neu(jetzt.Add(-time.Minute))
+	gueltig, s := testAussteller.Neu(jetzt.Add(-time.Minute))
 	if _, err := sp.Anmelden(ctx, "kennung", speicher.Geraet{ID: "geraet-1"}, s); err != nil {
 		t.Fatal(err)
 	}
-	abgelaufen, s2 := Neu(jetzt.Add(-time.Hour)) // läuft genau jetzt ab
+	abgelaufen, s2 := testAussteller.Neu(jetzt.Add(-time.Hour)) // läuft genau jetzt ab
 	if _, err := sp.SitzungAnlegen(ctx, "geraet-1", s2); err != nil {
 		t.Fatal(err)
 	}
@@ -248,7 +349,7 @@ func TestVorDemLesen(t *testing.T) {
 		{"lehnt unbekanntes Token ab", sp, "Bearer erfunden", connect.CodeUnauthenticated},
 		{"lehnt abgelaufene Sitzung ab", sp, "Bearer " + abgelaufen, connect.CodeUnauthenticated},
 		{"meldet Speicherausfall als nicht verfügbar, nicht als erlaubt", fehlerSpeicher{}, "Bearer " + gueltig, connect.CodeUnavailable},
-		{"lehnt übrige Sitzung eines gesperrten Geräts ab", geraetGesperrt, "Bearer uebrig", connect.CodeUnauthenticated},
+		{"lehnt übrige Sitzung eines gesperrten Geräts ab", geraetGesperrt, "Bearer " + uebrig, connect.CodeUnauthenticated},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -265,7 +366,7 @@ func TestVorDemLesen(t *testing.T) {
 				gesehen, _ = IdentitaetAus(r.Context())
 				dienst.ServeHTTP(w, r)
 			})
-			i := NeuerInterceptor(tt.lesen, []string{offen}, func() time.Time { return jetzt })
+			i := NeuerInterceptor(tt.lesen, testAussteller, []string{offen}, func() time.Time { return jetzt })
 			srv := httptest.NewServer(i.VorDemLesen(direkt))
 			t.Cleanup(srv.Close)
 

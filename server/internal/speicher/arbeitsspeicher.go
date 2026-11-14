@@ -98,6 +98,17 @@ func (a *Arbeitsspeicher) Geraet(_ context.Context, geraetID string) (Geraet, er
 	return g, nil
 }
 
+func (a *Arbeitsspeicher) KennungVon(_ context.Context, kontoID string) (string, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	for kennung, id := range a.kennungen {
+		if id == kontoID {
+			return kennung, nil
+		}
+	}
+	return "", ErrNichtGefunden
+}
+
 func (a *Arbeitsspeicher) SitzungAnlegen(_ context.Context, geraetID string, s NeueSitzung) (string, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()

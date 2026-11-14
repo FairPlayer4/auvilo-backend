@@ -1,17 +1,22 @@
 // Package sitzung stellt Sitzungs-Tokens aus und prüft sie: beim Erneuern
 // (Signatur des Geräts) und bei jeder Anfrage (Interceptor).
 //
-// Ein Sitzungs-Token ist ein Zufallswert. Gespeichert wird nur sein SHA-256;
+// Ein Sitzungs-Token ist ein Zufallswert mit einer Signatur des Servers
+// (HMAC, ID8 in docs/anforderungen.md). Gespeichert wird nur sein SHA-256;
 // geprüft wird jede Anfrage gegen den Speicher. Gesperrte Geräte sind dadurch
-// sofort draußen (Entscheidung in docs/anforderungen.md).
+// sofort draußen (Entscheidung in docs/anforderungen.md). Die Signatur prüft
+// der Server vorher ohne Speicher: Erfundene Tokens kosten so keinen Zugriff
+// auf Firestore.
 package sitzung
 
 import (
+	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/FairPlayer4/avlreminder-backend/server/internal/geraeteschluessel"
@@ -32,12 +37,61 @@ var (
 	ErrSignatur  = errors.New("Signatur ungültig")
 )
 
-// Neu erzeugt ein Token (256 Bit Zufall) und die Daten zum Speichern.
-func Neu(jetzt time.Time) (token string, s speicher.NeueSitzung) {
+// zweckToken trennt den Schlüssel der Tokens von anderen Verwendungen des
+// Pfeffers (die Kennung ist HMAC(Pfeffer, Google-Konto-ID)).
+const zweckToken = "avlreminder/sitzungstoken/v1"
+
+// Aussteller stellt Tokens aus und erkennt die eigenen (ID8).
+type Aussteller struct {
+	schluessel []byte
+}
+
+// NeuerAussteller leitet den Schlüssel für die Tokens aus dem Pfeffer ab. Ein
+// eigenes Geheimnis bräuchte einen weiteren Eintrag im Secret Manager; so
+// ersetzt die Rotation des Pfeffers (Sicherheitsphase) auch diesen Schlüssel.
+// Danach gelten alte Tokens nicht mehr, und die Geräte erneuern ihre Sitzung.
+func NeuerAussteller(pfeffer []byte) Aussteller {
+	mac := hmac.New(sha256.New, pfeffer)
+	mac.Write([]byte(zweckToken))
+	return Aussteller{schluessel: mac.Sum(nil)}
+}
+
+// signatur ist der HMAC über den Zufallsteil, gekürzt auf 128 Bit (genug
+// gegen Raten, und das Token bleibt kurz).
+func (a Aussteller) signatur(zufall []byte) []byte {
+	mac := hmac.New(sha256.New, a.schluessel)
+	mac.Write(zufall)
+	return mac.Sum(nil)[:16]
+}
+
+// Neu erzeugt ein Token und die Daten zum Speichern. Aufbau:
+// base64url(256 Bit Zufall) + "." + base64url(Signatur), ohne Auffüllung.
+func (a Aussteller) Neu(jetzt time.Time) (token string, s speicher.NeueSitzung) {
 	b := make([]byte, 32)
 	_, _ = rand.Read(b) // liefert seit Go 1.24 nie einen Fehler
-	token = base64.RawURLEncoding.EncodeToString(b)
+	token = base64.RawURLEncoding.EncodeToString(b) + "." + base64.RawURLEncoding.EncodeToString(a.signatur(b))
 	return token, speicher.NeueSitzung{Hash: Hash(token), LaeuftAb: jetzt.Add(Dauer)}
+}
+
+// Echt sagt, ob das Token von diesem Aussteller stammt. Es sagt nicht, ob
+// die Sitzung noch gilt; das weiß nur der Speicher.
+//
+// KRITISCH: Vergleich in konstanter Zeit (hmac.Equal), sonst ließe sich die
+// Signatur über die Antwortzeit Byte für Byte erraten.
+func (a Aussteller) Echt(token string) bool {
+	zufallText, sigText, ok := strings.Cut(token, ".")
+	if !ok {
+		return false
+	}
+	zufall, err := base64.RawURLEncoding.DecodeString(zufallText)
+	if err != nil || len(zufall) != 32 {
+		return false
+	}
+	sig, err := base64.RawURLEncoding.DecodeString(sigText)
+	if err != nil {
+		return false
+	}
+	return hmac.Equal(sig, a.signatur(zufall))
 }
 
 // Hash ist der Wert, unter dem eine Sitzung gespeichert wird.

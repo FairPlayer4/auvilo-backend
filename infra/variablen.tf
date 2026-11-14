@@ -119,3 +119,17 @@ variable "server_image_start" {
   type        = string
   default     = "us-docker.pkg.dev/cloudrun/container/hello"
 }
+
+variable "freigegebene_kennungen" {
+  description = "Kennungen der Google-Konten, die sich anmelden dürfen (ID7, docs/anforderungen.md). Steht in werte.auto.tfvars; leer = niemand, [\"*\"] = alle."
+  type        = list(string)
+  default     = []
+
+  validation {
+    # Kennungen sind HMAC-SHA256 hexadezimal (anmeldung.Kennung). Der Server
+    # startet bei einem Tippfehler nicht; hier fällt er schon im Plan auf.
+    # join statt == ["*"]: Eine Liste ist in HCL nie gleich einem Tupel.
+    condition     = join(",", var.freigegebene_kennungen) == "*" || alltrue([for k in var.freigegebene_kennungen : can(regex("^[0-9a-f]{64}$", k))])
+    error_message = "freigegebene_kennungen: jede Kennung 64 Zeichen 0-9a-f, oder genau [\"*\"] für alle."
+  }
+}

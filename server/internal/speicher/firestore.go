@@ -229,6 +229,19 @@ func (f *Firestore) Geraet(ctx context.Context, geraetID string) (Geraet, error)
 	return geraetAus(snap)
 }
 
+// KennungVon erfüllt Speicher.KennungVon. Die Kennung ist die Dokument-ID;
+// gesucht wird über das Feld konto_id (wie beim Sperren des Kontos).
+func (f *Firestore) KennungVon(ctx context.Context, kontoID string) (string, error) {
+	snaps, err := f.c.Collection(sammlungKennungen).Where("konto_id", "==", kontoID).Limit(1).Documents(ctx).GetAll()
+	if err != nil {
+		return "", err
+	}
+	if len(snaps) == 0 {
+		return "", ErrNichtGefunden
+	}
+	return snaps[0].Ref.ID, nil
+}
+
 // SitzungAnlegen erfüllt Speicher.SitzungAnlegen.
 //
 // KRITISCH: Die Sperre wird in derselben Transaktion gelesen, in der die

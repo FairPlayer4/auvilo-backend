@@ -105,3 +105,5 @@ angegeben.
   `STORAGE_EMULATOR_HOST=localhost:4443` und `SICHERUNG_BUCKET=lokal` (Bucket wie
   oben anlegen), für Diagnosen `DIAGNOSE_BUCKET=lokal` (derselbe Bucket reicht) und
   in `DIAGNOSE_KONTEN` die Konto-IDs mit Diagnose-Erlaubnis (leer = niemand).
+  Anmelden kann sich nur, wessen Kennung in `FREIGEGEBENE_KENNUNGEN` steht; lokal
+  `FREIGEGEBENE_KENNUNGEN='*'` (alle).

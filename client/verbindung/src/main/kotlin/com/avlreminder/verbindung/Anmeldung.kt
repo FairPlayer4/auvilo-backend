@@ -2,8 +2,10 @@ package com.avlreminder.verbindung
 
 import com.avlreminder.protokoll.Geraetenachrichten
 import com.avlreminder.schnittstelle.v1.AnmeldenRequest
+import com.avlreminder.schnittstelle.v1.NichtFreigegeben
 import com.avlreminder.schnittstelle.v1.SitzungErneuernRequest
 import com.connectrpc.Code
+import com.connectrpc.ConnectException
 import com.google.protobuf.ByteString
 import com.google.protobuf.Timestamp
 import java.security.SecureRandom
@@ -62,6 +64,16 @@ class AnmeldungAbgelehnt : Exception("Anmeldung abgelehnt - neu mit Google anmel
  * neuer Geräteschlüssel ergibt ein neues Gerät.
  */
 class GeraetGesperrt : Exception("Dieses Gerät ist gesperrt")
+
+/**
+ * Das Google-Konto steht nicht auf der Freigabeliste des Servers
+ * (failed_precondition, ID7 im Backend). Die App zeigt [kennung] an; der Nutzer gibt
+ * sie weiter, um die Freigabe zu erfragen. null, wenn der Server sie nicht
+ * mitgeschickt hat. Neu mit Google anmelden hilft nicht; gemerkte Sitzung und
+ * Geräteschlüssel bleiben, nach der Freigabe geht es mit ihnen weiter.
+ */
+class KontoNichtFreigegeben(val kennung: String?) :
+    Exception("Google-Konto ist nicht freigegeben" + (kennung?.let { " - Kennung $it" } ?: ""))
 
 /**
  * Anmelden mit Google und Erneuern der Sitzung mit dem Geräteschlüssel
@@ -178,11 +190,21 @@ class Anmeldung(
             !vomDienst -> this
             code == Code.UNAUTHENTICATED -> AnmeldungAbgelehnt()
             code == Code.PERMISSION_DENIED -> GeraetGesperrt()
+            code == Code.FAILED_PRECONDITION -> KontoNichtFreigegeben(ursache.kennung())
             else -> this
         }
+
+    /** Die Kennung aus dem Fehlerdetail NichtFreigegeben, wenn es eins gibt. */
+    private fun ConnectException.kennung(): String? =
+        details.firstOrNull { it.type == NICHT_FREIGEGEBEN }
+            ?.let { runCatching { NichtFreigegeben.parseFrom(it.payload.toByteArray()).kennung }.getOrNull() }
+            ?.takeIf { it.isNotEmpty() }
 
     companion object {
         /** So viele Sekunden vor dem Ablauf wird die Sitzung erneuert. */
         const val VORLAUF = 120L
+
+        /** Typname des Fehlerdetails, wie Connect ihn sendet (ohne type.googleapis.com/). */
+        private const val NICHT_FREIGEGEBEN = "avlreminder.v1.NichtFreigegeben"
     }
 }

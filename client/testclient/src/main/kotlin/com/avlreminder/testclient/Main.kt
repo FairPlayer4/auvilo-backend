@@ -35,6 +35,7 @@ import com.avlreminder.schnittstelle.v1.GeraeteAuflistenRequest
 import com.avlreminder.verbindung.Anmeldung
 import com.avlreminder.verbindung.AnmeldungAbgelehnt
 import com.avlreminder.verbindung.GeraetGesperrt
+import com.avlreminder.verbindung.KontoNichtFreigegeben
 import com.avlreminder.verbindung.NichtAngemeldet
 import com.avlreminder.verbindung.ServerBackupAblage
 import com.avlreminder.verbindung.ServerDiagnoseAblage
@@ -104,6 +105,12 @@ fun main(args: Array<String>) {
         System.err.println(
             "Fehler: Dieses Gerät ist noch nicht freigeschaltet - auf einem freigeschalteten Gerät " +
                 "\"freischalten <id>\" ausführen oder bei \"anmelden\" den Wiederherstellungsschlüssel eingeben.",
+        )
+        exitProcess(1)
+    } catch (e: KontoNichtFreigegeben) {
+        System.err.println(
+            "Fehler: Dieses Google-Konto ist für den Server nicht freigegeben. " +
+                "Zum Freigeben diese Kennung an Kevin geben: ${e.kennung ?: "(nicht mitgeschickt)"}",
         )
         exitProcess(1)
     } catch (e: EinrichtungAbgebrochen) {

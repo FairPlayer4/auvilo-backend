@@ -305,9 +305,59 @@ func (x *SitzungErneuernResponse) GetLoeschenAb() *timestamppb.Timestamp {
 	return nil
 }
 
+// Fehlerdetail zu failed_precondition (Anmelden und SitzungErneuern): Das
+// Google-Konto steht nicht auf der Freigabeliste des Servers.
+type NichtFreigegeben struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Kennung des Google-Kontos (64 Zeichen 0-9a-f, HMAC der Google-Konto-ID).
+	// Bleibt für ein Google-Konto gleich, auch nach dem Löschen des Kontos;
+	// verrät ohne den geheimen Pfeffer des Servers nichts über das Google-Konto.
+	Kennung       string `protobuf:"bytes,1,opt,name=kennung,proto3" json:"kennung,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *NichtFreigegeben) Reset() {
+	*x = NichtFreigegeben{}
+	mi := &file_avlreminder_v1_anmeldung_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *NichtFreigegeben) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*NichtFreigegeben) ProtoMessage() {}
+
+func (x *NichtFreigegeben) ProtoReflect() protoreflect.Message {
+	mi := &file_avlreminder_v1_anmeldung_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use NichtFreigegeben.ProtoReflect.Descriptor instead.
+func (*NichtFreigegeben) Descriptor() ([]byte, []int) {
+	return file_avlreminder_v1_anmeldung_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *NichtFreigegeben) GetKennung() string {
+	if x != nil {
+		return x.Kennung
+	}
+	return ""
+}
+
 type Sitzung struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// Als "Authorization: Bearer <token>" mitschicken. Gilt 1 Stunde; vor
+	// Als "Authorization: Bearer <token>" mitschicken. Der Inhalt ist für den
+	// Client undurchsichtig (Format kann sich ändern). Gilt 1 Stunde; vor
 	// laeuft_ab mit SitzungErneuern eine neue holen.
 	Token         string                 `protobuf:"bytes,1,opt,name=token,proto3" json:"token,omitempty"`
 	LaeuftAb      *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=laeuft_ab,json=laeuftAb,proto3" json:"laeuft_ab,omitempty"`
@@ -317,7 +367,7 @@ type Sitzung struct {
 
 func (x *Sitzung) Reset() {
 	*x = Sitzung{}
-	mi := &file_avlreminder_v1_anmeldung_proto_msgTypes[4]
+	mi := &file_avlreminder_v1_anmeldung_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -329,7 +379,7 @@ func (x *Sitzung) String() string {
 func (*Sitzung) ProtoMessage() {}
 
 func (x *Sitzung) ProtoReflect() protoreflect.Message {
-	mi := &file_avlreminder_v1_anmeldung_proto_msgTypes[4]
+	mi := &file_avlreminder_v1_anmeldung_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -342,7 +392,7 @@ func (x *Sitzung) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Sitzung.ProtoReflect.Descriptor instead.
 func (*Sitzung) Descriptor() ([]byte, []int) {
-	return file_avlreminder_v1_anmeldung_proto_rawDescGZIP(), []int{4}
+	return file_avlreminder_v1_anmeldung_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *Sitzung) GetToken() string {
@@ -385,7 +435,9 @@ const file_avlreminder_v1_anmeldung_proto_rawDesc = "" +
 	"\x17SitzungErneuernResponse\x121\n" +
 	"\asitzung\x18\x01 \x01(\v2\x17.avlreminder.v1.SitzungR\asitzung\x12;\n" +
 	"\vloeschen_ab\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
-	"loeschenAb\"X\n" +
+	"loeschenAb\",\n" +
+	"\x10NichtFreigegeben\x12\x18\n" +
+	"\akennung\x18\x01 \x01(\tR\akennung\"X\n" +
 	"\aSitzung\x12\x14\n" +
 	"\x05token\x18\x01 \x01(\tR\x05token\x127\n" +
 	"\tlaeuft_ab\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\blaeuftAb2\xc2\x01\n" +
@@ -406,22 +458,23 @@ func file_avlreminder_v1_anmeldung_proto_rawDescGZIP() []byte {
 	return file_avlreminder_v1_anmeldung_proto_rawDescData
 }
 
-var file_avlreminder_v1_anmeldung_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_avlreminder_v1_anmeldung_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_avlreminder_v1_anmeldung_proto_goTypes = []any{
 	(*AnmeldenRequest)(nil),         // 0: avlreminder.v1.AnmeldenRequest
 	(*AnmeldenResponse)(nil),        // 1: avlreminder.v1.AnmeldenResponse
 	(*SitzungErneuernRequest)(nil),  // 2: avlreminder.v1.SitzungErneuernRequest
 	(*SitzungErneuernResponse)(nil), // 3: avlreminder.v1.SitzungErneuernResponse
-	(*Sitzung)(nil),                 // 4: avlreminder.v1.Sitzung
-	(*timestamppb.Timestamp)(nil),   // 5: google.protobuf.Timestamp
+	(*NichtFreigegeben)(nil),        // 4: avlreminder.v1.NichtFreigegeben
+	(*Sitzung)(nil),                 // 5: avlreminder.v1.Sitzung
+	(*timestamppb.Timestamp)(nil),   // 6: google.protobuf.Timestamp
 }
 var file_avlreminder_v1_anmeldung_proto_depIdxs = []int32{
-	4, // 0: avlreminder.v1.AnmeldenResponse.sitzung:type_name -> avlreminder.v1.Sitzung
-	5, // 1: avlreminder.v1.AnmeldenResponse.loeschen_ab:type_name -> google.protobuf.Timestamp
-	5, // 2: avlreminder.v1.SitzungErneuernRequest.zeitpunkt:type_name -> google.protobuf.Timestamp
-	4, // 3: avlreminder.v1.SitzungErneuernResponse.sitzung:type_name -> avlreminder.v1.Sitzung
-	5, // 4: avlreminder.v1.SitzungErneuernResponse.loeschen_ab:type_name -> google.protobuf.Timestamp
-	5, // 5: avlreminder.v1.Sitzung.laeuft_ab:type_name -> google.protobuf.Timestamp
+	5, // 0: avlreminder.v1.AnmeldenResponse.sitzung:type_name -> avlreminder.v1.Sitzung
+	6, // 1: avlreminder.v1.AnmeldenResponse.loeschen_ab:type_name -> google.protobuf.Timestamp
+	6, // 2: avlreminder.v1.SitzungErneuernRequest.zeitpunkt:type_name -> google.protobuf.Timestamp
+	5, // 3: avlreminder.v1.SitzungErneuernResponse.sitzung:type_name -> avlreminder.v1.Sitzung
+	6, // 4: avlreminder.v1.SitzungErneuernResponse.loeschen_ab:type_name -> google.protobuf.Timestamp
+	6, // 5: avlreminder.v1.Sitzung.laeuft_ab:type_name -> google.protobuf.Timestamp
 	0, // 6: avlreminder.v1.AnmeldeDienst.Anmelden:input_type -> avlreminder.v1.AnmeldenRequest
 	2, // 7: avlreminder.v1.AnmeldeDienst.SitzungErneuern:input_type -> avlreminder.v1.SitzungErneuernRequest
 	1, // 8: avlreminder.v1.AnmeldeDienst.Anmelden:output_type -> avlreminder.v1.AnmeldenResponse
@@ -444,7 +497,7 @@ func file_avlreminder_v1_anmeldung_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_avlreminder_v1_anmeldung_proto_rawDesc), len(file_avlreminder_v1_anmeldung_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   5,
+			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

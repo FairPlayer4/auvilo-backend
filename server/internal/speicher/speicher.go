@@ -121,6 +121,11 @@ type Speicher interface {
 	// Geraet liefert ein Gerät oder ErrNichtGefunden.
 	Geraet(ctx context.Context, geraetID string) (Geraet, error)
 
+	// KennungVon liefert die Kennung eines Kontos oder ErrNichtGefunden (kein
+	// Konto, oder die Kennung ist schon gelöscht, KontoSperren). Für die
+	// Freigabeliste beim Erneuern (ID7, docs/anforderungen.md).
+	KennungVon(ctx context.Context, kontoID string) (string, error)
+
 	// SitzungAnlegen stellt eine Sitzung für ein Gerät aus und liefert dessen
 	// Konto.
 	//

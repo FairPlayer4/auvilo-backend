@@ -6,6 +6,7 @@ import com.avlreminder.protokoll.KontoGeraet
 import com.avlreminder.schnittstelle.v1.AnmeldenResponse
 import com.avlreminder.schnittstelle.v1.Geraet
 import com.avlreminder.schnittstelle.v1.GeraeteAuflistenResponse
+import com.avlreminder.schnittstelle.v1.NichtFreigegeben
 import com.avlreminder.schnittstelle.v1.SitzungErneuernRequest
 import com.avlreminder.schnittstelle.v1.SitzungErneuernResponse
 import com.google.protobuf.MessageLite
@@ -39,7 +40,7 @@ class AnmeldungTest {
     private sealed interface Antwort {
         data class Ok(val nachricht: MessageLite) : Antwort
         /** Fehler im Connect-Format (JSON), wie ihn der Dienst selbst sendet. */
-        data class Fehler(val code: String) : Antwort
+        data class Fehler(val code: String, val details: String = "") : Antwort
         /** Antwort von etwas vor dem Dienst, etwa Google bei gesperrtem Dienst. */
         data class Roh(val status: Int, val typ: String, val text: String) : Antwort
     }
@@ -60,7 +61,7 @@ class AnmeldungTest {
             anfragen += Anfrage(ex.requestURI.path, ex.requestBody.readAllBytes(), ex.requestHeaders.getFirst("Authorization"))
             val (status, typ, inhalt) = when (val a = folge.removeFirstOrNull() ?: antwort) {
                 is Antwort.Ok -> Triple(200, "application/proto", a.nachricht.toByteArray())
-                is Antwort.Fehler -> Triple(400, "application/json", """{"code":"${a.code}","message":"nachgebaut"}""".toByteArray())
+                is Antwort.Fehler -> Triple(400, "application/json", """{"code":"${a.code}","message":"nachgebaut"${a.details}}""".toByteArray())
                 is Antwort.Roh -> Triple(a.status, a.typ, a.text.toByteArray())
             }
             ex.responseHeaders.add("Content-Type", typ)
@@ -234,6 +235,28 @@ class AnmeldungTest {
     // KRITISCH: Nur Fehler des Dienstes selbst werden umgedeutet. Ein 403 als HTML
     // (Kill-Switch hat gesperrt) ist kein gesperrtes Gerät; sonst würfe die App
     // ihren Geräteschlüssel weg. Nach jedem Fehler bleibt die gemerkte Sitzung.
+    // KRITISCH: Nicht freigegeben ist weder „abgelehnt“ (neu anmelden hilft nicht)
+    // noch „gesperrt“ (der Geräteschlüssel bleibt). Die Kennung kommt aus dem Detail.
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("nichtFreigegeben")
+    fun `Nicht freigegebenes Konto`(fall: Freigabefall) {
+        antwort = fall.antwort as Antwort
+        val geraetId = Geraetenachrichten.geraetId(schluessel.oeffentlich)
+        val vorher = Sitzung("konto-1", geraetId, "token-alt", jetzt - 10)
+        val speicher = Speicher(vorher)
+        val a = anmeldung(speicher)
+
+        val e = runCatching { runBlocking { if (fall.erneuern) a.erneuern() else a.anmelden(a.versuch(), "id-token") } }.exceptionOrNull()
+
+        assertTrue(e is KontoNichtFreigegeben, "erwartet KontoNichtFreigegeben, bekommen $e")
+        assertEquals(fall.kennung, (e as KontoNichtFreigegeben).kennung)
+        assertEquals(vorher, speicher.sitzung)
+    }
+
+    data class Freigabefall(val name: String, val antwort: Any, val kennung: String?, val erneuern: Boolean) {
+        override fun toString() = name
+    }
+
     @ParameterizedTest(name = "{0}")
     @MethodSource("fehlerfaelle")
     fun `Fehler des Servers`(fall: Fehlerfall) {
@@ -347,6 +370,29 @@ class AnmeldungTest {
         )
 
         private val html403 = Antwort.Roh(403, "text/html", "<html>Forbidden</html>")
+
+        private const val KENNUNG = "71ef3b1d8582a4452c41c1ff84af8788b3940ab99fb8631a5d0bdcf4ffdf98f8"
+
+        /** Fehler failed_precondition mit Detail, wie der Go-Server ihn sendet (base64 ohne Auffüllung). */
+        private fun fehlerNichtFreigegeben(typ: String, nachricht: MessageLite): Antwort {
+            val wert = java.util.Base64.getEncoder().withoutPadding().encodeToString(nachricht.toByteArray())
+            return Antwort.Fehler("failed_precondition", ""","details":[{"type":"$typ","value":"$wert"}]""")
+        }
+
+        private val mitKennung = fehlerNichtFreigegeben("avlreminder.v1.NichtFreigegeben", NichtFreigegeben.newBuilder().setKennung(KENNUNG).build())
+
+        @JvmStatic
+        fun nichtFreigegeben() = listOf(
+            Freigabefall("Anmelden: Kennung aus dem Detail", mitKennung, KENNUNG, erneuern = false),
+            Freigabefall("Erneuern: Kennung aus dem Detail", mitKennung, KENNUNG, erneuern = true),
+            Freigabefall("ohne Detail: keine Kennung", Antwort.Fehler("failed_precondition"), null, erneuern = false),
+            Freigabefall(
+                "Detail anderen Typs wird nicht als Kennung gelesen",
+                fehlerNichtFreigegeben("avlreminder.v1.Sitzung", SitzungNachricht.newBuilder().setToken(KENNUNG).build()),
+                null,
+                erneuern = false,
+            ),
+        )
 
         @JvmStatic
         fun fehlerfaelle() = listOf(

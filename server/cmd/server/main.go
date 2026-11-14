@@ -12,7 +12,7 @@
 //
 //	FIRESTORE_EMULATOR_HOST=localhost:8086 STORAGE_EMULATOR_HOST=localhost:4443 \
 //	PROJEKT=lokal SICHERUNG_BUCKET=lokal DIAGNOSE_BUCKET=lokal \
-//	GOOGLE_CLIENT_IDS=<client-id> PFEFFER=<base64, ≥ 32 Bytes> go run ./cmd/server
+//	GOOGLE_CLIENT_IDS=<client-id> FREIGEGEBENE_KENNUNGEN='*' //	PFEFFER=<base64, ≥ 32 Bytes> go run ./cmd/server
 package main
 
 import (
@@ -25,6 +25,7 @@ import (
 	"os"
 	"os/signal"
 	"regexp"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -45,6 +46,10 @@ import (
 // kontoIDMuster beschreibt eine Konto-ID: 128 Bit Zufall als Hex in
 // Kleinbuchstaben (wie in infra/diagnose.tf geprüft).
 var kontoIDMuster = regexp.MustCompile(`^[0-9a-f]{32}$`)
+
+// kennungMuster beschreibt eine Kennung: HMAC-SHA256 als Hex in
+// Kleinbuchstaben (anmeldung.Kennung).
+var kennungMuster = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
 func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{ReplaceAttr: cloudLoggingFelder})))
@@ -117,10 +122,14 @@ func leseAblageKonfiguration(getenv func(string) string) (ablageKonfiguration, e
 type konfiguration struct {
 	ablageKonfiguration          // eingebettet: k.projekt usw. funktionieren direkt
 	diagnoseKonten      []string // DIAGNOSE_KONTEN: Konto-IDs mit Diagnose-Erlaubnis, durch Komma getrennt; leer = niemand
-	clientIDs           []string // GOOGLE_CLIENT_IDS, durch Komma getrennt
-	pfefferSecret       string   // PFEFFER_SECRET: Secret-Manager-Version (Betrieb)
-	pfeffer             []byte   // PFEFFER: base64 (nur lokal)
-	port                string   // PORT, setzt Cloud Run; sonst 8080
+	// FREIGEGEBENE_KENNUNGEN: Kennungen der Google-Konten, die sich anmelden
+	// dürfen (ID7), durch Komma getrennt; leer = niemand, "*" = alle.
+	kennungen       []string
+	alleFreigegeben bool
+	clientIDs       []string // GOOGLE_CLIENT_IDS, durch Komma getrennt
+	pfefferSecret   string   // PFEFFER_SECRET: Secret-Manager-Version (Betrieb)
+	pfeffer         []byte   // PFEFFER: base64 (nur lokal)
+	port            string   // PORT, setzt Cloud Run; sonst 8080
 }
 
 // leseKonfiguration ist von os.Getenv getrennt, damit sie testbar ist.
@@ -145,6 +154,9 @@ func leseKonfiguration(getenv func(string) string) (konfiguration, error) {
 			return k, fmt.Errorf("DIAGNOSE_KONTEN: %q ist keine Konto-ID (32 Zeichen 0-9a-f)", id)
 		}
 	}
+	if k.kennungen, k.alleFreigegeben, err = leseFreigabe(getenv("FREIGEGEBENE_KENNUNGEN")); err != nil {
+		return k, err
+	}
 	k.clientIDs = liste(getenv("GOOGLE_CLIENT_IDS"))
 	if len(k.clientIDs) == 0 {
 		return k, errors.New("GOOGLE_CLIENT_IDS fehlt")
@@ -164,6 +176,35 @@ func leseKonfiguration(getenv func(string) string) (konfiguration, error) {
 		return k, errors.New("PFEFFER_SECRET (oder lokal PFEFFER) fehlt")
 	}
 	return k, nil
+}
+
+// leseFreigabe liest FREIGEGEBENE_KENNUNGEN.
+//
+// KRITISCH: Wie bei DIAGNOSE_KONTEN startet der Server bei einem Tippfehler
+// nicht, statt still niemanden (oder alle) zuzulassen. "*" gilt nur allein:
+// Neben Kennungen wäre unklar, was gemeint ist.
+func leseFreigabe(wert string) (kennungen []string, alle bool, err error) {
+	kennungen = liste(wert)
+	if slices.Contains(kennungen, "*") {
+		if len(kennungen) > 1 {
+			return nil, false, errors.New("FREIGEGEBENE_KENNUNGEN: \"*\" (alle) nur allein, nicht neben Kennungen")
+		}
+		return nil, true, nil
+	}
+	for _, k := range kennungen {
+		if !kennungMuster.MatchString(k) {
+			return nil, false, fmt.Errorf("FREIGEGEBENE_KENNUNGEN: %q ist keine Kennung (64 Zeichen 0-9a-f)", k)
+		}
+	}
+	return kennungen, false, nil
+}
+
+// freigabe baut aus der Konfiguration die Freigabe für den Dienst.
+func (k konfiguration) freigabe() dienst.Freigabe {
+	if k.alleFreigegeben {
+		return dienst.FreigabeAlle()
+	}
+	return dienst.FreigabeFuer(k.kennungen)
 }
 
 // liste zerlegt eine durch Komma getrennte Liste und lässt leere Einträge weg.
@@ -231,6 +272,7 @@ func starte() error {
 		Diagnosen:   diagnose.NeuesCloudStorage(gcs, k.diagnoseBucket),
 		Kontingente: kontingent.NeuerFirestore(fs),
 		Pfeffer:     k.pfeffer,
+		Freigabe:    k.freigabe(),
 		// Freigeschaltet werden Konten, nicht Geräte (E-D-3).
 		DiagnoseErlaubt: erlaubtFuer(k.diagnoseKonten),
 	})
@@ -255,7 +297,11 @@ func starte() error {
 
 	fehler := make(chan error, 1)
 	go func() { fehler <- srv.ListenAndServe() }() // "go": läuft parallel weiter
-	slog.Info("Server gestartet", "port", k.port, "projekt", k.projekt, "diagnoseKonten", len(k.diagnoseKonten))
+	slog.Info("Server gestartet", "port", k.port, "projekt", k.projekt, "diagnoseKonten", len(k.diagnoseKonten),
+		"freigegebeneKennungen", len(k.kennungen), "alleFreigegeben", k.alleFreigegeben)
+	if !k.alleFreigegeben && len(k.kennungen) == 0 {
+		slog.Warn("FREIGEGEBENE_KENNUNGEN ist leer: Niemand kann sich anmelden")
+	}
 
 	// select wartet auf das, was zuerst passiert: Fehler beim Start oder Signal.
 	select {

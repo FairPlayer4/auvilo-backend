@@ -163,8 +163,13 @@ Revision `server-00019-pw8`, bereit; der Job `aufraeumen` hat dasselbe Image.
 3. **Review-Punkte:** `.review/state.md`, Abschnitt „Offen“.
 4. **B3:** Vorgaben B3-1 bis B3-8 (anforderungen.md Kap. 4.6), offene Fragen in Kap. 10.
 5. **Vor der Veröffentlichung des App-Repos** (App-Anf. 7.34, 2026-11-14): Zugang nur
-   nach Freigabe über Kennungen (ID7) und Kostengrenzen gegen Angriffe (ID8) umsetzen;
-   gehört zur Sicherheitsphase. Die Server-URL bleibt beim Zurücksetzen dieselbe.
+   nach Freigabe über Kennungen (ID7) und Kostengrenzen gegen Angriffe (ID8) sind
+   **umgesetzt (2026-11-14), noch nicht angewendet und deployt**. Reihenfolge: erst
+   `tofu apply` (setzt `FREIGEGEBENE_KENNUNGEN`, Anfrage-Alarm, Pub/Sub-Kanal), dann
+   Server und Kill-Switch deployen; sonst lässt der neue Server niemanden zu. Danach
+   den Test-Client anmelden, seine Kennung eintragen, erneut `tofu apply`. Offen: die
+   App zeigt die Kennung bei „nicht freigegeben“ an (App-Repo). Die Server-URL bleibt
+   beim Zurücksetzen dieselbe.
 
 ## Befehle
 ```bash
@@ -178,10 +183,11 @@ cd infra/killswitch && go test -cover ./...
 Server lokal gegen Firestore-Emulator und fake-gcs-server (beide vorher starten,
 Bucket `lokal` anlegen, siehe [entwicklungsumgebung.md](entwicklungsumgebung.md));
 `PFEFFER` ist ein Zufallswert nur für diesen Lauf. Für `diagnose-senden` zusätzlich
-`DIAGNOSE_KONTEN=<eigene Konto-ID>` setzen, sonst ist niemand freigeschaltet:
+`DIAGNOSE_KONTEN=<eigene Konto-ID>` setzen, sonst ist niemand freigeschaltet.
+`FREIGEGEBENE_KENNUNGEN='*'` lässt lokal jedes Google-Konto zu (leer = niemand, ID7):
 
 ```bash
-cd server && FIRESTORE_EMULATOR_HOST=localhost:8086 STORAGE_EMULATOR_HOST=localhost:4443 SICHERUNG_BUCKET=lokal DIAGNOSE_BUCKET=lokal PROJEKT=lokal GOOGLE_CLIENT_IDS=82416816442-vka4ve2no02681umqkn8b0rk37ri37qd.apps.googleusercontent.com PFEFFER=$(openssl rand -base64 32) go run ./cmd/server
+cd server && FIRESTORE_EMULATOR_HOST=localhost:8086 STORAGE_EMULATOR_HOST=localhost:4443 SICHERUNG_BUCKET=lokal DIAGNOSE_BUCKET=lokal PROJEKT=lokal GOOGLE_CLIENT_IDS=82416816442-vka4ve2no02681umqkn8b0rk37ri37qd.apps.googleusercontent.com FREIGEGEBENE_KENNUNGEN='*' PFEFFER=$(openssl rand -base64 32) go run ./cmd/server
 ```
 
 Test-Client (Kotlin, B2) bauen, dann als Gerät anmelden und Schlüssel einrichten
