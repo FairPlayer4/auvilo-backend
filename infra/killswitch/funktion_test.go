@@ -48,6 +48,13 @@ func TestVerarbeite(t *testing.T) {
 		{"lehnt Meldung ohne Budget ab", `{"costAmount":21}`, nil, 0, 0, Nichts, false, true, slog.LevelError},
 		{"lehnt Meldung ohne Kosten ab", `{"budgetAmount":20}`, nil, 0, 0, Nichts, false, true, slog.LevelError},
 		{"Kosten 0 sind gültig, wenn angegeben", `{"costAmount":0,"budgetAmount":20}`, nil, 0, 0, Nichts, false, false, slog.LevelInfo},
+		// Alarme von Cloud Monitoring (ID8): sperren, nie trennen.
+		{"offener Alarm mit Label sperrt die Dienste", `{"incident":{"incident_id":"0.abc","state":"open","policy_name":"Server bekommt ungewöhnlich viele Anfragen","policy_user_labels":{"killswitch":"sperren"},"summary":"…"},"version":"1.2"}`, nil, 2, 2, DiensteSperren, false, false, slog.LevelWarn},
+		{"offener Alarm, alles schon gesperrt: nur INFO", `{"incident":{"incident_id":"0.abc","state":"open","policy_name":"Server bekommt ungewöhnlich viele Anfragen","policy_user_labels":{"killswitch":"sperren"},"summary":"…"},"version":"1.2"}`, nil, 2, 0, DiensteSperren, false, false, slog.LevelInfo},
+		{"geschlossener Alarm tut nichts", `{"incident":{"state":"closed","policy_user_labels":{"killswitch":"sperren"}},"version":"1.2"}`, nil, 2, 0, Nichts, false, false, slog.LevelInfo},
+		{"lehnt offenen Alarm ohne Label ab", `{"incident":{"state":"open","policy_name":"andere"},"version":"1.2"}`, nil, 2, 2, Nichts, false, true, slog.LevelError},
+		{"lehnt offenen Alarm mit anderem Wert ab", `{"incident":{"state":"open","policy_user_labels":{"killswitch":"trennen"}},"version":"1.2"}`, nil, 2, 2, Nichts, false, true, slog.LevelError},
+		{"lehnt Alarm mit unbekanntem Zustand ab", `{"incident":{"state":"","policy_user_labels":{"killswitch":"sperren"}},"version":"1.2"}`, nil, 2, 2, Nichts, false, true, slog.LevelError},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

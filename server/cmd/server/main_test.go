@@ -7,12 +7,13 @@ import (
 
 func TestLeseKonfiguration(t *testing.T) {
 	gut := map[string]string{ //nolint:gosec // nur Namen von Secrets, keine Geheimnisse
-		"PROJEKT":           "p",
-		"GOOGLE_CLIENT_IDS": "a.apps, b.apps ,",
-		"PFEFFER_SECRET":    "projects/p/secrets/pfeffer/versions/latest",
-		"SICHERUNG_BUCKET":  "b",
-		"DIAGNOSE_BUCKET":   "d",
-		"DIAGNOSE_KONTEN":   " 0123456789abcdef0123456789abcdef ,,fedcba9876543210fedcba9876543210",
+		"PROJEKT":                "p",
+		"GOOGLE_CLIENT_IDS":      "a.apps, b.apps ,",
+		"PFEFFER_SECRET":         "projects/p/secrets/pfeffer/versions/latest",
+		"SICHERUNG_BUCKET":       "b",
+		"DIAGNOSE_BUCKET":        "d",
+		"DIAGNOSE_KONTEN":        " 0123456789abcdef0123456789abcdef ,,fedcba9876543210fedcba9876543210",
+		"FREIGEGEBENE_KENNUNGEN": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef, fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
 	}
 	mit := func(aenderungen map[string]string) func(string) string {
 		m := map[string]string{}
@@ -33,6 +34,25 @@ func TestLeseKonfiguration(t *testing.T) {
 		if !slices.Equal(k.clientIDs, []string{"a.apps", "b.apps"}) || k.port != "8080" || k.sicherungBucket != "b" ||
 			k.diagnoseBucket != "d" || !slices.Equal(k.diagnoseKonten, []string{"0123456789abcdef0123456789abcdef", "fedcba9876543210fedcba9876543210"}) {
 			t.Errorf("Konfiguration = %+v", k)
+		}
+	})
+	t.Run("liest freigegebene Kennungen", func(t *testing.T) {
+		k, err := leseKonfiguration(mit(nil))
+		if err != nil || k.alleFreigegeben || !slices.Equal(k.kennungen, []string{"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"}) {
+			t.Errorf("Kennungen = %q, alle = %v, Fehler %v", k.kennungen, k.alleFreigegeben, err)
+		}
+	})
+	t.Run("Stern gibt alle frei", func(t *testing.T) {
+		k, err := leseKonfiguration(mit(map[string]string{"FREIGEGEBENE_KENNUNGEN": " * "}))
+		if err != nil || !k.alleFreigegeben || len(k.kennungen) != 0 {
+			t.Errorf("Kennungen = %q, alle = %v, Fehler %v", k.kennungen, k.alleFreigegeben, err)
+		}
+	})
+	// KRITISCH: Ohne Liste startet der Server, lässt aber niemanden zu.
+	t.Run("ohne freigegebene Kennungen ist niemand freigegeben", func(t *testing.T) {
+		k, err := leseKonfiguration(mit(map[string]string{"FREIGEGEBENE_KENNUNGEN": ""}))
+		if err != nil || k.alleFreigegeben || len(k.kennungen) != 0 {
+			t.Errorf("Kennungen = %q, alle = %v, Fehler %v", k.kennungen, k.alleFreigegeben, err)
 		}
 	})
 	t.Run("liest lokalen Pfeffer als base64", func(t *testing.T) {
@@ -62,6 +82,10 @@ func TestLeseKonfiguration(t *testing.T) {
 		{"lehnt freigeschaltete Konto-ID mit Großbuchstaben ab", map[string]string{"DIAGNOSE_KONTEN": "0123456789ABCDEF0123456789ABCDEF"}},
 		{"lehnt zu kurze freigeschaltete Konto-ID ab", map[string]string{"DIAGNOSE_KONTEN": "0123456789abcdef0123456789abcde"}},
 		{"lehnt zu lange freigeschaltete Konto-ID ab", map[string]string{"DIAGNOSE_KONTEN": "0123456789abcdef0123456789abcdef0"}},
+		{"lehnt Kennung mit Großbuchstaben ab", map[string]string{"FREIGEGEBENE_KENNUNGEN": "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF"}},
+		{"lehnt zu kurze Kennung ab", map[string]string{"FREIGEGEBENE_KENNUNGEN": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcde"}},
+		{"lehnt Konto-ID statt Kennung ab", map[string]string{"FREIGEGEBENE_KENNUNGEN": "0123456789abcdef0123456789abcdef"}},
+		{"lehnt Stern neben Kennungen ab", map[string]string{"FREIGEGEBENE_KENNUNGEN": "*, 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}},
 	}
 	for _, tt := range fehler {
 		t.Run(tt.name, func(t *testing.T) {

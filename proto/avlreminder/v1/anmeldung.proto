@@ -16,6 +16,13 @@ option java_package = "com.avlreminder.schnittstelle.v1";
 //                     nicht. Nach abgelehntem Erneuern: neu mit Google anmelden.
 //   permission_denied Gerät ist gesperrt – endgültig, auch für Anmelden. Nur
 //                     ein neuer Geräteschlüssel ergibt ein neues Gerät.
+//   failed_precondition Das Google-Konto ist nicht freigegeben (Freigabeliste,
+//                     ID7 in docs/anforderungen.md). Fehlerdetail
+//                     NichtFreigegeben mit der Kennung; die App zeigt sie an,
+//                     damit der Nutzer sie zum Freischalten weitergeben kann.
+//                     Bei SitzungErneuern: Das Konto wurde von der Liste
+//                     genommen (gleiches Detail). Neu mit Google anzumelden
+//                     hilft dann nicht; erst nach der Freigabe wiederholen.
 //   invalid_argument  nur SitzungErneuern: geraet_id ist kein 32-stelliges
 //                     Hex oder zeitpunkt fehlt.
 //   resource_exhausted Anfrage größer als 64 KiB (gilt für alle Dienste), oder
@@ -83,8 +90,18 @@ message SitzungErneuernResponse {
   google.protobuf.Timestamp loeschen_ab = 2;
 }
 
+// Fehlerdetail zu failed_precondition (Anmelden und SitzungErneuern): Das
+// Google-Konto steht nicht auf der Freigabeliste des Servers.
+message NichtFreigegeben {
+  // Kennung des Google-Kontos (64 Zeichen 0-9a-f, HMAC der Google-Konto-ID).
+  // Bleibt für ein Google-Konto gleich, auch nach dem Löschen des Kontos;
+  // verrät ohne den geheimen Pfeffer des Servers nichts über das Google-Konto.
+  string kennung = 1;
+}
+
 message Sitzung {
-  // Als "Authorization: Bearer <token>" mitschicken. Gilt 1 Stunde; vor
+  // Als "Authorization: Bearer <token>" mitschicken. Der Inhalt ist für den
+  // Client undurchsichtig (Format kann sich ändern). Gilt 1 Stunde; vor
   // laeuft_ab mit SitzungErneuern eine neue holen.
   string token = 1;
   google.protobuf.Timestamp laeuft_ab = 2;

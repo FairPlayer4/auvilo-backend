@@ -5,3 +5,7 @@ alarm_email    = "name@example.com"
 
 # Konten, die Diagnosen senden dürfen (32 Zeichen 0-9a-f); leer = niemand.
 # diagnose_konten = ["0123456789abcdef0123456789abcdef"]
+
+# Google-Konten, die sich anmelden dürfen (ID7): Kennungen, 64 Zeichen 0-9a-f
+# (zeigt die App bei „nicht freigegeben“ an); leer = niemand, ["*"] = alle.
+# freigegebene_kennungen = ["0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"]

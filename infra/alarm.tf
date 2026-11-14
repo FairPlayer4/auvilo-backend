@@ -186,3 +186,104 @@ resource "google_monitoring_alert_policy" "egress" {
 
   notification_channels = [google_monitoring_notification_channel.email.id]
 }
+
+# Kill-Switch bei ungewöhnlich vielen Anfragen (ID8 in docs/anforderungen.md).
+#
+# Das Budget meldet sich erst nach Stunden; wer den offenen Server mit Anfragen
+# flutet, verbraucht bis dahin Geld. Diese Regel zählt die Anfragen an den
+# Server über ein gleitendes Fenster von einer Stunde. Mehr als 10.000 heißt
+# Angriff oder Fehler (die App braucht etwa 30 am Tag je Gerät; selbst
+# 100 Geräte kämen nicht in die Nähe): Dann geht der Alarm per Pub/Sub an den
+# Kill-Switch, der die Dienste sperrt (killswitch/entscheidung.go,
+# EntscheideAlarm), und per Mail an Kevin. Abrechnung trennen bleibt dem
+# Budget vorbehalten.
+#
+# Gezählt werden alle Antworten, auch abgelehnte (401 ohne Sitzung): Gerade
+# die kosten bei einer Flut Rechenzeit. Nach dem Sperren lehnt Google die
+# Anfragen vor dem Dienst ab; sie kosten dann nichts mehr.
+#
+# Kosten: eine Bedingung mit einer Zeitreihe, wie der Egress-Alarm ca. 0,35 $
+# im Monat plus wenige Cent für die abgefragten Punkte.
+
+locals {
+  # Anfragen je Stunde, ab denen der Kill-Switch sperrt (Kevin, 2026-11-14).
+  anfragen_sperren_ab = 10000
+}
+
+# Der Kanal veröffentlicht Alarme im Thema der Budget-Meldungen; dort hört der
+# Kill-Switch schon zu.
+resource "google_monitoring_notification_channel" "killswitch" {
+  display_name = "Kill-Switch (Pub/Sub)"
+  type         = "pubsub"
+  labels = {
+    topic = google_pubsub_topic.budget.id
+  }
+  depends_on = [google_project_service.apis]
+}
+
+# Cloud Monitoring veröffentlicht mit seinem eigenen Dienstkonto. Google legt
+# es mit dem ersten Pub/Sub-Kanal an, daher erst nach dem Kanal.
+resource "google_pubsub_topic_iam_member" "monitoring_meldet" {
+  topic      = google_pubsub_topic.budget.name
+  role       = "roles/pubsub.publisher"
+  member     = "serviceAccount:service-${data.google_project.projekt.number}@gcp-sa-monitoring-notification.iam.gserviceaccount.com"
+  depends_on = [google_monitoring_notification_channel.killswitch]
+}
+
+resource "google_monitoring_alert_policy" "anfragen" {
+  display_name = "Server bekommt ungewöhnlich viele Anfragen"
+  combiner     = "OR"
+
+  # KRITISCH: Dieses Label lässt den Kill-Switch sperren. Ohne es meldet er
+  # den Alarm als Fehler und sperrt nichts.
+  user_labels = {
+    killswitch = "sperren"
+  }
+
+  conditions {
+    display_name = "Mehr als ${local.anfragen_sperren_ab} Anfragen in einer Stunde"
+    condition_threshold {
+      filter = join(" AND ", [
+        "metric.type=\"run.googleapis.com/request_count\"",
+        "resource.type=\"cloud_run_revision\"",
+        "resource.labels.service_name=\"${google_cloud_run_v2_service.server.name}\"",
+      ])
+      comparison      = "COMPARISON_GT"
+      threshold_value = local.anfragen_sperren_ab
+      duration        = "0s"
+
+      # Summe über alle Revisionen und Antwortcodes (wie beim Egress-Alarm).
+      aggregations {
+        alignment_period     = "3600s"
+        per_series_aligner   = "ALIGN_SUM"
+        cross_series_reducer = "REDUCE_SUM"
+        group_by_fields      = ["resource.label.service_name"]
+      }
+
+      trigger {
+        count = 1
+      }
+    }
+  }
+
+  alert_strategy {
+    auto_close = "3600s"
+  }
+
+  documentation {
+    mime_type = "text/markdown"
+    content   = <<-EOT
+      Der Server hat in einer Stunde mehr als ${local.anfragen_sperren_ab} Anfragen bekommen. Der Kill-Switch hat ihn gesperrt.
+
+      - Wer fragt an? `gcloud logging read 'resource.labels.service_name="server"' --bucket=logs-eu --location=${var.region} --view=_AllLogs --limit=50`
+      - Kill-Switch: `gcloud logging read 'resource.labels.service_name="killswitch"' --bucket=logs-eu --location=${var.region} --view=_AllLogs --limit=10`
+      - Der Dienst bleibt gesperrt, bis er bewusst geöffnet wird (`tofu apply -var=gesperrte_dienste_oeffnen=true`).
+    EOT
+  }
+
+  notification_channels = [
+    google_monitoring_notification_channel.killswitch.id,
+    google_monitoring_notification_channel.email.id,
+  ]
+  depends_on = [google_pubsub_topic_iam_member.monitoring_meldet]
+}

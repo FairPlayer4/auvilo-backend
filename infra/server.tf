@@ -162,6 +162,11 @@ resource "google_cloud_run_v2_service" "server" {
         value = join(",", var.diagnose_konten)
       }
       env {
+        # Kennungen sind Pseudonyme (HMAC mit dem Pfeffer), keine Geheimnisse.
+        name  = "FREIGEGEBENE_KENNUNGEN"
+        value = join(",", var.freigegebene_kennungen)
+      }
+      env {
         # Weiche Grenze für Go: Ab hier räumt der Garbage Collector häufiger auf,
         # statt dass Cloud Run die Instanz bei 256 MiB beendet. Gut 25 % Luft für
         # das, was Go nicht zählt (Stacks des Laufzeitsystems, Puffer).

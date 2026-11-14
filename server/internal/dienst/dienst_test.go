@@ -31,6 +31,8 @@ const clientID = "test-client.apps.googleusercontent.com"
 
 var start = time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)
 
+var testPfeffer = []byte("0123456789abcdef0123456789abcdef")
+
 type testServer struct {
 	google   *testhilfe.Google
 	anmelde  avlreminderv1connect.AnmeldeDienstClient
@@ -76,7 +78,8 @@ func neuerTestServerMit(t *testing.T, sicherungen datensicherung.Ablage, gleichz
 		Diagnosen:                ts.diagnosen,
 		Kontingente:              kontingent.NeuerArbeitsspeicher(),
 		DiagnoseErlaubt:          func(k string) bool { return ts.diagnoseKonten[k] },
-		Pfeffer:                  []byte("0123456789abcdef0123456789abcdef"),
+		Pfeffer:                  testPfeffer,
+		Freigabe:                 FreigabeAlle(),
 		Jetzt:                    uhr,
 		GleichzeitigeSicherungen: gleichzeitig,
 	}

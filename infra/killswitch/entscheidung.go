@@ -8,6 +8,11 @@
 //     Rechnungskonto getrennt. Dann stoppt alles; Ressourcen können nach einer
 //     Frist von Google gelöscht werden.
 //
+// Über dasselbe Thema kommen auch Alarme von Cloud Monitoring (ID8 in
+// docs/anforderungen.md): Eine Alarmrichtlinie mit dem Label
+// killswitch=sperren (alarm.tf, ungewöhnlich viele Anfragen) sperrt die
+// Dienste, sobald sie anschlägt – Stunden bevor das Budget es bemerkte.
+//
 // Die Entscheidung (diese Datei) ist reine Logik ohne Cloud-Zugriff und daher
 // vollständig testbar. Die Ausführung steht in ausfuehrung.go.
 package killswitch
@@ -77,6 +82,48 @@ func (s Schwellen) Pruefe() error {
 		return fmt.Errorf("%w: Sperren=%v, Trennen=%v", ErrUngueltigeSchwellen, s.Sperren, s.Trennen)
 	}
 	return nil
+}
+
+// Alarm ist der Teil einer Meldung von Cloud Monitoring (Pub/Sub-Kanal,
+// Schema 1.2, Feld "incident"), den der Kill-Switch braucht.
+type Alarm struct {
+	State            string            `json:"state"` // "open" oder "closed"
+	PolicyName       string            `json:"policy_name"`
+	PolicyUserLabels map[string]string `json:"policy_user_labels"`
+}
+
+// Label einer Alarmrichtlinie, das sagt, was der Kill-Switch tun soll.
+const (
+	LabelKillSwitch = "killswitch"
+	WertSperren     = "sperren"
+)
+
+// Fehler bei Alarm-Meldungen.
+var (
+	ErrAlarmZustand    = errors.New("Alarm-Meldung mit unbekanntem Zustand")
+	ErrAlarmOhneAktion = errors.New("Alarm-Meldung ohne Label killswitch=sperren")
+)
+
+// EntscheideAlarm bestimmt anhand eines Alarms, welche Aktion nötig ist.
+//
+// KRITISCH: Ein Alarm sperrt höchstens die Dienste, er trennt nie die
+// Abrechnung. Das Trennen kann Ressourcen kosten und bleibt dem Budget
+// vorbehalten. Ein geschlossener Alarm öffnet nichts wieder: Gesperrte
+// Dienste öffnet nur Kevin von Hand. Ein offener Alarm ohne passendes Label
+// ist ein Fehler in der Einrichtung (ERROR im Log, also eine Mail), kein
+// stilles "Nichts".
+func EntscheideAlarm(a Alarm) (Aktion, error) {
+	switch a.State {
+	case "closed":
+		return Nichts, nil
+	case "open":
+		if a.PolicyUserLabels[LabelKillSwitch] != WertSperren {
+			return Nichts, fmt.Errorf("%w: Richtlinie %q", ErrAlarmOhneAktion, a.PolicyName)
+		}
+		return DiensteSperren, nil
+	default:
+		return Nichts, fmt.Errorf("%w: %q", ErrAlarmZustand, a.State)
+	}
 }
 
 // Entscheide bestimmt anhand der Meldung, welche Aktion nötig ist.

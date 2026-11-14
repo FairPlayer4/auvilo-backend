@@ -66,8 +66,11 @@ type Konfiguration struct {
 	// DiagnoseErlaubt sagt, ob ein Konto Diagnosen senden darf (freigeschaltete
 	// Konten, E-D-3). nil = keines.
 	DiagnoseErlaubt func(kontoID string) bool
-	Pfeffer         []byte           // geheimer Wert für die Kennung (HMAC der Google-Konto-ID)
-	Jetzt           func() time.Time // nil = time.Now
+	Pfeffer         []byte // geheimer Wert für die Kennung (HMAC der Google-Konto-ID)
+	// Freigabe: welche Google-Konten sich anmelden dürfen (freigabe.go).
+	// Nullwert = niemand.
+	Freigabe Freigabe
+	Jetzt    func() time.Time // nil = time.Now
 	// Höchstens so viele Aufrufe des Datensicherungs-Dienstes gleichzeitig;
 	// 0 = StandardGleichzeitigeSicherungen.
 	GleichzeitigeSicherungen int
@@ -93,7 +96,8 @@ func NeuerHandler(k Konfiguration) (http.Handler, error) {
 	}
 	frei := freischaltPruefer{geraete: k.Speicher}
 	limit := tageslimit{zaehler: k.Kontingente, jetzt: k.Jetzt}
-	anmelde := &anmeldeDienst{pruefer: k.Pruefer, speicher: k.Speicher, limit: limit, pfeffer: k.Pfeffer, jetzt: k.Jetzt}
+	aussteller := sitzung.NeuerAussteller(k.Pfeffer)
+	anmelde := &anmeldeDienst{pruefer: k.Pruefer, speicher: k.Speicher, limit: limit, pfeffer: k.Pfeffer, aussteller: aussteller, freigabe: k.Freigabe, jetzt: k.Jetzt}
 	geraete := &geraeteDienst{speicher: k.Speicher, frei: frei, jetzt: k.Jetzt}
 	schluessel := &schluesselDienst{speicher: k.Speicher, frei: frei, jetzt: k.Jetzt}
 	sicherung := &datensicherungDienst{ablage: k.Sicherungen, limit: limit}
@@ -101,7 +105,7 @@ func NeuerHandler(k Konfiguration) (http.Handler, error) {
 	konto := &kontoDienst{speicher: k.Speicher, loescher: NeuerLoescher(k.Speicher, k.Sicherungen, k.Diagnosen), frei: frei, jetzt: k.Jetzt}
 
 	// Erst die Sitzung, dann die Richtlinie der Prozedur (richtlinie.go).
-	interceptor := sitzung.NeuerInterceptor(k.Speicher, offeneProzeduren(), k.Jetzt)
+	interceptor := sitzung.NeuerInterceptor(k.Speicher, aussteller, offeneProzeduren(), k.Jetzt)
 	optionen := []connect.HandlerOption{
 		connect.WithInterceptors(interceptor, richtlinienInterceptor{frei}),
 		connect.WithReadMaxBytes(MaxAnfrage),
@@ -147,6 +151,7 @@ type anmeldeSpeicher interface {
 	geraetLesen
 	loeschenAbLesen
 	Anmelden(ctx context.Context, kennung string, geraet speicher.Geraet, sitzung speicher.NeueSitzung) (speicher.AnmeldeErgebnis, error)
+	KennungVon(ctx context.Context, kontoID string) (string, error)
 	SitzungAnlegen(ctx context.Context, geraetID string, sitzung speicher.NeueSitzung) (kontoID string, err error)
 }
 
@@ -179,11 +184,13 @@ type tageslimit struct {
 }
 
 type anmeldeDienst struct {
-	pruefer  AnmeldePruefer
-	speicher anmeldeSpeicher
-	limit    tageslimit
-	pfeffer  []byte
-	jetzt    func() time.Time
+	pruefer    AnmeldePruefer
+	speicher   anmeldeSpeicher
+	limit      tageslimit
+	pfeffer    []byte
+	aussteller sitzung.Aussteller // stellt die Sitzungs-Tokens aus (ID8)
+	freigabe   Freigabe
+	jetzt      func() time.Time
 }
 
 type geraeteDienst struct {
@@ -249,18 +256,21 @@ func (d *anmeldeDienst) Anmelden(ctx context.Context, req *connect.Request[v1.An
 		slog.WarnContext(ctx, "Anmeldung abgelehnt", "grund", err.Error())
 		return nil, errAnmeldungAbgelehnt()
 	}
-	// Erst nach der Prüfung zählen: Nur wer den Geräteschlüssel hat, verbraucht
-	// etwas vom Limit dieses Geräts.
+	kennung := anmeldung.Kennung(d.pfeffer, erg.GoogleSub)
+	if err := d.pruefeFreigabe(ctx, kennung); err != nil {
+		return nil, err
+	}
+	// Erst nach den Prüfungen zählen: Nur wer den Geräteschlüssel hat und
+	// freigegeben ist, verbraucht etwas vom Limit dieses Geräts.
 	if err := d.limit.verbrauche(ctx, kontingentSitzung, erg.GeraetID, SitzungenJeTag, "Tageslimit für Sitzungen dieses Geräts erreicht – morgen wieder"); err != nil {
 		return nil, err
 	}
-	kennung := anmeldung.Kennung(d.pfeffer, erg.GoogleSub)
 	if err := d.neuesGeraetZaehlen(ctx, kennung, erg.GeraetID); err != nil {
 		return nil, err
 	}
 
 	jetzt := d.jetzt()
-	token, neueSitzung := sitzung.Neu(jetzt)
+	token, neueSitzung := d.aussteller.Neu(jetzt)
 	geraet := speicher.Geraet{ID: erg.GeraetID, Schluessel: req.Msg.GetGeraeteschluessel(), Erstellt: jetzt}
 	ergebnis, err := d.speicher.Anmelden(ctx, kennung, geraet, neueSitzung)
 	switch {
@@ -328,11 +338,14 @@ func (d *anmeldeDienst) SitzungErneuern(ctx context.Context, req *connect.Reques
 		}
 		return nil, errErneuernAbgelehnt()
 	}
+	if err := d.pruefeFreigabeDesKontos(ctx, g.KontoID); err != nil {
+		return nil, err
+	}
 	if err := d.limit.verbrauche(ctx, kontingentSitzung, geraetID, SitzungenJeTag, "Tageslimit für Sitzungen dieses Geräts erreicht – morgen wieder"); err != nil {
 		return nil, err
 	}
 
-	token, neueSitzung := sitzung.Neu(jetzt)
+	token, neueSitzung := d.aussteller.Neu(jetzt)
 	// SitzungAnlegen prüft die Sperre noch einmal in derselben Transaktion –
 	// falls das Gerät gerade eben gesperrt wurde.
 	kontoID, err := d.speicher.SitzungAnlegen(ctx, geraetID, neueSitzung)

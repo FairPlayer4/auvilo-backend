@@ -68,6 +68,57 @@ liegt in einem Kotlin-Modul, das später in die App übernommen werden kann. [E]
 - ID5 Missbrauchsschutz: Rate-Limits pro Konto und Gerät; später für den Play Store
   zusätzlich **Play Integrity API** (Anfrage kommt von der echten App). [E]
 - ID6 **Gerät abmelden/sperren** aus einem anderen Gerät heraus (verloren, gestohlen).
+- ID7 **Zugang nur nach Freigabe** (2026-11-14, umgesetzt, noch nicht deployt; App-Anf. 7.34 OV1): Der Server
+  nimmt nur Google-Konten an, deren **Kennung** (`anmeldung.Kennung`, HMAC aus Pfeffer
+  und `sub`) auf einer Liste steht. Nicht die Konto-ID: Die ist zufällig und nach
+  *Konto löschen* neu.
+  - Liste wie `DIAGNOSE_KONTEN` als Umgebungsvariable `FREIGEGEBENE_KENNUNGEN` über
+    OpenTofu (`freigegebene_kennungen` in `werte.auto.tfvars`); ein Firestore-Dokument
+    mit Admin-Befehl erst, wenn sie sich oft ändert. **Leer heißt niemand**; wer den
+    Server selbst betreibt und offen haben will, setzt ausdrücklich `*` (nur allein).
+    Ein Tippfehler (nicht 64 Zeichen 0-9a-f) verhindert Plan und Serverstart.
+  - Antwort `failed_precondition` mit Fehlerdetail `NichtFreigegeben { kennung }`
+    (anmeldung.proto); Client: `KontoNichtFreigegeben`, der Test-Client nennt die Kennung.
+  - **Entzug** wirkt auch beim Erneuern (Kevin, 2026-11-14): `SitzungErneuern` liest die
+    Kennung des Kontos (eine Firestore-Abfrage, nur wenn nicht `*`) und lehnt ab, wenn
+    sie nicht mehr auf der Liste steht. Wer gestrichen wird, ist spätestens nach einer
+    Stunde draußen.
+  - Startliste (Kevin, 2026-11-14): App- und Test-Konto. Am 2026-11-14 gab es in
+    Firestore nur eine Kennung (Konto `65eab9f8…`); das alte Testkonto ist gelöscht.
+    Die Kennung des Test-Kontos kommt beim ersten abgelehnten Anmelden des Test-Clients.
+  - Nicht freigegeben: Der Server prüft das Google-Token, legt aber **nichts** an (kein
+    Konto, keine Kennung, keine Sitzung, kein Gerät, kein Tageszähler) und antwortet
+    mit „nicht freigegeben“ und der Kennung. Die App zeigt sie mit „Schick diesen Code
+    an den Betreiber“; Kevin trägt sie ein. Die Prüfung kommt vor jedem Firestore-Zugriff.
+  - Ein neuer Pfeffer (Sicherheitsphase, Punkt 3) ändert alle Kennungen: danach die
+    Liste neu füllen (zuerst Kevins neue Kennung).
+  - Wer einen eigenen Server betreibt, setzt in der App eigene Server-URL und
+    Web-Client-ID (App-Anf. 7.34 OV1); der offizielle Server bleibt geschlossen.
+- ID8 **Kosten bei Angriffen begrenzen** (2026-11-14, umgesetzt, noch nicht deployt): Die Adresse ist kein
+  Geheimnis (sie steht in jeder APK und im Repo); geschützt wird über Grenzen, nicht
+  über Verstecken. Schon da: `max_instance_count` 2, Timeout 30 s, Größenlimits je
+  Methode, Tageszähler je Konto, Alarm bei viel ausgehendem Verkehr, Kill-Switch über
+  das Budget. Ergänzen:
+  - **Ungültiges früh und ohne Firestore ablehnen:** Heute liest der Interceptor für
+    jedes Bearer-Token eine Sitzung aus Firestore, also kostet auch ein erfundenes Token
+    einen Lesezugriff. Sitzungs-Token mit Server-Signatur (HMAC), die vor dem Lesen
+    geprüft wird; Anmelden mit nicht freigegebener Kennung ohne Firestore (ID7).
+    Umgesetzt: Token = base64url(256 Bit Zufall) „.“ base64url(HMAC, 128 Bit), Schlüssel
+    aus dem Pfeffer abgeleitet (`sitzung.Aussteller`). Alte Tokens gelten nach dem
+    Deploy nicht mehr; die Geräte erneuern einmal (wie nach einer Rotation).
+  - **Schneller als das Budget:** Abrechnungsdaten kommen mit Stunden Verzug, eine Flut
+    kann bis dahin über 20 € kosten. Umgesetzt: Alarm `anfragen` (alarm.tf) auf
+    `run.googleapis.com/request_count` des Servers, **mehr als 10.000 je Stunde**
+    (Kevin, 2026-11-14; normal sind etwa 30 je Gerät und Tag). Er geht per Pub/Sub ins
+    Thema `budget-meldungen`; der Kill-Switch erkennt Alarme am Feld `incident` und
+    sperrt bei offenem Alarm mit Label `killswitch=sperren` die Dienste, trennt aber nie
+    die Abrechnung. Dazu eine Mail.
+  - Nicht umgesetzt: kürzerer Timeout (Tests zeigen, dass die 30 s für 8 MiB über
+    langsames Netz nötig sind; für eine Flut kleiner Anfragen spart er nichts) und
+    Grenze je IP (bei höchstens 2 Instanzen und Angreifern mit vielen Adressen wenig
+    Nutzen; der Anfrage-Alarm deckt die Flut ab). Play Integrity erst mit dem Play
+    Store (ID5). Cloud Armor braucht einen Load Balancer mit Grundgebühr über dem
+    Budget, deshalb nicht.
 
 ### 3.2 Kontakte und Freigaben
 - F1 **Kontakt** = andere Person, deren Personenschlüssel man kennt und bestätigt hat.
@@ -520,3 +571,5 @@ tragen die Tests die Spezifikation. Anleitung zum Review: [go-review.md](go-revi
 | 2026-11-12 | Konto löschen **ohne Zugang** (B1 in Kap. 3.5): Ein freigeschaltetes Gerät löscht sofort; mit Google-Login allein (nicht freigeschaltetes Gerät oder Webseite) nur ein **Antrag mit 7 Tagen Wartezeit**, den jedes freigeschaltete Gerät abbrechen kann und von dem vorhandene Geräte beim nächsten Aufruf erfahren. Ohne Google-Konto ist keine Zuordnung möglich (Art. 11 DSGVO); dann löscht die Frist aus P5. Keine Löschung per Mail |
 | 2026-11-12 | Konto löschen, **Umsetzung** (Server und Client, `konto.proto`): `KontoLoeschen` setzt immer zuerst den Termin (sofort oder 7 Tage später) und löscht dann im selben Weg wie der regelmäßige Lauf: Zugang abschneiden, Datensicherung (alle Fassungen) und Diagnosen löschen, zuletzt Geräte, Schlüssel-Backup und Konto. Abbrechen geht nur vor dem Termin; ab dann gilt die Löschung als begonnen (`failed_precondition`), damit nie ein halb gelöschtes Konto ohne Termin bleibt. Der Lauf ist der Unterbefehl `aufraeumen` desselben Images (Cloud Run Job mit eigenem Dienstkonto, Cloud Scheduler). `loeschen_ab` steht in den Antworten von Anmelden, SitzungErneuern und GeraeteAuflisten. Die App verwirft ihre Schlüssel nur nach `geloescht = true` |
 | 2026-11-13 | **CI nur auf `main`** (GitHub-Minuten, privates Repo): keine Läufe auf `develop` und bei PRs, reine Doku-Merges ohne Lauf; dafür lokal `werkzeuge/pruefen.sh` (vor jedem Push) und `pruefen.sh voll` (vor PR nach `main`, mit Race-Detector, govulncheck, buf breaking, tofu test, Image, actionlint), Go und OpenTofu in Linux-Containern. Kleine Jobs zusammengelegt, Image-Test nur noch im Deploy, Dependabot monatlich. Mit der Veröffentlichung als Open Source wieder auf `develop` und bei PRs prüfen |
+| 2026-11-14 | Vor der Veröffentlichung des App-Repos (App-Anf. 7.34): **Zugang nur nach Freigabe** über eine Liste von Kennungen, leer heißt niemand; nicht Freigegebene bekommen ihre Kennung zum Weitergeben, der Server legt nichts an (ID7). **Kosten bei Angriffen** über Grenzen statt versteckte Adresse: signierte Sitzungs-Token ohne Firestore-Lesen bei Fälschungen, Alarm auf die Anfragezahl löst den Kill-Switch aus (ID8). Das Zurücksetzen der Sicherheitsphase behält Projekt und Adresse; die Adresse ist kein Geheimnis |
+| 2026-11-14 | ID7/ID8 umgesetzt (Kevin): Entzug der Freigabe wirkt auch beim Erneuern der Sitzung; Kill-Switch sperrt ab mehr als 10.000 Anfragen je Stunde; Startliste App- und Test-Konto. Kürzerer Timeout und Grenze je IP bewusst nicht |

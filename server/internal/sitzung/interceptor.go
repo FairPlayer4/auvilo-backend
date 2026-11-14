@@ -46,14 +46,16 @@ type SitzungLesen interface {
 // offen genannten Prozeduren (Anmelden, SitzungErneuern). Ein neuer Aufruf ist
 // also automatisch geschützt, auch wenn man ihn hier vergisst.
 type Interceptor struct {
-	sitzungen SitzungLesen
-	offen     map[string]bool
-	jetzt     func() time.Time
+	sitzungen  SitzungLesen
+	aussteller Aussteller
+	offen      map[string]bool
+	jetzt      func() time.Time
 }
 
-// NeuerInterceptor legt den Interceptor an. offen sind die vollen Prozedurnamen
-// (z. B. avlreminderv1connect.AnmeldeDienstAnmeldenProcedure). jetzt nil = time.Now.
-func NeuerInterceptor(sitzungen SitzungLesen, offen []string, jetzt func() time.Time) *Interceptor {
+// NeuerInterceptor legt den Interceptor an. aussteller erkennt die Tokens
+// des Servers. offen sind die vollen Prozedurnamen (z. B.
+// avlreminderv1connect.AnmeldeDienstAnmeldenProcedure). jetzt nil = time.Now.
+func NeuerInterceptor(sitzungen SitzungLesen, aussteller Aussteller, offen []string, jetzt func() time.Time) *Interceptor {
 	if jetzt == nil {
 		jetzt = time.Now
 	}
@@ -61,7 +63,7 @@ func NeuerInterceptor(sitzungen SitzungLesen, offen []string, jetzt func() time.
 	for _, p := range offen {
 		m[p] = true
 	}
-	return &Interceptor{sitzungen: sitzungen, offen: m, jetzt: jetzt}
+	return &Interceptor{sitzungen: sitzungen, aussteller: aussteller, offen: m, jetzt: jetzt}
 }
 
 // Der Interceptor erfüllt connect.Interceptor (Prüfung beim Übersetzen).
@@ -77,6 +79,12 @@ func (i *Interceptor) pruefe(ctx context.Context, prozedur string, kopf http.Hea
 	schema, token, ok := strings.Cut(kopf.Get("Authorization"), " ")
 	if !ok || !strings.EqualFold(schema, "Bearer") || token == "" {
 		return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("Sitzung fehlt"))
+	}
+	// KRITISCH: Erst die Signatur, dann der Speicher. Erfundene Tokens kosten
+	// so nur einen HMAC und keinen Lesezugriff auf Firestore (ID8). Die Antwort
+	// ist dieselbe wie bei einem unbekannten Token.
+	if !i.aussteller.Echt(token) {
+		return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("Sitzung ungültig"))
 	}
 	s, err := i.sitzungen.Sitzung(ctx, Hash(token))
 	if errors.Is(err, speicher.ErrNichtGefunden) {

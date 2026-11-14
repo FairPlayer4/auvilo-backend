@@ -173,6 +173,25 @@ func pruefeVertrag(t *testing.T, neu func(t *testing.T) Speicher) {
 		}
 	})
 
+	t.Run("KennungVon liefert die Kennung des Kontos", func(t *testing.T) {
+		s := neu(t)
+		a := anmelden(t, s, "kennung-a", "geraet-1", "hash-1", 0)
+		b := anmelden(t, s, "kennung-b", "geraet-2", "hash-2", 0)
+		for konto, erwartet := range map[string]string{a.KontoID: "kennung-a", b.KontoID: "kennung-b"} {
+			if k, err := s.KennungVon(ctx, konto); err != nil || k != erwartet {
+				t.Errorf("KennungVon(%s) = %q, %v; erwartet %q", konto, k, err, erwartet)
+			}
+		}
+	})
+
+	t.Run("KennungVon meldet unbekanntes Konto als nicht gefunden", func(t *testing.T) {
+		s := neu(t)
+		anmelden(t, s, "kennung-a", "geraet-1", "hash-1", 0)
+		if k, err := s.KennungVon(ctx, "unbekannt"); !errors.Is(err, ErrNichtGefunden) {
+			t.Errorf("KennungVon = %q, %v; erwartet ErrNichtGefunden", k, err)
+		}
+	})
+
 	t.Run("unbekanntes Gerät und unbekannte Sitzung melden nicht gefunden", func(t *testing.T) {
 		s := neu(t)
 		if _, err := s.Geraet(ctx, "gibt-es-nicht"); !errors.Is(err, ErrNichtGefunden) {
@@ -814,6 +833,9 @@ func pruefeVertrag(t *testing.T, neu func(t *testing.T) Speicher) {
 			if _, err := s.Sitzung(ctx, hash); !errors.Is(err, ErrNichtGefunden) {
 				t.Errorf("Sitzung %s noch da: %v", hash, err)
 			}
+		}
+		if k, err := s.KennungVon(ctx, a); !errors.Is(err, ErrNichtGefunden) {
+			t.Errorf("Kennung nach dem Sperren = %q, %v; erwartet ErrNichtGefunden", k, err)
 		}
 		// Das alte Gerät gehört noch zu Konto a, bis es entfernt ist.
 		if _, err := s.Anmelden(ctx, "kennung-a", geraet("geraet-1", 2), sitzung("hash-4")); !errors.Is(err, ErrGeraetFremd) {
