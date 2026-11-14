@@ -96,7 +96,7 @@ Einwilligung je Sendung (Art. 6 Abs. 1 lit. a DSGVO); du kannst jederzeit aufhö
 schon gesendete löschen wir auf Wunsch.
 
 ## 8. Dienstleister und Drittländer
-- **Google Cloud** ([Vertragspartner]) betreibt Server und Speicher für uns in der
+- **Google Cloud** (Google Cloud EMEA Limited, Irland) betreibt Server und Speicher für uns in der
   Region Belgien, als Auftragsverarbeiter nach Art. 28 DSGVO. Google kann
   Unterauftragnehmer außerhalb der EU einsetzen; dafür gelten die
   EU-Standardvertragsklauseln und das EU-US Data Privacy Framework.

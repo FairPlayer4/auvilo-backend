@@ -11,11 +11,17 @@ Datenschutzerklärung (Abschnitt „Auf dem Gerät“).
   BDSG verlangt ihn erst ab 20 Personen, **oder** wenn eine Verarbeitung einer
   Pflicht-DSFA unterliegt (Satz 2). Deshalb hält [dsfa.md](dsfa.md) fest, ob die DSFA
   Pflicht oder freiwillig ist.
-- **Auftragsverarbeiter:** Google Cloud (Vertragspartner: [laut Cloud Console, z. B.
-  Google Cloud EMEA Limited, Irland – prüfen]), Grundlage: Cloud Data Processing
-  Addendum (CDPA) [akzeptiert am …]. Unterauftragsverarbeiter von Google nach dessen
-  Liste; Übermittlungen in Drittländer (v. a. Google LLC, USA) über die
-  Standardvertragsklauseln im CDPA und das EU-US Data Privacy Framework.
+- **Auftragsverarbeiter:** Google Cloud (Vertragspartner bei Rechnungsadresse in
+  Europa: Google Cloud EMEA Limited, Irland; auf einer Rechnung bestätigen).
+  Grundlage: Cloud Data Processing Addendum (CDPA), Fassung vom 2026-06-08,
+  **akzeptiert am 2026-11-14** von Kevin in der Cloud Console (Rechtliche Hinweise und
+  Compliance). Unterauftragsverarbeiter von Google nach dessen Liste; Übermittlungen in
+  Drittländer (v. a. Google LLC, USA) über die Standardvertragsklauseln im CDPA und das
+  EU-US Data Privacy Framework. Die übrigen Angaben auf der Seite (Bestätigung der
+  DSGVO, EU-Vertreter, Aufsichtsbehörde) gelten nur bei Rechnungsadresse bzw. Sitz
+  außerhalb Europas und bleiben leer; einen Datenschutzbeauftragten gibt es nicht.
+- **Löschen bei Google:** Was wir löschen, entfernt Google aus seinen Systemen (auch
+  Sicherungen) so bald wie möglich, spätestens nach **180 Tagen** (CDPA 6.1).
 - **Keine weiteren Empfänger.** GitHub und Anthropic bekommen keine Daten von Nutzern
   (Ausnahme Diagnosen, V4).
 - **Technische und organisatorische Maßnahmen:** [toms.md](toms.md).

@@ -11,7 +11,7 @@ in der veröffentlichten Fassung ersetzt werden.
 
 | Dokument | Pflicht aus | Stand |
 |---|---|---|
-| [vvt.md](vvt.md) – Verzeichnis der Verarbeitungstätigkeiten, mit Löschfristen und Empfängern | Art. 30 | Entwurf |
+| [vvt.md](vvt.md) – Verzeichnis der Verarbeitungstätigkeiten, mit Löschfristen und Empfängern | Art. 30 | Entwurf; CDPA akzeptiert 2026-11-14 |
 | [toms.md](toms.md) – technische und organisatorische Maßnahmen | Art. 32 | Entwurf |
 | [dsfa.md](dsfa.md) – Datenschutz-Folgenabschätzung | Art. 35 (P7) | Entwurf, Ergebnis offen bis K2 |
 | [datenschutzerklaerung.md](datenschutzerklaerung.md) – Datenschutzerklärung und Testerinformation | Art. 13, Play Store | Entwurf mit Platzhaltern |
@@ -28,6 +28,7 @@ Geprüft: `server/internal/dienst/konto.go`, `server/internal/speicher/firestore
   Konto, Geräte, Sitzungen, Schlüssel-Backup, Datensicherung mit allen Fassungen,
   Diagnosen. Beide Buckets haben kein Soft Delete, Firestore hat weder
   Point-in-Time-Recovery noch Sicherungen: Gelöscht ist wirklich gelöscht (Art. 17).
+  Aus Googles eigenen Systemen verschwindet es spätestens nach 180 Tagen (CDPA 6.1).
 - Bricht das Löschen ab, macht der tägliche Lauf weiter; kein halb gelöschtes Konto
   ohne Termin.
 - Die 7 Tage Wartezeit bei einem Antrag ohne freigeschaltetes Gerät passen zu
@@ -53,9 +54,9 @@ Reihenfolge nach Fälligkeit. „Kevin“ heißt: nur er kann es (Console, recht
 Angaben, Entscheidung).
 
 **Vor dem ersten Tester bzw. vor B3 (Sicherheitsphase):**
-1. **Kevin:** In der Cloud Console prüfen, dass das **Cloud Data Processing Addendum**
-   (CDPA) akzeptiert ist, und den Vertragspartner von Google für [vvt.md](vvt.md)
-   notieren (P3).
+1. ~~**Cloud Data Processing Addendum** (CDPA) akzeptieren (P3)~~ – erledigt
+   2026-11-14 ([vvt.md](vvt.md)). Offen nur: Vertragspartner auf der nächsten Rechnung
+   bestätigen.
 2. **Konto löschen in der App** (K1).
 3. **`zuletzt_aktiv` und die Fristen aus P5** (K2). Empfehlung: vorziehen.
 4. **Freigabeliste pflegen** (K3): Ablauf in [betroffenenrechte.md](betroffenenrechte.md).
