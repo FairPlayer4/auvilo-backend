@@ -68,7 +68,7 @@ liegt in einem Kotlin-Modul, das später in die App übernommen werden kann. [E]
 - ID5 Missbrauchsschutz: Rate-Limits pro Konto und Gerät; später für den Play Store
   zusätzlich **Play Integrity API** (Anfrage kommt von der echten App). [E]
 - ID6 **Gerät abmelden/sperren** aus einem anderen Gerät heraus (verloren, gestohlen).
-- ID7 **Zugang nur nach Freigabe** (2026-11-14, umgesetzt, noch nicht deployt; App-Anf. 7.34 OV1): Der Server
+- ID7 **Zugang nur nach Freigabe** (2026-11-14, umgesetzt und deployt mit PR #25; App-Anf. 7.34 OV1): Der Server
   nimmt nur Google-Konten an, deren **Kennung** (`anmeldung.Kennung`, HMAC aus Pfeffer
   und `sub`) auf einer Liste steht. Nicht die Konto-ID: Die ist zufällig und nach
   *Konto löschen* neu.
@@ -94,7 +94,7 @@ liegt in einem Kotlin-Modul, das später in die App übernommen werden kann. [E]
     Liste neu füllen (zuerst Kevins neue Kennung).
   - Wer einen eigenen Server betreibt, setzt in der App eigene Server-URL und
     Web-Client-ID (App-Anf. 7.34 OV1); der offizielle Server bleibt geschlossen.
-- ID8 **Kosten bei Angriffen begrenzen** (2026-11-14, umgesetzt, noch nicht deployt): Die Adresse ist kein
+- ID8 **Kosten bei Angriffen begrenzen** (2026-11-14, umgesetzt und deployt mit PR #25): Die Adresse ist kein
   Geheimnis (sie steht in jeder APK und im Repo); geschützt wird über Grenzen, nicht
   über Verstecken. Schon da: `max_instance_count` 2, Timeout 30 s, Größenlimits je
   Methode, Tageszähler je Konto, Alarm bei viel ausgehendem Verkehr, Kill-Switch über

@@ -41,7 +41,7 @@ Geprüft: `server/internal/dienst/konto.go`, `server/internal/speicher/firestore
 | Nr. | Lücke | Gewicht | Empfehlung |
 |---|---|---|---|
 | K1 | Die **App** kann das Konto noch nicht löschen; nur der Test-Client kann es. | vor dem ersten Tester Pflicht | wie geplant (App-Repo `docs/stand.md`) |
-| K2 | ~~**Die Frist aus P5 lässt sich nicht umsetzen:** keine letzte Aktivität im Konto.~~ **Erledigt 2026-11-14:** `zuletzt_aktiv` (nur der Tag) beim Anmelden und Erneuern; der tägliche Lauf `aufraeumen` merkt Konten nach 24 Monaten ohne Aktivität zur Löschung in 7 Tagen vor und ersetzt Geräte, die seit 90 Tagen gesperrt sind, durch einen Grabstein ([anforderungen.md](../anforderungen.md) Kap. 11). | – | Wirkt erst nach dem Deploy (PR nach `main`). Konten von vor dem Deploy erfasst die Frist erst nach ihrer nächsten Anmeldung. |
+| K2 | ~~**Die Frist aus P5 lässt sich nicht umsetzen:** keine letzte Aktivität im Konto.~~ **Erledigt 2026-11-14:** `zuletzt_aktiv` (nur der Tag) beim Anmelden und Erneuern; der tägliche Lauf `aufraeumen` merkt Konten nach 24 Monaten ohne Aktivität zur Löschung in 7 Tagen vor und ersetzt Geräte, die seit 90 Tagen gesperrt sind, durch einen Grabstein ([anforderungen.md](../anforderungen.md) Kap. 11). | – | Deployt 2026-11-14 (PR #26). Konten von vor dem Deploy erfasst die Frist erst nach ihrer nächsten Anmeldung. |
 | K3 | Die **Kennung bleibt auf der Freigabeliste** (`freigegebene_kennungen` in `werte.auto.tfvars`, Umgebungsvariable des Dienstes, auch in alten Revisionen). Sie ist ein Pseudonym der Person; meldet sie sich neu an, ist sie sofort wieder zugelassen. | mittel | Die Liste ist eine eigene Verarbeitung (Zugangsverwaltung, [vvt.md](vvt.md) V1). Austragen, wenn jemand nicht mehr teilnimmt oder es verlangt; alte Revisionen dann löschen. In der Datenschutzerklärung nennen. |
 | K4 | **Logs** (Konto-ID, Geräte-ID, IP-Adresse) bleiben bis 30 Tage nach dem Löschen. | bewusst | So entschieden (Kap. 11, 2026-11-01); steht in der Datenschutzerklärung. |
 | K5 | **Tageszähler** (`kontingente`, Konto-ID in der Dokument-ID) verschwinden erst mit der TTL. Firestore löscht abgelaufene Dokumente verzögert, laut Google in der Regel innerhalb von 24 Stunden; „höchstens zwei Tage“ in B1 ist also zu knapp. | gering | In B1 und Datenschutzerklärung „wenige Tage“ schreiben. |
@@ -58,8 +58,8 @@ Angaben, Entscheidung).
    2026-11-14 ([vvt.md](vvt.md)). Offen nur: Vertragspartner auf der nächsten Rechnung
    bestätigen.
 2. **Konto löschen in der App** (K1).
-3. ~~**`zuletzt_aktiv` und die Fristen aus P5** (K2)~~ – umgesetzt 2026-11-14; offen
-   nur der Deploy.
+3. ~~**`zuletzt_aktiv` und die Fristen aus P5** (K2)~~ – umgesetzt und deployt
+   2026-11-14 (PR #26).
 4. **Freigabeliste pflegen** (K3): Ablauf in [betroffenenrechte.md](betroffenenrechte.md).
 5. **Auskunft** (Art. 15, B2): Die App braucht eine Anzeige der eigenen Konto-ID, damit
    Kevin eine Anfrage zuordnen kann; den Rest erledigt er nach

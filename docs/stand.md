@@ -131,8 +131,8 @@ Einzelheiten stehen in den Entwürfen, in git und in den Review-Berichten
 | B2b | Daten-Backup einer Person: Datensicherung in Cloud Storage, Freischaltung neuer Geräte (E-B2b-13), Tageslimits, Fassungen (R-4), Diagnose-Log ([b2b-entwurf.md](b2b-entwurf.md), [diagnose-entwurf.md](diagnose-entwurf.md)) | Server und Client fertig, zuletzt in der Cloud getestet am 2026-11-10 (Limits, Fassungen, Trennen ab 150 %); App-Einbindung: App-Repo `docs/stand.md` |
 | B3 | Teilen zwischen Personen | nicht begonnen; Vorgaben in [anforderungen.md](anforderungen.md) Kap. 4.6; davor die Sicherheitsphase |
 
-Letzter Deploy: PR #25 am 2026-11-14 (ID7/ID8: Freigabeliste, signierte Tokens, Anfrage-Alarm),
-Revision `server-00023-bm7` (mit beiden Kennungen), bereit; der Job `aufraeumen` hat dasselbe Image.
+Letzter Deploy: PR #26 am 2026-11-14 (Fristen aus P5: `zuletzt_aktiv`, Grabsteine),
+Revision `server-00024-2gg`, bereit; der Job `aufraeumen` hat dasselbe Image.
 
 ## Offen
 1. **Eigenbetrieb** seit 2026-11-07: Die App sichert Kevins echte Daten in der Cloud;
@@ -159,11 +159,11 @@ Revision `server-00023-bm7` (mit beiden Kennungen), bereit; der Job `aufraeumen`
    Sicherung für eine Person sicher; für die DSGVO fehlen vor allem Konto löschen
    und Fristen ([anforderungen.md](anforderungen.md) Kap. 4.4, 4.5, 11).
    **DSGVO-Dokumente** (Entwürfe, 2026-11-14) und die Liste, was noch fehlt:
-   [datenschutz/README.md](datenschutz/README.md). K2 ist **umgesetzt
-   (2026-11-14, auf `develop`, noch nicht deployt):** `zuletzt_aktiv`, Löschung nach
-   24 Monaten ohne Anmeldung, Grabsteine für Geräte nach 90 Tagen Sperre im Lauf
-   `aufraeumen`. Nach dem Deploy in der Cloud prüfen, dass der Lauf grün endet
-   (Log „Aufräumen beendet“ mit `begrabene_geraete`, `vorgemerkte_konten`).
+   [datenschutz/README.md](datenschutz/README.md). K2 ist **umgesetzt und
+   deployt (2026-11-14, PR #26):** `zuletzt_aktiv`, Löschung nach 24 Monaten ohne
+   Anmeldung, Grabsteine für Geräte nach 90 Tagen Sperre im Lauf `aufraeumen`.
+   Erster Lauf von Hand nach dem Deploy grün („Aufräumen beendet“, alle Zähler 0,
+   wie erwartet: noch kein Gerät 90 Tage gesperrt, kein Konto 24 Monate alt).
 2. **App-Einbindung** (Schritte 1–5, Wiederherstellen R-1…R-6): App-Repo
    `docs/stand.md`; dort auch die Gerätetests.
 3. **Review-Punkte:** `.review/state.md`, Abschnitt „Offen“.
