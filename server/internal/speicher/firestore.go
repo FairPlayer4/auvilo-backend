@@ -18,6 +18,8 @@ const (
 	sammlungGeraete   = "geraete"          // Dokument-ID: Geräte-ID
 	sammlungSitzungen = "sitzungen"        // Dokument-ID: Hash des Tokens; TTL auf laeuft_ab
 	sammlungBackups   = "backups"          // Dokument-ID: Konto-ID (siehe docs/b2-entwurf.md)
+	// Begrabene Geräte (GeraetBegraben); Dokument-ID: Geräte-ID.
+	sammlungGrabsteine = "geraete_grabsteine"
 )
 
 // Dokumente, wie sie in Firestore liegen. Die Tags "firestore:..." geben die
@@ -30,6 +32,23 @@ type kontoDok struct {
 	Erstellt time.Time `firestore:"erstellt"` // nur der Tag (Datensparsamkeit)
 	// Gesetzt, solange eine Löschung beantragt ist (KontoLoeschen).
 	LoeschenAb *time.Time `firestore:"loeschen_ab,omitempty"`
+	// Tag der letzten Anmeldung oder Erneuerung (aktivTag), für die Frist aus
+	// P5. Fehlt bei Konten aus der Zeit davor bis zur nächsten Aktivität.
+	ZuletztAktiv *time.Time `firestore:"zuletzt_aktiv,omitempty"`
+}
+
+// zuletztAktiv liefert den Tag der letzten Aktivität (Nullwert = keiner).
+func (k kontoDok) zuletztAktiv() time.Time {
+	if k.ZuletztAktiv == nil {
+		return time.Time{}
+	}
+	return k.ZuletztAktiv.UTC()
+}
+
+// grabsteinDok: Von einem begrabenen Gerät bleibt nur das Konto, damit
+// Anmelden es weiter ablehnt und KontoEntfernen den Grabstein findet.
+type grabsteinDok struct {
+	KontoID string `firestore:"konto_id"`
 }
 
 type geraetDok struct {
@@ -112,11 +131,28 @@ func (f *Firestore) Anmelden(ctx context.Context, kennung string, g Geraet, s Ne
 			return err
 		}
 		ergebnis.KontoID = kd.KontoID
+		kontoRef := f.c.Collection(sammlungKonten).Doc(kd.KontoID)
 
-		geraetSnap, err := tx.Get(geraetRef)
-		geraetNeu := false
-		switch {
-		case err == nil:
+		// Gerät und Konto in einem Aufruf: Jede weitere Runde zum Server
+		// verlängert die Transaktion, und ein gleichzeitiges Sperren gewinnt
+		// dann fast immer (Rennen im Vertragstest).
+		// GetAll liefert fehlende Dokumente ohne Fehler, mit Exists() == false.
+		snaps, err := tx.GetAll([]*firestore.DocumentRef{geraetRef, kontoRef})
+		if err != nil {
+			return err
+		}
+		geraetSnap, kontoSnap := snaps[0], snaps[1]
+		aktivSchreiben := false
+		if !ergebnis.NeuesKonto && kontoSnap.Exists() {
+			var konto kontoDok
+			if err := kontoSnap.DataTo(&konto); err != nil {
+				return err
+			}
+			aktivSchreiben = mussAktivSchreiben(konto.zuletztAktiv(), aktivTag(g.Erstellt))
+		}
+
+		geraetNeu := !geraetSnap.Exists()
+		if !geraetNeu {
 			var gd geraetDok
 			if err := geraetSnap.DataTo(&gd); err != nil {
 				return err
@@ -128,12 +164,12 @@ func (f *Firestore) Anmelden(ctx context.Context, kennung string, g Geraet, s Ne
 				return ErrGeraetGesperrt
 			}
 			ergebnis.Freigeschaltet = gd.Freigeschaltet
-		case nichtGefunden(err):
-			geraetNeu = true
-		default:
-			return err
 		}
 		if geraetNeu {
+			// KRITISCH: Ein begrabenes Gerät bleibt gesperrt.
+			if err := f.grabsteinPruefen(tx, g.ID, kd.KontoID); err != nil {
+				return err
+			}
 			geraete, err := f.geraeteIn(tx, kd.KontoID)
 			if err != nil {
 				return err
@@ -154,8 +190,14 @@ func (f *Firestore) Anmelden(ctx context.Context, kennung string, g Geraet, s Ne
 			if err := tx.Create(kennungRef, kd); err != nil {
 				return err
 			}
-			konto := kontoDok{Erstellt: g.Erstellt.UTC().Truncate(24 * time.Hour)}
-			if err := tx.Create(f.c.Collection(sammlungKonten).Doc(kd.KontoID), konto); err != nil {
+			tag := aktivTag(g.Erstellt)
+			konto := kontoDok{Erstellt: tag, ZuletztAktiv: &tag}
+			if err := tx.Create(kontoRef, konto); err != nil {
+				return err
+			}
+		}
+		if aktivSchreiben {
+			if err := tx.Update(kontoRef, []firestore.Update{{Path: "zuletzt_aktiv", Value: aktivTag(g.Erstellt)}}); err != nil {
 				return err
 			}
 		}
@@ -180,6 +222,26 @@ func (f *Firestore) Anmelden(ctx context.Context, kennung string, g Geraet, s Ne
 		return AnmeldeErgebnis{}, fmt.Errorf("anmelden: %w", err)
 	}
 	return ergebnis, nil
+}
+
+// grabsteinPruefen liest in der Transaktion, ob die Geräte-ID begraben ist:
+// im eigenen Konto ErrGeraetGesperrt, in einem anderen ErrGeraetFremd.
+func (f *Firestore) grabsteinPruefen(tx *firestore.Transaction, geraetID, kontoID string) error {
+	snap, err := tx.Get(f.c.Collection(sammlungGrabsteine).Doc(geraetID))
+	if nichtGefunden(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	var gs grabsteinDok
+	if err := snap.DataTo(&gs); err != nil {
+		return err
+	}
+	if gs.KontoID != kontoID {
+		return ErrGeraetFremd
+	}
+	return ErrGeraetGesperrt
 }
 
 // geraeteIn liest die Geräte eines Kontos in der Transaktion (für die Regeln
@@ -218,15 +280,28 @@ func (f *Firestore) backupMitSchluessel(tx *firestore.Transaction, kontoID strin
 	return len(bd.Freischaltschluessel) > 0, nil
 }
 
+// Geraet erfüllt Speicher.Geraet. Fehlt das Gerät, wird der Grabstein gelesen
+// (ein zweiter Lesezugriff nur für unbekannte und begrabene Geräte).
 func (f *Firestore) Geraet(ctx context.Context, geraetID string) (Geraet, error) {
 	snap, err := f.c.Collection(sammlungGeraete).Doc(geraetID).Get(ctx)
+	if err == nil {
+		return geraetAus(snap)
+	}
+	if !nichtGefunden(err) {
+		return Geraet{}, err
+	}
+	snap, err = f.c.Collection(sammlungGrabsteine).Doc(geraetID).Get(ctx)
 	if nichtGefunden(err) {
 		return Geraet{}, ErrNichtGefunden
 	}
 	if err != nil {
 		return Geraet{}, err
 	}
-	return geraetAus(snap)
+	var gs grabsteinDok
+	if err := snap.DataTo(&gs); err != nil {
+		return Geraet{}, err
+	}
+	return begraben(geraetID, gs.KontoID), nil
 }
 
 // KennungVon erfüllt Speicher.KennungVon. Die Kennung ist die Dokument-ID;
@@ -246,8 +321,10 @@ func (f *Firestore) KennungVon(ctx context.Context, kontoID string) (string, err
 //
 // KRITISCH: Die Sperre wird in derselben Transaktion gelesen, in der die
 // Sitzung entsteht. Läse man das Gerät vorher (außerhalb), könnte ein
-// gleichzeitiges Sperren die neue Sitzung übersehen.
-func (f *Firestore) SitzungAnlegen(ctx context.Context, geraetID string, s NeueSitzung) (string, error) {
+// gleichzeitiges Sperren die neue Sitzung übersehen. Das Konto wird mitgelesen,
+// damit zuletzt_aktiv höchstens einmal am Tag geschrieben wird; fehlt es, wird
+// nur die Sitzung angelegt.
+func (f *Firestore) SitzungAnlegen(ctx context.Context, geraetID string, s NeueSitzung, jetzt time.Time) (string, error) {
 	var kontoID string
 	err := f.c.RunTransaction(ctx, func(ctx context.Context, tx *firestore.Transaction) error {
 		snap, err := tx.Get(f.c.Collection(sammlungGeraete).Doc(geraetID))
@@ -265,11 +342,23 @@ func (f *Firestore) SitzungAnlegen(ctx context.Context, geraetID string, s NeueS
 			return ErrGeraetGesperrt
 		}
 		kontoID = g.KontoID
-		return tx.Create(f.c.Collection(sammlungSitzungen).Doc(s.Hash), sitzungDok{
+		kontoRef := f.c.Collection(sammlungKonten).Doc(g.KontoID)
+		konto, err := kontoIn(tx, kontoRef)
+		if err != nil && !errors.Is(err, ErrNichtGefunden) {
+			return err
+		}
+		aktivSchreiben := err == nil && mussAktivSchreiben(konto.zuletztAktiv(), aktivTag(jetzt))
+		if err := tx.Create(f.c.Collection(sammlungSitzungen).Doc(s.Hash), sitzungDok{
 			KontoID:  g.KontoID,
 			GeraetID: geraetID,
 			LaeuftAb: s.LaeuftAb.UTC().Truncate(time.Millisecond),
-		})
+		}); err != nil {
+			return err
+		}
+		if !aktivSchreiben {
+			return nil
+		}
+		return tx.Update(kontoRef, []firestore.Update{{Path: "zuletzt_aktiv", Value: aktivTag(jetzt)}})
 	})
 	if err != nil {
 		return "", fmt.Errorf("Sitzung anlegen: %w", err)
@@ -590,14 +679,9 @@ func (f *Firestore) konto(ctx context.Context, kontoID string) (kd kontoDok, gib
 // FaelligeLoeschungen erfüllt Speicher.FaelligeLoeschungen. Konten ohne
 // loeschen_ab stehen nicht im Index des Felds und werden nicht gefunden.
 func (f *Firestore) FaelligeLoeschungen(ctx context.Context, jetzt time.Time, max int) ([]string, error) {
-	snaps, err := f.c.Collection(sammlungKonten).Where("loeschen_ab", "<=", jetzt.UTC()).
-		Select().Limit(max).Documents(ctx).GetAll()
+	ids, err := f.idsVon(ctx, f.c.Collection(sammlungKonten).Where("loeschen_ab", "<=", jetzt.UTC()), max)
 	if err != nil {
 		return nil, fmt.Errorf("fällige Löschungen: %w", err)
-	}
-	ids := make([]string, 0, len(snaps))
-	for _, snap := range snaps {
-		ids = append(ids, snap.Ref.ID)
 	}
 	return ids, nil
 }
@@ -668,6 +752,9 @@ func (f *Firestore) KontoEntfernen(ctx context.Context, kontoID string, jetzt ti
 		{"Kennung", f.c.Collection(sammlungKennungen).Where("konto_id", "==", kontoID)},
 		{"Sitzungen", f.c.Collection(sammlungSitzungen).Where("konto_id", "==", kontoID)},
 		{"Geräte", f.c.Collection(sammlungGeraete).Where("konto_id", "==", kontoID)},
+		// Nach den Geräten: Ein gleichzeitiges Begraben findet dann kein Gerät
+		// mehr, oder sein Grabstein liegt schon da und wird hier gelöscht.
+		{"Grabsteine", f.c.Collection(sammlungGrabsteine).Where("konto_id", "==", kontoID)},
 	}
 	for _, s := range schritte {
 		if err := f.loescheAlle(ctx, s.q); err != nil {
@@ -681,6 +768,107 @@ func (f *Firestore) KontoEntfernen(ctx context.Context, kontoID string, jetzt ti
 		return fmt.Errorf("Konto entfernen: %w", err)
 	}
 	return nil
+}
+
+// InaktiveKonten erfüllt Speicher.InaktiveKonten. Konten ohne zuletzt_aktiv
+// stehen nicht im Index des Felds und werden nicht gefunden.
+func (f *Firestore) InaktiveKonten(ctx context.Context, grenze time.Time, max int) ([]string, error) {
+	ids, err := f.idsVon(ctx, f.c.Collection(sammlungKonten).Where("zuletzt_aktiv", "<", grenze.UTC()), max)
+	if err != nil {
+		return nil, fmt.Errorf("inaktive Konten: %w", err)
+	}
+	return ids, nil
+}
+
+// InaktivesKontoVormerken erfüllt Speicher.InaktivesKontoVormerken.
+//
+// KRITISCH: Aktivität lesen und Termin setzen in einer Transaktion. Schreibt
+// eine Anmeldung zuletzt_aktiv dazwischen, wiederholt Firestore die Funktion,
+// und das Konto ist nicht mehr inaktiv.
+func (f *Firestore) InaktivesKontoVormerken(ctx context.Context, kontoID string, grenze, ab time.Time) (bool, error) {
+	var geaendert bool
+	err := f.c.RunTransaction(ctx, func(ctx context.Context, tx *firestore.Transaction) error {
+		geaendert = false
+		ref := f.c.Collection(sammlungKonten).Doc(kontoID)
+		kd, err := kontoIn(tx, ref)
+		if errors.Is(err, ErrNichtGefunden) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if !istInaktiv(kd.zuletztAktiv(), grenze) {
+			return nil
+		}
+		var alt time.Time
+		if kd.LoeschenAb != nil {
+			alt = kd.LoeschenAb.UTC()
+		}
+		termin := frueherTermin(alt, ab.UTC().Truncate(time.Millisecond))
+		if termin.Equal(alt) {
+			return nil
+		}
+		geaendert = true
+		return tx.Update(ref, []firestore.Update{{Path: "loeschen_ab", Value: termin}})
+	})
+	if err != nil {
+		return false, fmt.Errorf("inaktives Konto vormerken: %w", err)
+	}
+	return geaendert, nil
+}
+
+// LangeGesperrteGeraete erfüllt Speicher.LangeGesperrteGeraete. Nur gesperrte
+// Geräte haben gesperrt_am.
+func (f *Firestore) LangeGesperrteGeraete(ctx context.Context, grenze time.Time, max int) ([]string, error) {
+	ids, err := f.idsVon(ctx, f.c.Collection(sammlungGeraete).Where("gesperrt_am", "<", grenze.UTC()), max)
+	if err != nil {
+		return nil, fmt.Errorf("lange gesperrte Geräte: %w", err)
+	}
+	return ids, nil
+}
+
+// GeraetBegraben erfüllt Speicher.GeraetBegraben: Gerät lesen und prüfen,
+// Grabstein anlegen und Gerät löschen in einer Transaktion. So gibt es nie
+// einen Augenblick ohne beides, in dem sich das Gerät neu anmelden könnte.
+func (f *Firestore) GeraetBegraben(ctx context.Context, geraetID string, grenze time.Time) error {
+	err := f.c.RunTransaction(ctx, func(ctx context.Context, tx *firestore.Transaction) error {
+		ref := f.c.Collection(sammlungGeraete).Doc(geraetID)
+		snap, err := tx.Get(ref)
+		if nichtGefunden(err) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		g, err := geraetAus(snap)
+		if err != nil {
+			return err
+		}
+		if err := darfBegraben(g, grenze); err != nil {
+			return err
+		}
+		if err := tx.Set(f.c.Collection(sammlungGrabsteine).Doc(geraetID), grabsteinDok{KontoID: g.KontoID}); err != nil {
+			return err
+		}
+		return tx.Delete(ref)
+	})
+	if err != nil {
+		return fmt.Errorf("Gerät begraben: %w", err)
+	}
+	return nil
+}
+
+// idsVon liefert die Dokument-IDs der ersten max Treffer (ohne Inhalte).
+func (f *Firestore) idsVon(ctx context.Context, q firestore.Query, max int) ([]string, error) {
+	snaps, err := q.Select().Limit(max).Documents(ctx).GetAll()
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]string, 0, len(snaps))
+	for _, snap := range snaps {
+		ids = append(ids, snap.Ref.ID)
+	}
+	return ids, nil
 }
 
 func geraetAus(snap *firestore.DocumentSnapshot) (Geraet, error) {

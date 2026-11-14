@@ -222,7 +222,9 @@ resource "google_monitoring_notification_channel" "killswitch" {
 }
 
 # Cloud Monitoring veröffentlicht mit seinem eigenen Dienstkonto. Google legt
-# es mit dem ersten Pub/Sub-Kanal an, daher erst nach dem Kanal.
+# es mit dem ersten Pub/Sub-Kanal an, daher erst nach dem Kanal. Das Anlegen
+# braucht einige Sekunden: Beim ersten apply (2026-11-14) meldete Google
+# "does not exist", ein zweites apply direkt danach lief durch.
 resource "google_pubsub_topic_iam_member" "monitoring_meldet" {
   topic      = google_pubsub_topic.budget.name
   role       = "roles/pubsub.publisher"

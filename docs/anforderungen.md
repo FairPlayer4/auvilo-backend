@@ -192,8 +192,8 @@ liegt in einem Kotlin-Modul, das später in die App übernommen werden kann. [E]
   Erst den Termin setzen, dann den Zugang abschneiden (Kennung, Sitzungen, Geräte
   gesperrt), dann die Inhalte, zuletzt Geräte, Schlüssel-Backup und Konto: Bricht es
   ab, findet der regelmäßige Lauf das Konto über den Termin und macht weiter
-  (Kap. 11, 2026-11-12, Umsetzung). Tageszähler laufen von selbst ab (höchstens zwei
-  Tage). In der App vor dem ersten weiteren Nutzer (vorgezogen aus B4,
+  (Kap. 11, 2026-11-12, Umsetzung). Tageszähler laufen von selbst ab (TTL nach etwa
+  zwei Tagen, Firestore löscht danach mit Verzögerung; zusammen wenige Tage). In der App vor dem ersten weiteren Nutzer (vorgezogen aus B4,
   Kap. 11, 2026-11-12).
   **Ohne Zugang** (Kap. 11, 2026-11-12):
   - Ein *freigeschaltetes* Gerät löscht sofort. Ein nicht freigeschaltetes Gerät
@@ -287,11 +287,14 @@ nicht (Kap. 11, 2026-11-12). Wird in der Datenschutzerklärung so benannt.
 - P4 Verzeichnis der Verarbeitungstätigkeiten, Datenschutzerklärung (öffentliche URL),
   Angaben zur Datensicherheit im Play Store, Webseite zum Löschen des Kontos. Dazu
   die TOMs (Art. 32) auf einer Seite, ein Ablauf für Datenpannen (Art. 33/34,
-  72 Stunden) und vor dem ersten Tester eine Testerinformation.
+  72 Stunden) und vor dem ersten Tester eine Testerinformation. Entwürfe und offene
+  Punkte: [datenschutz/README.md](datenschutz/README.md) (seit 2026-11-14).
 - P5 Aufbewahrung: Operationen bis zum Snapshot bzw. max. 90 Tage, Logs max. 30 Tage,
-  KI-Anfragen gar nicht. Konten ohne Anmeldung seit 24 Monaten löscht der Server auf
-  demselben Weg wie B1 (Kap. 3.5), gesperrte Geräte nach 90 Tagen; einmal im Monat
-  angestoßen, spätestens zu B6 (Kap. 11, 2026-11-12).
+  KI-Anfragen gar nicht. Ein Konto ohne Anmeldung und ohne Erneuerung der Sitzung
+  seit 24 Monaten bekommt einen Löschtermin in 7 Tagen und wird dann auf demselben
+  Weg wie B1 gelöscht (Kap. 3.5). Gesperrte Geräte werden nach 90 Tagen durch einen
+  Grabstein ersetzt (nur Geräte-ID und Konto, bis das Konto gelöscht wird). Beides
+  macht der tägliche Lauf `aufraeumen`; umgesetzt 2026-11-14 (Kap. 11).
 - P6 **Rechtsgrundlagen:** Vertrag (Art. 6 Abs. 1 lit. b) für Anmeldung, Sicherung und
   Teilen; berechtigtes Interesse (lit. f) für Server-Logs, Limits und
   Missbrauchsschutz; Einwilligung (lit. a, je Sendung) für Diagnosen.
@@ -573,3 +576,5 @@ tragen die Tests die Spezifikation. Anleitung zum Review: [go-review.md](go-revi
 | 2026-11-13 | **CI nur auf `main`** (GitHub-Minuten, privates Repo): keine Läufe auf `develop` und bei PRs, reine Doku-Merges ohne Lauf; dafür lokal `werkzeuge/pruefen.sh` (vor jedem Push) und `pruefen.sh voll` (vor PR nach `main`, mit Race-Detector, govulncheck, buf breaking, tofu test, Image, actionlint), Go und OpenTofu in Linux-Containern. Kleine Jobs zusammengelegt, Image-Test nur noch im Deploy, Dependabot monatlich. Mit der Veröffentlichung als Open Source wieder auf `develop` und bei PRs prüfen |
 | 2026-11-14 | Vor der Veröffentlichung des App-Repos (App-Anf. 7.34): **Zugang nur nach Freigabe** über eine Liste von Kennungen, leer heißt niemand; nicht Freigegebene bekommen ihre Kennung zum Weitergeben, der Server legt nichts an (ID7). **Kosten bei Angriffen** über Grenzen statt versteckte Adresse: signierte Sitzungs-Token ohne Firestore-Lesen bei Fälschungen, Alarm auf die Anfragezahl löst den Kill-Switch aus (ID8). Das Zurücksetzen der Sicherheitsphase behält Projekt und Adresse; die Adresse ist kein Geheimnis |
 | 2026-11-14 | ID7/ID8 umgesetzt (Kevin): Entzug der Freigabe wirkt auch beim Erneuern der Sitzung; Kill-Switch sperrt ab mehr als 10.000 Anfragen je Stunde; Startliste App- und Test-Konto. Kürzerer Timeout und Grenze je IP bewusst nicht |
+| 2026-11-14 | **Fristen aus P5 umgesetzt** ([datenschutz/README.md](datenschutz/README.md) K2): Das Konto speichert `zuletzt_aktiv` (nur der Tag), gesetzt beim Anmelden und Erneuern, höchstens ein Schreibvorgang je Konto und Tag. Der tägliche Lauf merkt Konten nach 24 vollen Monaten ohne Aktivität zur Löschung in 7 Tagen vor. Der Termin wirkt wie ein Antrag: Die Geräte sehen ihn, nur ein freigeschaltetes Gerät bricht ab, eine Anmeldung allein hebt ihn nicht auf (der Speicher unterscheidet die beiden nicht). Gesperrte Geräte ersetzt der Lauf nach 90 Tagen durch einen **Grabstein** (Kevin): Schlüssel und Zeitpunkte verschwinden, Geräte-ID und Konto bleiben in `geraete_grabsteine`, bis das Konto gelöscht wird. Sonst meldete sich ein gestohlenes Handy mit seinem alten Schlüssel als neues Gerät an. Konten aus der Zeit davor erfasst die Frist erst nach ihrer nächsten Anmeldung; Firestore wird zu Beginn der Sicherheitsphase ohnehin geleert |
+| 2026-11-14 | Backend wird mit der App veröffentlicht (App-Anf. 7.34, Kevin): Lizenz **Apache-2.0**; Historie bleibt (nur Gmail- und GitHub-Adressen, keine Testdaten); Doku war schon ohne Benutzerpfade; CI bei PRs und GitHub-Einstellungen erst kurz davor |

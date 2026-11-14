@@ -27,11 +27,35 @@ import (
 // Antrag aus einem übernommenen Google-Konto zu bemerken und abzubrechen.
 const WartezeitLoeschung = 7 * 24 * time.Hour
 
+// Fristen aus P5 (docs/anforderungen.md Kap. 4.4, datenschutz/README.md K2),
+// die der regelmäßige Lauf (Aufraeumen) umsetzt.
+const (
+	// FristInaktivMonate: Ein Konto, das sich so lange weder angemeldet noch
+	// eine Sitzung erneuert hat, wird zur Löschung vorgemerkt; gelöscht wird es
+	// WartezeitLoeschung später auf dem üblichen Weg.
+	FristInaktivMonate = 24
+	// FristGesperrt: So lange nach dem Sperren wird ein Gerät begraben
+	// (Speicher.GeraetBegraben): Schlüssel und Zeitpunkte verschwinden, die
+	// Sperre bleibt.
+	FristGesperrt = 90 * 24 * time.Hour
+)
+
+// inaktivGrenze: Konten, deren letzte Aktivität vor diesem Tag liegt, sind
+// inaktiv. Auf den Tag abgerundet, weil das Konto nur den Tag speichert: So
+// liegen immer mindestens volle FristInaktivMonate dazwischen.
+func inaktivGrenze(jetzt time.Time) time.Time {
+	return jetzt.UTC().AddDate(0, -FristInaktivMonate, 0).Truncate(24 * time.Hour)
+}
+
 // loeschSpeicher ist, was der Löschweg vom Speicher braucht.
 type loeschSpeicher interface {
 	FaelligeLoeschungen(ctx context.Context, jetzt time.Time, max int) ([]string, error)
 	KontoSperren(ctx context.Context, kontoID string, jetzt time.Time) error
 	KontoEntfernen(ctx context.Context, kontoID string, jetzt time.Time) error
+	InaktiveKonten(ctx context.Context, grenze time.Time, max int) ([]string, error)
+	InaktivesKontoVormerken(ctx context.Context, kontoID string, grenze, ab time.Time) (bool, error)
+	LangeGesperrteGeraete(ctx context.Context, grenze time.Time, max int) ([]string, error)
+	GeraetBegraben(ctx context.Context, geraetID string, grenze time.Time) error
 }
 
 // kontoSpeicher ist, was der Konto-Dienst vom Speicher braucht.
@@ -92,26 +116,84 @@ func (l *Loescher) loeschen(ctx context.Context, kontoID string, jetzt time.Time
 	return nil
 }
 
-// faelligeJeAbfrage: So viele fällige Konten holt Aufraeumen auf einmal.
-const faelligeJeAbfrage = 50
+// jeAbfrage: So viele Treffer holt Aufraeumen je Abfrage auf einmal.
+const jeAbfrage = 50
 
-// Aufraeumen löscht alle Konten, deren Termin erreicht ist (ein Durchgang des
-// regelmäßigen Laufs). Scheitert ein Konto, macht es mit den übrigen weiter;
-// die Fehler kommen gesammelt zurück, und das Konto bleibt für den nächsten
-// Lauf fällig. Liefert die Zahl der gelöschten Konten.
+// AufraeumErgebnis zählt, was ein Durchgang von Aufraeumen getan hat.
+type AufraeumErgebnis struct {
+	Begraben   int // gesperrte Geräte, durch Grabsteine ersetzt
+	Vorgemerkt int // inaktive Konten, die einen Löschtermin bekommen haben
+	Geloescht  int // Konten mit erreichtem Termin, gelöscht
+}
+
+// Aufraeumen ist ein Durchgang des regelmäßigen Laufs, in drei Schritten:
+//  1. Geräte, die länger als FristGesperrt gesperrt sind, begraben.
+//  2. Konten, die länger als FristInaktivMonate inaktiv sind, zur Löschung
+//     vormerken (Termin in WartezeitLoeschung). Die Geräte sehen den Termin wie
+//     bei einem Antrag, und ein freigeschaltetes Gerät kann abbrechen.
+//  3. Alle Konten löschen, deren Termin erreicht ist.
 //
-// Später löscht derselbe Lauf auch nach den Fristen aus P5 (lange nicht
-// angemeldete Konten, gesperrte Geräte).
-func (l *Loescher) Aufraeumen(ctx context.Context, jetzt time.Time) (int, error) {
+// Scheitert ein Gerät oder Konto, macht jeder Schritt mit den übrigen weiter,
+// und auch die folgenden Schritte laufen; die Fehler kommen gesammelt zurück.
+// Was scheiterte, findet der nächste Lauf wieder.
+func (l *Loescher) Aufraeumen(ctx context.Context, jetzt time.Time) (AufraeumErgebnis, error) {
+	var e AufraeumErgebnis
+	var fehler []error
+
+	gesperrtVor := jetzt.Add(-FristGesperrt)
+	fehler = append(fehler, jeEinmal(func(max int) ([]string, error) {
+		return l.speicher.LangeGesperrteGeraete(ctx, gesperrtVor, max)
+	}, func(id string) error {
+		if err := l.speicher.GeraetBegraben(ctx, id, gesperrtVor); err != nil {
+			return fmt.Errorf("Gerät %s begraben: %w", id, err)
+		}
+		e.Begraben++
+		slog.InfoContext(ctx, "Gesperrtes Gerät begraben (Lauf)", "geraet", id)
+		return nil
+	})...)
+
+	grenze := inaktivGrenze(jetzt)
+	ab := jetzt.Add(WartezeitLoeschung)
+	fehler = append(fehler, jeEinmal(func(max int) ([]string, error) {
+		return l.speicher.InaktiveKonten(ctx, grenze, max)
+	}, func(id string) error {
+		geaendert, err := l.speicher.InaktivesKontoVormerken(ctx, id, grenze, ab)
+		if err != nil {
+			return fmt.Errorf("Konto %s vormerken: %w", id, err)
+		}
+		if geaendert {
+			e.Vorgemerkt++
+			slog.InfoContext(ctx, "Inaktives Konto zur Löschung vorgemerkt (Lauf)", "konto", id, "ab", ab)
+		}
+		return nil
+	})...)
+
+	fehler = append(fehler, jeEinmal(func(max int) ([]string, error) {
+		return l.speicher.FaelligeLoeschungen(ctx, jetzt, max)
+	}, func(id string) error {
+		if err := l.loeschen(ctx, id, jetzt); err != nil {
+			return fmt.Errorf("Konto %s: %w", id, err)
+		}
+		e.Geloescht++
+		slog.InfoContext(ctx, "Konto gelöscht (Lauf)", "konto", id)
+		return nil
+	})...)
+
+	return e, errors.Join(fehler...)
+}
+
+// jeEinmal ruft tu für jede ID auf, die holen liefert, für jede höchstens
+// einmal, und sammelt die Fehler. Was scheitert (oder, wie ein schon
+// vorgemerktes Konto, ein Treffer bleibt), liefert holen wieder; daher holt es
+// jedes Mal so viele mehr, dass immer neue dabei sein können. Es endet, wenn
+// holen nichts Neues mehr liefert, oder beim ersten Fehler von holen.
+func jeEinmal(holen func(max int) ([]string, error), tu func(id string) error) []error {
 	versucht := map[string]bool{}
 	var fehler []error
-	geloescht := 0
 	for {
-		// Gescheiterte Konten bleiben fällig und kommen wieder; daher so viele
-		// mehr holen, dass immer neue dabei sein können.
-		ids, err := l.speicher.FaelligeLoeschungen(ctx, jetzt, len(versucht)+faelligeJeAbfrage)
+		ids, err := holen(len(versucht) + jeAbfrage)
 		if err != nil {
-			return geloescht, errors.Join(append(fehler, err)...)
+			return append(fehler, err)
 		}
 		neu := 0
 		for _, id := range ids {
@@ -120,15 +202,12 @@ func (l *Loescher) Aufraeumen(ctx context.Context, jetzt time.Time) (int, error)
 			}
 			versucht[id] = true
 			neu++
-			if err := l.loeschen(ctx, id, jetzt); err != nil {
-				fehler = append(fehler, fmt.Errorf("Konto %s: %w", id, err))
-				continue
+			if err := tu(id); err != nil {
+				fehler = append(fehler, err)
 			}
-			geloescht++
-			slog.InfoContext(ctx, "Konto gelöscht (Lauf)", "konto", id)
 		}
 		if neu == 0 {
-			return geloescht, errors.Join(fehler...)
+			return fehler
 		}
 	}
 }

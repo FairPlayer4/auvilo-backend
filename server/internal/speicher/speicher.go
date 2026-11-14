@@ -5,8 +5,9 @@
 //
 // Gespeichert werden nur Metadaten (Anforderung 4.2): Kennung (HMAC der
 // Google-Konto-ID), Konto- und Geräte-IDs, öffentliche Schlüssel, Zeitpunkte
-// (auch der Termin einer beantragten Kontolöschung).
-// Bewusst NICHT: E-Mail, Name, IP-Adressen, "zuletzt gesehen".
+// (auch der Termin einer beantragten Kontolöschung) und der Tag der letzten
+// Aktivität eines Kontos, nur für die Frist aus P5.
+// Bewusst NICHT: E-Mail, Name, IP-Adressen, Uhrzeit der letzten Aktivität.
 package speicher
 
 import (
@@ -37,8 +38,9 @@ var (
 	// geht nicht mehr, die Löschung kann schon begonnen haben.
 	ErrLoeschungLaeuft = errors.New("Löschung des Kontos ist fällig")
 	// ErrNichtFaellig: Ein Konto soll gesperrt oder entfernt werden, dessen
-	// Löschung nicht beantragt oder noch nicht fällig ist.
-	ErrNichtFaellig = errors.New("Löschung des Kontos ist nicht fällig")
+	// Löschung nicht beantragt oder noch nicht fällig ist – oder ein Gerät soll
+	// begraben werden, das nicht lange genug gesperrt ist.
+	ErrNichtFaellig = errors.New("Löschung ist nicht fällig")
 )
 
 // MaxOffeneGeraete ist die Zahl neuer Geräte, die ein Konto höchstens hat,
@@ -100,7 +102,10 @@ type Backup struct {
 type Speicher interface {
 	// Anmelden sucht das Konto zur Kennung (legt es beim ersten Mal an), legt
 	// das Gerät an, falls es neu ist, und stellt die Sitzung aus – alles in
-	// einem Schritt (Transaktion). Von geraet zählen ID, Schluessel und Erstellt.
+	// einem Schritt (Transaktion). Von geraet zählen ID, Schluessel und Erstellt;
+	// Erstellt ist der Zeitpunkt der Anmeldung. Daraus werden der Erstelltag
+	// eines neuen Kontos und Geräts und der Tag der letzten Aktivität des Kontos
+	// (zuletztAktiv).
 	//
 	// KRITISCH: Ein gesperrtes Gerät bleibt gesperrt (ErrGeraetGesperrt), auch
 	// wenn der Google-Login stimmt. Ein Geräteschlüssel, der schon zu einem
@@ -116,9 +121,16 @@ type Speicher interface {
 	// (ErrZuVieleGeraete), wenn das Konto schon MaxOffeneGeraete Geräte hat, die
 	// weder freigeschaltet noch gesperrt sind. Vorhandene Geräte melden sich
 	// immer an.
+	//
+	// KRITISCH: Ein begrabenes Gerät (GeraetBegraben) bleibt gesperrt wie
+	// vorher: ErrGeraetGesperrt im eigenen Konto, sonst ErrGeraetFremd. Es wird
+	// nie als neues Gerät wieder angelegt.
 	Anmelden(ctx context.Context, kennung string, geraet Geraet, sitzung NeueSitzung) (AnmeldeErgebnis, error)
 
-	// Geraet liefert ein Gerät oder ErrNichtGefunden.
+	// Geraet liefert ein Gerät oder ErrNichtGefunden. Für ein begrabenes Gerät
+	// liefert es ID, Konto und Gesperrt, ohne Schlüssel und Zeitpunkte: Wer
+	// nach der Sperre fragt (Interceptor, Erneuern, Tageslimit für neue
+	// Geräte), sieht weiter ein gesperrtes Gerät.
 	Geraet(ctx context.Context, geraetID string) (Geraet, error)
 
 	// KennungVon liefert die Kennung eines Kontos oder ErrNichtGefunden (kein
@@ -127,17 +139,20 @@ type Speicher interface {
 	KennungVon(ctx context.Context, kontoID string) (string, error)
 
 	// SitzungAnlegen stellt eine Sitzung für ein Gerät aus und liefert dessen
-	// Konto.
+	// Konto. jetzt zählt als Aktivität des Kontos (zuletztAktiv).
 	//
 	// KRITISCH: Prüft in derselben Transaktion, dass das Gerät nicht gesperrt
-	// ist. Sonst könnte ein gleichzeitiges Sperren übergangen werden.
-	SitzungAnlegen(ctx context.Context, geraetID string, sitzung NeueSitzung) (kontoID string, err error)
+	// ist. Sonst könnte ein gleichzeitiges Sperren übergangen werden. Ein
+	// begrabenes Gerät meldet ErrNichtGefunden.
+	SitzungAnlegen(ctx context.Context, geraetID string, sitzung NeueSitzung, jetzt time.Time) (kontoID string, err error)
 
 	// Sitzung liefert eine Sitzung zum Hash oder ErrNichtGefunden. Ob sie
 	// abgelaufen ist, prüft der Aufrufer.
 	Sitzung(ctx context.Context, hash string) (Sitzung, error)
 
 	// Geraete liefert alle Geräte eines Kontos, sortiert nach Erstellung.
+	// Begrabene Geräte gehören nicht dazu; ebenso finden GeraetSperren und
+	// GeraetFreischalten sie nicht (ErrNichtGefunden).
 	Geraete(ctx context.Context, kontoID string) ([]Geraet, error)
 
 	// GeraetSperren sperrt ein Gerät des Kontos und löscht danach seine
@@ -231,13 +246,79 @@ type Speicher interface {
 	// kann ein Fehler im Aufrufer kein beliebiges Konto löschen.
 	KontoSperren(ctx context.Context, kontoID string, jetzt time.Time) error
 
-	// KontoEntfernen löscht die Geräte, übrige Sitzungen, das Schlüssel-Backup
-	// und zuletzt das Konto selbst. Wiederholbar; ein Konto, das es nicht mehr
+	// KontoEntfernen löscht die Geräte, ihre Grabsteine, übrige Sitzungen, das
+	// Schlüssel-Backup und zuletzt das Konto selbst. Wiederholbar; ein Konto, das es nicht mehr
 	// gibt, ist kein Fehler.
 	//
 	// KRITISCH: Nur ein Konto mit erreichtem Termin (sonst ErrNichtFaellig), und
 	// das Konto zuletzt: Solange es da ist, findet FaelligeLoeschungen den Rest.
 	KontoEntfernen(ctx context.Context, kontoID string, jetzt time.Time) error
+
+	// Fristen aus P5 (docs/anforderungen.md Kap. 4.4, datenschutz/README.md K2)
+	// für den regelmäßigen Lauf.
+
+	// InaktiveKonten liefert höchstens max Konten, deren letzte Aktivität vor
+	// grenze liegt. Konten ohne Tag der letzten Aktivität (aus der Zeit davor)
+	// findet sie nicht.
+	InaktiveKonten(ctx context.Context, grenze time.Time, max int) ([]string, error)
+
+	// InaktivesKontoVormerken setzt den Löschtermin ab für ein Konto, dessen
+	// letzte Aktivität vor grenze liegt, und meldet, ob sich der Termin dadurch
+	// geändert hat. Ein Konto, das es nicht gibt, ist kein Fehler (false).
+	//
+	// KRITISCH: Die Aktivität wird in derselben Transaktion geprüft, in der
+	// der Termin entsteht. Meldet sich das Konto zwischen InaktiveKonten und
+	// diesem Aufruf an, bleibt es ohne Termin. Ein früherer Termin bleibt
+	// (frueherTermin), wie bei LoeschungBeantragen.
+	InaktivesKontoVormerken(ctx context.Context, kontoID string, grenze, ab time.Time) (bool, error)
+
+	// LangeGesperrteGeraete liefert höchstens max Geräte, die vor grenze
+	// gesperrt wurden.
+	LangeGesperrteGeraete(ctx context.Context, grenze time.Time, max int) ([]string, error)
+
+	// GeraetBegraben ersetzt ein Gerät, das vor grenze gesperrt wurde, durch
+	// einen Grabstein: Der öffentliche Schlüssel und die Zeitpunkte
+	// verschwinden, Geräte-ID und Konto bleiben, bis das Konto entfernt wird.
+	// Ein Gerät, das es nicht (mehr) gibt, ist kein Fehler.
+	//
+	// KRITISCH: Nur ein lange genug gesperrtes Gerät, sonst ErrNichtFaellig –
+	// geprüft in derselben Transaktion. Der Grabstein ist nötig, weil die
+	// Geräte-ID aus dem Schlüssel folgt: Ohne ihn meldete sich ein gestohlenes
+	// Handy mit seinem alten Schlüssel als neues Gerät an und läse mit seinem
+	// lokalen Tresorschlüssel neue Sicherungen.
+	GeraetBegraben(ctx context.Context, geraetID string, grenze time.Time) error
+}
+
+// aktivTag: Von der letzten Aktivität speichern die Ablagen nur den Tag (UTC),
+// wie beim Erstelltag (Datensparsamkeit).
+func aktivTag(jetzt time.Time) time.Time {
+	return jetzt.UTC().Truncate(24 * time.Hour)
+}
+
+// mussAktivSchreiben: Geschrieben wird nur, wenn der Tag neuer ist als der
+// gespeicherte (Nullwert = keiner) – höchstens einmal je Konto und Tag, und nie
+// zurück.
+func mussAktivSchreiben(gespeichert, tag time.Time) bool {
+	return gespeichert.Before(tag)
+}
+
+// istInaktiv entscheidet InaktivesKontoVormerken: Gibt es einen Tag der
+// letzten Aktivität, und liegt er vor grenze?
+func istInaktiv(zuletztAktiv, grenze time.Time) bool {
+	return !zuletztAktiv.IsZero() && zuletztAktiv.Before(grenze)
+}
+
+// darfBegraben entscheidet GeraetBegraben für ein vorhandenes Gerät.
+func darfBegraben(g Geraet, grenze time.Time) error {
+	if !g.Gesperrt || g.GesperrtAm.IsZero() || !g.GesperrtAm.Before(grenze) {
+		return ErrNichtFaellig
+	}
+	return nil
+}
+
+// begraben ist, was Geraet für ein begrabenes Gerät liefert.
+func begraben(geraetID, kontoID string) Geraet {
+	return Geraet{ID: geraetID, KontoID: kontoID, Gesperrt: true}
 }
 
 // frueherTermin entscheidet LoeschungBeantragen: Der frühere Termin gilt
