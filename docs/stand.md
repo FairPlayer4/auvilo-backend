@@ -131,8 +131,8 @@ Einzelheiten stehen in den Entwürfen, in git und in den Review-Berichten
 | B2b | Daten-Backup einer Person: Datensicherung in Cloud Storage, Freischaltung neuer Geräte (E-B2b-13), Tageslimits, Fassungen (R-4), Diagnose-Log ([b2b-entwurf.md](b2b-entwurf.md), [diagnose-entwurf.md](diagnose-entwurf.md)) | Server und Client fertig, zuletzt in der Cloud getestet am 2026-11-10 (Limits, Fassungen, Trennen ab 150 %); App-Einbindung: App-Repo `docs/stand.md` |
 | B3 | Teilen zwischen Personen | nicht begonnen; Vorgaben in [anforderungen.md](anforderungen.md) Kap. 4.6; davor die Sicherheitsphase |
 
-Letzter Deploy: PR #21 am 2026-11-13 (Konto löschen: Server, Client, täglicher Lauf),
-Revision `server-00019-pw8`, bereit; der Job `aufraeumen` hat dasselbe Image.
+Letzter Deploy: PR #25 am 2026-11-14 (ID7/ID8: Freigabeliste, signierte Tokens, Anfrage-Alarm),
+Revision `server-00023-bm7` (mit beiden Kennungen), bereit; der Job `aufraeumen` hat dasselbe Image.
 
 ## Offen
 1. **Eigenbetrieb** seit 2026-11-07: Die App sichert Kevins echte Daten in der Cloud;
@@ -164,11 +164,9 @@ Revision `server-00019-pw8`, bereit; der Job `aufraeumen` hat dasselbe Image.
 4. **B3:** Vorgaben B3-1 bis B3-8 (anforderungen.md Kap. 4.6), offene Fragen in Kap. 10.
 5. **Vor der Veröffentlichung des App-Repos** (App-Anf. 7.34, 2026-11-14): Zugang nur
    nach Freigabe über Kennungen (ID7) und Kostengrenzen gegen Angriffe (ID8) sind
-   **umgesetzt (2026-11-14), noch nicht angewendet und deployt**. Reihenfolge: erst
-   `tofu apply` (setzt `FREIGEGEBENE_KENNUNGEN`, Anfrage-Alarm, Pub/Sub-Kanal), dann
-   Server und Kill-Switch deployen; sonst lässt der neue Server niemanden zu. Danach
-   den Test-Client anmelden, seine Kennung eintragen, erneut `tofu apply`. Offen: die
-   App zeigt die Kennung bei „nicht freigegeben“ an (App-Repo). Die Server-URL bleibt
+   **umgesetzt und deployt (2026-11-14, PR #25)**. Freigegeben sind App- und
+   Test-Konto; der Test-Client wurde vorher wie erwartet abgelehnt und meldet sich danach an. Offen: die App
+   zeigt die Kennung bei „nicht freigegeben“ an (App-Repo). Die Server-URL bleibt
    beim Zurücksetzen dieselbe.
 
 ## Befehle
