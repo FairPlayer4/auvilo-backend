@@ -45,7 +45,7 @@ mittel / hoch, **nach** den Maßnahmen aus [toms.md](toms.md).
 |---|---|---|---|---|
 | R1 | Angriff auf Server oder Speicher legt Inhalte offen | E2E: Schlüssel nie auf dem Server; Server sieht nur Chiffrate | gering | gering (nur Metadaten) |
 | R2 | Übernahme des Google-Kontos | Neues Gerät braucht Freischaltung oder Wiederherstellungsschlüssel; Löschen ohne Freischaltung nur mit 7 Tagen Wartezeit, sichtbar auf allen Geräten | mittel | gering; **hoch**, wenn der Wiederherstellungsschlüssel ungeschützt im Passwortdienst liegt (daher Papier als Standard) |
-| R3 | Übernahme der Betreiberkonten (GCP, GitHub) | Krypto nur im Client: Ein manipulierter Server kann nichts entschlüsseln. Möglich: Daten löschen, Metadaten lesen, Dienst sperren | gering | mittel (Verfügbarkeit, Metadaten). **Offen:** GitHub mit Passkey |
+| R3 | Übernahme der Betreiberkonten (GCP, GitHub) | Krypto nur im Client: Ein manipulierter Server kann nichts entschlüsseln. Möglich: Daten löschen, Metadaten lesen, Dienst sperren | gering | mittel (Verfügbarkeit, Metadaten). GitHub mit Passkey seit 2026-11-14 |
 | R4 | Fehler in der Kryptografie | Tink statt Eigenbau, feste Testvektoren, Reviews, Format v2 (SE6, offen) | gering | hoch |
 | R5 | Metadaten verraten Nutzungsmuster (Größe, Zeitpunkt, IP-Adresse) | 30 Tage Logs, Zugriff nur Kevin, kein Profil | mittel | gering |
 | R6 | Datenverlust (Kill-Switch, Löschung durch Fremden mit entsperrtem Handy, Fehler) | lokal-first, ältere Fassungen 7 Tage, lokales Backup; Displaysperre (SE5, offen) | mittel | mittel |

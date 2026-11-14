@@ -191,7 +191,9 @@ erster Tester, Veröffentlichung im Play Store.
   Sitzungs-Token, Anfragealarm löst den Kill-Switch aus). Nach dem neuen Pfeffer
   (Punkt 3) die Liste der Kennungen neu füllen, zuerst Kevins.
 - **GitHub-Konto** mit Passkey oder Sicherheitsschlüssel: Ohne Branch-Schutz kann ein
-  übernommenes Konto über `main` deployen.
+  übernommenes Konto über `main` deployen. **Erledigt 2026-11-14:** Passkey für die
+  Anmeldung; Authenticator-App und GitHub Mobile bleiben als Reserve (lassen sich
+  abphishen, bewusst in Kauf genommen: Inhalte bleiben E2E-verschlüsselt).
 - **Dokumente** vor dem ersten Tester bzw. vor B3: Datenschutzerklärung oder
   Testerinformation (P4, P6), Verzeichnis der Verarbeitungstätigkeiten, TOMs,
   DSFA (P7), Google Cloud DPA akzeptiert (P3), Angaben zur Datensicherheit im Play

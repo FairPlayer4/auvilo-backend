@@ -68,7 +68,8 @@ Angaben, Entscheidung).
    Platzhalter füllen, Mindestalter 16 (P8), Abschnitt Diagnose nur, wenn der Tester
    eine Diagnose-Erlaubnis bekommt (P9). Dem Tester vor der Freigabe geben.
 7. **DSFA abschließen** ([dsfa.md](dsfa.md)): Ergebnis bestätigen, sobald K2 umgesetzt ist.
-8. **TOMs nachziehen:** Displaysperre (SE5), Format v2 (SE6), GitHub mit Passkey; die
+8. **TOMs nachziehen:** Displaysperre (SE5), Format v2 (SE6) (GitHub mit Passkey
+   erledigt 2026-11-14); die
    Liste in [toms.md](toms.md) markiert sie als offen.
 9. **Kevin:** zuständige Aufsichtsbehörde in [datenpannen.md](datenpannen.md) eintragen.
 

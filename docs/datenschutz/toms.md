@@ -29,9 +29,11 @@ Nutzer“). Einzelheiten stehen in den verlinkten Entwürfen und im Code (`// KR
   von `main` und nur nach grüner CI.
 - **Betreiberzugang:** Nur Kevin hat Rollen im Projekt. Er kann Metadaten und
   Chiffrate sehen, aber nichts entschlüsseln. Admin-Aktionen stehen im Audit-Log.
-- **Offen:** GitHub-Konto mit Passkey oder Sicherheitsschlüssel (ein übernommenes Konto
-  könnte über `main` deployen); Zurücksetzen aller Schlüssel und des Pfeffers zu Beginn
-  der Sicherheitsphase (Werte aus dem Eigenbetrieb gelten als bekannt).
+- **GitHub-Konto** (ein übernommenes Konto könnte über `main` deployen): 2FA mit
+  Passkey für die Anmeldung (seit 2026-11-14), Authenticator-App und GitHub Mobile
+  als Reserve.
+- **Offen:** Zurücksetzen aller Schlüssel und des Pfeffers zu Beginn der
+  Sicherheitsphase (Werte aus dem Eigenbetrieb gelten als bekannt).
 
 ## Integrität (lit. b)
 - Anmelden und Erneuern sind mit dem Geräteschlüssel signiert (Ed25519); Chiffrate
