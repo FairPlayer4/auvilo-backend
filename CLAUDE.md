@@ -15,6 +15,8 @@ Kommunikation auf **Deutsch, mit ß**.
 - [docs/b2-entwurf.md](docs/b2-entwurf.md) – Schlüsselmodell, Backup, Kotlin-Client (`client/`)
 - [docs/b2b-entwurf.md](docs/b2b-entwurf.md) – Daten-Backup, Vorbereitung der App-Einbindung
 - [docs/diagnose-entwurf.md](docs/diagnose-entwurf.md) – Diagnose-Log aus der App
+- [docs/datenschutz/](docs/datenschutz/README.md) – DSGVO-Dokumente (VVT, TOMs, DSFA,
+  Datenschutzerklärung, Abläufe) und offene Punkte
 
 ## Code
 - Go-Code erklärend kommentieren (Kevin kennt Go nur grob). Kevin liest vor allem

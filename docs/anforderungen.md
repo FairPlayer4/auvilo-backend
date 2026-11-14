@@ -192,8 +192,8 @@ liegt in einem Kotlin-Modul, das später in die App übernommen werden kann. [E]
   Erst den Termin setzen, dann den Zugang abschneiden (Kennung, Sitzungen, Geräte
   gesperrt), dann die Inhalte, zuletzt Geräte, Schlüssel-Backup und Konto: Bricht es
   ab, findet der regelmäßige Lauf das Konto über den Termin und macht weiter
-  (Kap. 11, 2026-11-12, Umsetzung). Tageszähler laufen von selbst ab (höchstens zwei
-  Tage). In der App vor dem ersten weiteren Nutzer (vorgezogen aus B4,
+  (Kap. 11, 2026-11-12, Umsetzung). Tageszähler laufen von selbst ab (TTL nach etwa
+  zwei Tagen, Firestore löscht danach mit Verzögerung; zusammen wenige Tage). In der App vor dem ersten weiteren Nutzer (vorgezogen aus B4,
   Kap. 11, 2026-11-12).
   **Ohne Zugang** (Kap. 11, 2026-11-12):
   - Ein *freigeschaltetes* Gerät löscht sofort. Ein nicht freigeschaltetes Gerät
@@ -287,7 +287,8 @@ nicht (Kap. 11, 2026-11-12). Wird in der Datenschutzerklärung so benannt.
 - P4 Verzeichnis der Verarbeitungstätigkeiten, Datenschutzerklärung (öffentliche URL),
   Angaben zur Datensicherheit im Play Store, Webseite zum Löschen des Kontos. Dazu
   die TOMs (Art. 32) auf einer Seite, ein Ablauf für Datenpannen (Art. 33/34,
-  72 Stunden) und vor dem ersten Tester eine Testerinformation.
+  72 Stunden) und vor dem ersten Tester eine Testerinformation. Entwürfe und offene
+  Punkte: [datenschutz/README.md](datenschutz/README.md) (seit 2026-11-14).
 - P5 Aufbewahrung: Operationen bis zum Snapshot bzw. max. 90 Tage, Logs max. 30 Tage,
   KI-Anfragen gar nicht. Konten ohne Anmeldung seit 24 Monaten löscht der Server auf
   demselben Weg wie B1 (Kap. 3.5), gesperrte Geräte nach 90 Tagen; einmal im Monat

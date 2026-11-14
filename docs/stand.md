@@ -158,6 +158,10 @@ Revision `server-00023-bm7` (mit beiden Kennungen), bereit; der Job `aufraeumen`
    Offen: die App. Ergebnis der Prüfung: Nach der Rotation ist die
    Sicherung für eine Person sicher; für die DSGVO fehlen vor allem Konto löschen
    und Fristen ([anforderungen.md](anforderungen.md) Kap. 4.4, 4.5, 11).
+   **DSGVO-Dokumente** (Entwürfe, 2026-11-14) und die Liste, was noch fehlt:
+   [datenschutz/README.md](datenschutz/README.md). Wichtigster neuer Punkt (K2): Der
+   Server speichert keine letzte Aktivität, die Frist „24 Monate ohne Anmeldung“
+   lässt sich so nicht umsetzen.
 2. **App-Einbindung** (Schritte 1–5, Wiederherstellen R-1…R-6): App-Repo
    `docs/stand.md`; dort auch die Gerätetests.
 3. **Review-Punkte:** `.review/state.md`, Abschnitt „Offen“.
