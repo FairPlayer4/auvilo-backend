@@ -162,6 +162,9 @@ Revision `server-00019-pw8`, bereit; der Job `aufraeumen` hat dasselbe Image.
    `docs/stand.md`; dort auch die Gerätetests.
 3. **Review-Punkte:** `.review/state.md`, Abschnitt „Offen“.
 4. **B3:** Vorgaben B3-1 bis B3-8 (anforderungen.md Kap. 4.6), offene Fragen in Kap. 10.
+5. **Vor der Veröffentlichung des App-Repos** (App-Anf. 7.34, 2026-11-14): Zugang nur
+   nach Freigabe über Kennungen (ID7) und Kostengrenzen gegen Angriffe (ID8) umsetzen;
+   gehört zur Sicherheitsphase. Die Server-URL bleibt beim Zurücksetzen dieselbe.
 
 ## Befehle
 ```bash

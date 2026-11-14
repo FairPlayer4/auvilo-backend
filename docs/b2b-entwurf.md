@@ -187,6 +187,9 @@ erster Tester, Veröffentlichung im Play Store.
 - **App A-15 neu:** Papier ist der Standard, der Passwortdienst nur nach dem Hinweis
   (Kap. 11, 2026-11-12).
 - **`DIAGNOSE_KONTEN`** enthält nach Punkt 5 nur Kevins neues Konto (P9).
+- **Zugang nur nach Freigabe** (ID7) und **Kostengrenzen** (ID8, signierte
+  Sitzungs-Token, Anfragealarm löst den Kill-Switch aus). Nach dem neuen Pfeffer
+  (Punkt 3) die Liste der Kennungen neu füllen, zuerst Kevins.
 - **GitHub-Konto** mit Passkey oder Sicherheitsschlüssel: Ohne Branch-Schutz kann ein
   übernommenes Konto über `main` deployen.
 - **Dokumente** vor dem ersten Tester bzw. vor B3: Datenschutzerklärung oder
