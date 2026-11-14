@@ -40,7 +40,7 @@ Geprüft: `server/internal/dienst/konto.go`, `server/internal/speicher/firestore
 
 | Nr. | Lücke | Gewicht | Empfehlung |
 |---|---|---|---|
-| K1 | Die **App** kann das Konto noch nicht löschen; nur der Test-Client kann es. | vor dem ersten Tester Pflicht | wie geplant (App-Repo `docs/stand.md`) |
+| K1 | ~~Die **App** kann das Konto noch nicht löschen; nur der Test-Client kann es.~~ **In der App umgesetzt in V1.3c2 (App-Branch `feature/konto-loeschen`, 2026-11-14), noch nicht installiert:** *Konto löschen* ersetzt *Cloud-Daten löschen*; ohne Freischaltung als Antrag mit *Löschung abbrechen*; einen Antrag von anderswo meldet die App mit Benachrichtigung, der stündliche Lauf fragt dafür spätestens nach 23 Stunden nach. | vor dem ersten Tester Pflicht | Gerätetest C15–C17 auf dem Emulator (App-Repo `docs/geraetetest.md`), dann installieren |
 | K2 | ~~**Die Frist aus P5 lässt sich nicht umsetzen:** keine letzte Aktivität im Konto.~~ **Erledigt 2026-11-14:** `zuletzt_aktiv` (nur der Tag) beim Anmelden und Erneuern; der tägliche Lauf `aufraeumen` merkt Konten nach 24 Monaten ohne Aktivität zur Löschung in 7 Tagen vor und ersetzt Geräte, die seit 90 Tagen gesperrt sind, durch einen Grabstein ([anforderungen.md](../anforderungen.md) Kap. 11). | – | Deployt 2026-11-14 (PR #26). Konten von vor dem Deploy erfasst die Frist erst nach ihrer nächsten Anmeldung. |
 | K3 | Die **Kennung bleibt auf der Freigabeliste** (`freigegebene_kennungen` in `werte.auto.tfvars`, Umgebungsvariable des Dienstes, auch in alten Revisionen). Sie ist ein Pseudonym der Person; meldet sie sich neu an, ist sie sofort wieder zugelassen. | mittel | Die Liste ist eine eigene Verarbeitung (Zugangsverwaltung, [vvt.md](vvt.md) V1). Austragen, wenn jemand nicht mehr teilnimmt oder es verlangt; alte Revisionen dann löschen. In der Datenschutzerklärung nennen. |
 | K4 | **Logs** (Konto-ID, Geräte-ID, IP-Adresse) bleiben bis 30 Tage nach dem Löschen. | bewusst | So entschieden (Kap. 11, 2026-11-01); steht in der Datenschutzerklärung. |
@@ -57,12 +57,13 @@ Angaben, Entscheidung).
 1. ~~**Cloud Data Processing Addendum** (CDPA) akzeptieren (P3)~~ – erledigt
    2026-11-14 ([vvt.md](vvt.md)). Offen nur: Vertragspartner auf der nächsten Rechnung
    bestätigen.
-2. **Konto löschen in der App** (K1).
+2. **Konto löschen in der App** (K1): umgesetzt in V1.3c2 (App-Branch `feature/konto-loeschen`, 2026-11-14), noch nicht installiert; offen sind die Gerätetests C15–C17.
 3. ~~**`zuletzt_aktiv` und die Fristen aus P5** (K2)~~ – umgesetzt und deployt
    2026-11-14 (PR #26).
 4. **Freigabeliste pflegen** (K3): Ablauf in [betroffenenrechte.md](betroffenenrechte.md).
-5. **Auskunft** (Art. 15, B2): Die App braucht eine Anzeige der eigenen Konto-ID, damit
-   Kevin eine Anfrage zuordnen kann; den Rest erledigt er nach
+5. ~~**Auskunft** (Art. 15, B2): Die App braucht eine Anzeige der eigenen Konto-ID~~ –
+   umgesetzt in V1.3c2 (2026-11-14, noch nicht installiert): *Einstellungen → Cloud-Backup (experimentell)* zeigt
+   die Konto-ID zum Kopieren, damit Kevin eine Anfrage zuordnen kann; den Rest erledigt er nach
    [betroffenenrechte.md](betroffenenrechte.md) von Hand. Ein eigener Endpunkt erst,
    wenn Anfragen häufiger kommen.
 6. **Testerinformation** aus [datenschutzerklaerung.md](datenschutzerklaerung.md):

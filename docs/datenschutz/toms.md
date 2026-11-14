@@ -69,7 +69,7 @@ Nutzer“). Einzelheiten stehen in den verlinkten Entwürfen und im Code (`// KR
 - Fristen aus P5 im täglichen Lauf: Konten nach 24 Monaten ohne Anmeldung oder
   Erneuerung (Termin in 7 Tagen, dann der Löschweg), gesperrte Geräte nach 90 Tagen
   (Grabstein). Tests im Vertragstest des Speichers und in `dienst/aufraeumen_test.go`.
-- **Offen:** Konto löschen in der App ([README.md](README.md), K1).
+- Konto löschen in der App: umgesetzt in V1.3c2 (App-Branch `feature/konto-loeschen`, 2026-11-14), noch nicht installiert ([README.md](README.md), K1).
 
 ## Überprüfung und Organisation (lit. d)
 - Lokales Prüfskript wie die CI (`werkzeuge/pruefen.sh`), CI auf `main`, Tests in der

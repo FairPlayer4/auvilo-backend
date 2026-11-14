@@ -155,7 +155,7 @@ Revision `server-00024-2gg`, bereit; der Job `aufraeumen` hat dasselbe Image.
    Sofort löschen von einem freigeschalteten Gerät eines neuen Kontos: alles weg,
    der Test-Client hat das Gerät vergessen. Die lokalen Dateien der alten
    Testgeräte liegen in `%APPDATA%\avlreminder\testclient\alt-konto-8b07`.
-   Offen: die App. Ergebnis der Prüfung: Nach der Rotation ist die
+   In der App umgesetzt in V1.3c2 (App-Branch `feature/konto-loeschen`, 2026-11-14), noch nicht installiert ([datenschutz/README.md](datenschutz/README.md) K1). Ergebnis der Prüfung: Nach der Rotation ist die
    Sicherung für eine Person sicher; für die DSGVO fehlen vor allem Konto löschen
    und Fristen ([anforderungen.md](anforderungen.md) Kap. 4.4, 4.5, 11).
    **DSGVO-Dokumente** (Entwürfe, 2026-11-14) und die Liste, was noch fehlt:

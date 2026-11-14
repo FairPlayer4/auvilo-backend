@@ -78,8 +78,8 @@ Damit die Tätigkeiten unten kurz bleiben, hier einmal, was wo liegt.
   lit. a) bedarf, ist eine Frage für die Prüfung vor B6. Empfehlung bis dahin: Die App
   holt beim Einschalten des Backups die ausdrückliche Einwilligung ein, mit Hinweis
   auf mögliche Gesundheitsdaten.
-- **Löschung:** *Cloud-Daten löschen* in der App (sofort, alle Fassungen), Konto
-  löschen; ältere Fassungen nach 7 Tagen.
+- **Löschung:** *Sicherung löschen* in der App (sofort, alle Fassungen), *Konto
+  löschen*; ältere Fassungen nach 7 Tagen.
 
 ## V4 Diagnose-Log
 - **Zweck:** Fehler der App finden ([diagnose-entwurf.md](../diagnose-entwurf.md)).
