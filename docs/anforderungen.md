@@ -184,6 +184,24 @@ liegt in einem Kotlin-Modul, das später in die App übernommen werden kann. [E]
   Modell- und Promptversion gehen mit der Antwort zurück. [E]
 - K5 Modell austauschbar (Gemini zuerst, weil auf Vertex AI mit EU-Endpunkt). [P]
 - K6 Kontingent pro Konto und Tag; lokale KI hat Vorrang, wo sie reicht.
+- K7 **Erster Anwendungsfall: Schnellerinnerung aus Sprache** (App-Anf. 7.35,
+  2026-11-15). Die App erkennt Sprache und Zeitangabe lokal und legt die Erinnerung
+  sofort an. Das Backend wertet nur Sätze aus, die der lokale Parser nicht versteht
+  („nach dem Essen“, „morgen früh vor der Arbeit“), und nur nach Freigabe je Anfrage
+  (K3). Die App bleibt ohne Backend voll nutzbar. [E]
+  - Schnittstelle wie sonst Protobuf über Connect; JSON nur zwischen Go und Vertex AI,
+    mit strukturierter Ausgabe (`responseSchema`), damit die Antwort dem Schema folgt.
+  - Anfrage: der Satz, dazu Ortszeit mit Zeitzone und Wochentag. Antwort: Text,
+    `in_minuten` oder eine Uhrzeit, `sicher` (ja/nein), Modell- und Promptversion (K4).
+    Die KI rechnet keine Uhrzeiten um; das macht die App.
+  - Der Server prüft die Antwort (`// KRITISCH:`, tabellengetrieben mit
+    Ablehnungsfällen): Text nicht leer und begrenzt lang, Zeit zwischen 1 min und
+    7 Tagen. Ist sie ungültig, gibt es einen zweiten Versuch, danach einen Fehler; die
+    App behält dann ihre lokale Erinnerung. Die App prüft die Antwort noch einmal.
+  - Modell: ein kleines, schnelles auf dem EU-Endpunkt (z. B. Gemini Flash-Lite). Ein
+    Aufruf kostet Bruchteile eines Cents; das Kontingent aus K6 gilt.
+  - Der Satz wird nicht gespeichert und nicht geloggt (K4); diktierte Sätze enthalten
+    leicht Dritte oder Gesundheitsdaten.
 
 ### 3.5 Verwaltung und Betrieb
 - B1 **Konto löschen** in der App **und über eine Webseite** (Pflicht im Play Store)
@@ -482,7 +500,7 @@ tragen die Tests die Spezifikation. Anleitung zum Review: [go-review.md](go-revi
 | B2b | Daten-Backup für eine Person (Tresorschlüssel, Cloud Storage EU, ältere Fassungen), Formate festschreiben, `client/` bereit für die App; danach Einbindung als Backup in eine interne App-Variante ([b2b-entwurf.md](b2b-entwurf.md)) |
 | B3 | Kontakte per QR (im Test-Client als Text), Freigaben, Append-only-Log, Konfliktauflösung |
 | B4 | FCM-Push, Snapshots, Ablaufzeiten, Person entfernen + faule Rotation (Konto löschen kommt vorher, Kap. 11, 2026-11-12) |
-| B5 | KI-Proxy (Text) mit Vertex AI EU, Freigabe-Ablauf im Test-Client, Kontingente |
+| B5 | KI-Proxy (Text) mit Vertex AI EU, Freigabe-Ablauf im Test-Client, Kontingente; erster Anwendungsfall Schnellerinnerung aus Sprache (K7) |
 | B6 | Play-Store-Vorbereitung: Play Integrity, Datenschutzerklärung, Löschseite, Härtung |
 
 ## 10. Offene Fragen
@@ -616,3 +634,4 @@ tragen die Tests die Spezifikation. Anleitung zum Review: [go-review.md](go-revi
 | 2026-11-15 | **SE5 in der App** (Kevin): *Konto löschen* und *Sicherung löschen* (löscht ebenfalls alle Fassungen endgültig) erst nach der Displaysperre, abgefragt vor jedem Kontakt zum Server; ohne Displaysperre geht es weiter und wird protokolliert, damit Löschen (Art. 17) möglich bleibt. Abbrechen, Fehlversuche und fehlender Sensor heißen nein. Eine Wartezeit im Server weiterhin erst mit mehreren Nutzern |
 | 2026-11-15 | **Wiederherstellungsschlüssel: Passwortmanager als Hauptweg** (Kevin): Papier geht leicht verloren, weil man es fast nie braucht; einen Ende-zu-Ende-verschlüsselten Passwortmanager nutzt man regelmäßig. Die App bietet ihn als Hauptknopf an, aber nur nach dem Hinweis vom 2026-11-12 und mit dem Rat, den Passwortmanager selbst mit seinem Wiederherstellungscode auf Papier zu schützen (dort liegt das größte Risiko). Von selbst öffnet sich kein Speicher-Dialog; Papier bleibt der Weg ohne Passwortmanager. Die App kann nicht prüfen, ob der Passwortmanager Ende-zu-Ende verschlüsselt; das trägt der Hinweis. Ändert den Eintrag vom 2026-11-12; App V1.3c3, 2026-11-15, noch nicht installiert |
 | 2026-11-15 | **Löschseite im Web** (P10, Kevin): Pflicht für den Play Store, vor dem Release. *Mit Google anmelden* stellt einen Löschantrag wie in der App (7 Tage Wartezeit ohne freigeschaltetes Gerät), weil der Server keine E-Mail-Adressen kennt. Hosting als eigener Cloud-Run-Dienst `web` in der EU-Region unter `*.run.app`, im kostenlosen Kontingent; eine günstige eigene Domain erst, wenn der OAuth-Zustimmungsbildschirm in *Produktion* geht und Google sie verlangt (Kap. 10, Frage 4). Ersetzt den Hinweis „GitHub Pages reicht“ in gcp-einrichtung.md (nicht nur EU) |
+| 2026-11-15 | **Erster KI-Anwendungsfall: Schnellerinnerung aus Sprache** (K7, Kevin: „Ja alle Punkte passen, erst lokal, dann per Bestätigung mit Hinweis Cloud KI“): Spracherkennung und Zeitangabe zuerst lokal in der App, die Erinnerung entsteht sofort und auch ohne Netz. Die Cloud-KI wertet nur Sätze aus, die der lokale Parser nicht versteht, und nur nach Freigabe je Anfrage; K3 bleibt unverändert. Strukturierte Ausgabe statt mehrerer Versuche, Prüfung im Server und in der App, die KI rechnet keine Uhrzeiten. Teil von B5; App-Seite in App-Anf. 7.35 |
