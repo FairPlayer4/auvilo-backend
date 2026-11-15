@@ -307,6 +307,35 @@ nicht (Kap. 11, 2026-11-12). Wird in der Datenschutzerklärung so benannt.
 - P9 **Diagnosen von Testern** liest Claude erst, wenn es dafür einen
   Auftragsverarbeitungsvertrag mit Anthropic gibt (Übermittlung in die USA). Bis dahin
   hat nur Kevins Konto eine Diagnose-Erlaubnis (E-D-3).
+- P10 **Löschseite im Web** (Play-Richtlinie zur Kontolöschung, festgehalten 2026-11-15):
+  Wer die App nicht mehr hat, kann dort die Löschung seines Kontos beantragen, ohne die
+  App neu zu installieren. Die Adresse kommt ins Formular zur Datensicherheit der
+  Play Console. **Vor dem Play-Store-Release** (frühestens mit App-V2), nicht vorher.
+  - Die Seite nennt App- und Entwicklernamen wie im Store, die Schritte, was gelöscht
+    wird (alles des Kontos, für alle Geräte), was bleibt und wie lange (Server-Logs
+    30 Tage, Grabsteine, Kap. 3.5) und den Weg in der App (*Konto löschen*, R-3).
+  - **Mit Google anmelden** auf der Seite: Der Server bildet aus dem ID-Token das
+    Pseudonym wie bei der App-Anmeldung und stellt einen **Löschantrag** (B1, K1): Ohne
+    freigeschaltetes Gerät gilt die Wartezeit von 7 Tagen, die anderen Geräte zeigen
+    den Antrag an und können ihn abbrechen. Eine E-Mail allein reicht nicht, weil der
+    Server keine E-Mail-Adressen kennt und sie keinem Konto zuordnen kann; eine
+    Kontaktadresse steht trotzdem als Ausweg da (z. B. wenn der Dienst gesperrt ist).
+  - Keine Cookies außer für die Anmeldung, keine Analyse, keine fremden Skripte außer
+    Googles Anmeldung. Server-Logs wie beim Dienst (30 Tage).
+  - Auf derselben Seite die **Datenschutzerklärung** (P4, öffentliche Adresse für Play
+    und den OAuth-Zustimmungsbildschirm).
+  - **Hosting:** eigener kleiner Cloud-Run-Dienst `web` in `var.region` (statische
+    Seiten), mit eigenem Dienstkonto und öffentlich über `infra/module/oeffentlich`.
+    Den Löschantrag nimmt der bestehende Dienst an (neue Zielgruppe: Web-Client-ID).
+    Kosten im kostenlosen Kontingent von Cloud Run, Adresse `*.run.app` ohne Domain.
+    Nicht GitHub Pages, Firebase Hosting oder ein öffentlicher Bucket: Die ersten beiden
+    liefern nicht nur aus der EU aus, ein Bucket mit HTTPS unter eigener Adresse braucht
+    einen Load Balancer (rund 18 €/Monat).
+  - **Domain** (offene Frage Kap. 10): Für Play reicht `*.run.app`. Geht der
+    OAuth-Zustimmungsbildschirm von *Testen* in *Produktion*, verlangt Google für Startseite
+    und Datenschutzerklärung wahrscheinlich eine eigene, in der Search Console bestätigte
+    Domain (`run.app` lässt sich nicht bestätigen). Dann eine günstige Domain (etwa
+    5–15 €/Jahr) per Domain-Zuordnung auf denselben Dienst.
 
 ### 4.5 Sicherheit
 - SE1 Nur HTTPS; Sitzungs-Tokens kurzlebig; Signaturen jeder Operation (gemeint sind
@@ -463,6 +492,9 @@ tragen die Tests die Spezifikation. Anleitung zum Review: [go-review.md](go-revi
    Eltern teilen (P8)? Vor B3.
 3. **Diagnosen von Testern:** AV-Vertrag mit Anthropic, oder bleiben Tester ohne
    Diagnose-Erlaubnis (P9)? Vor dem ersten Tester, der Diagnosen senden soll.
+4. **Eigene Domain** für Löschseite und Datenschutzerklärung (P10)? Für Play reicht
+   `*.run.app`; vor dem Wechsel des OAuth-Zustimmungsbildschirms in *Produktion*
+   prüfen, ob Google eine bestätigte Domain verlangt. Vor dem Play-Store-Release.
 
 ## 11. Entscheidungen
 
@@ -583,3 +615,4 @@ tragen die Tests die Spezifikation. Anleitung zum Review: [go-review.md](go-revi
 | 2026-11-14 | **Konto löschen in der App** (K1, Kevin nach Vorschlag): ersetzt *Cloud-Daten löschen* (App R-3). Neu anfangen heißt Konto löschen und neu anmelden; die Kennung bleibt freigegeben. Ein nicht freigeschaltetes Gerät beantragt und behält seine Schlüssel; einen Termin, den der Server bei Anmeldung oder Erneuerung meldet, zeigt die App mit Benachrichtigung. Damit vorhandene Geräte innerhalb der 7 Tage davon erfahren, erneuert der stündliche Lauf die Sitzung spätestens nach 23 Stunden, auch ohne geänderte Daten; nur unter den Bedingungen der automatischen Sicherung (eingeschaltet, freigeschaltet, einmal von Hand gesichert) |
 | 2026-11-15 | **SE5 in der App** (Kevin): *Konto löschen* und *Sicherung löschen* (löscht ebenfalls alle Fassungen endgültig) erst nach der Displaysperre, abgefragt vor jedem Kontakt zum Server; ohne Displaysperre geht es weiter und wird protokolliert, damit Löschen (Art. 17) möglich bleibt. Abbrechen, Fehlversuche und fehlender Sensor heißen nein. Eine Wartezeit im Server weiterhin erst mit mehreren Nutzern |
 | 2026-11-15 | **Wiederherstellungsschlüssel: Passwortmanager als Hauptweg** (Kevin): Papier geht leicht verloren, weil man es fast nie braucht; einen Ende-zu-Ende-verschlüsselten Passwortmanager nutzt man regelmäßig. Die App bietet ihn als Hauptknopf an, aber nur nach dem Hinweis vom 2026-11-12 und mit dem Rat, den Passwortmanager selbst mit seinem Wiederherstellungscode auf Papier zu schützen (dort liegt das größte Risiko). Von selbst öffnet sich kein Speicher-Dialog; Papier bleibt der Weg ohne Passwortmanager. Die App kann nicht prüfen, ob der Passwortmanager Ende-zu-Ende verschlüsselt; das trägt der Hinweis. Ändert den Eintrag vom 2026-11-12; App V1.3c3, 2026-11-15, noch nicht installiert |
+| 2026-11-15 | **Löschseite im Web** (P10, Kevin): Pflicht für den Play Store, vor dem Release. *Mit Google anmelden* stellt einen Löschantrag wie in der App (7 Tage Wartezeit ohne freigeschaltetes Gerät), weil der Server keine E-Mail-Adressen kennt. Hosting als eigener Cloud-Run-Dienst `web` in der EU-Region unter `*.run.app`, im kostenlosen Kontingent; eine günstige eigene Domain erst, wenn der OAuth-Zustimmungsbildschirm in *Produktion* geht und Google sie verlangt (Kap. 10, Frage 4). Ersetzt den Hinweis „GitHub Pages reicht“ in gcp-einrichtung.md (nicht nur EU) |
