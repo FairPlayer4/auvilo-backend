@@ -142,7 +142,7 @@ Revision `server-00024-2gg`, bereit; der Job `aufraeumen` hat dasselbe Image.
    **Vorher fertig** (Sicherheits- und Datenschutzprüfung 2026-11-12, Liste dort):
    Konto löschen, Bestätigung mit der Displaysperre (beide in der App V1.3c2, noch
    nicht installiert), Format v2 mit HKDF-Labels,
-   A-15 neu in der App, Dokumente. **Konto löschen:** Server und Client fertig
+   A-15 neu in der App (App V1.3c3, 2026-11-15, noch nicht installiert), Dokumente. **Konto löschen:** Server und Client fertig
    (2026-11-12). Die Infrastruktur steht in `infra/aufraeumen.tf`
    (Cloud Run Job `aufraeumen`, täglich 4 Uhr per Cloud Scheduler, Rolle
    „Objekte auflisten und löschen“ ohne Lesen, Alarm), angewendet und deployt am

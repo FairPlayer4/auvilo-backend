@@ -187,8 +187,8 @@ erster Tester, Veröffentlichung im Play Store.
   *Cloud-Daten löschen* gibt es seit 2026-11-14 nicht mehr): umgesetzt in der App V1.3c2 (2026-11-15, noch nicht installiert).
 - **Format v2:** Schlüssel aus dem Wiederherstellungsschlüssel per HKDF mit eigenem
   Label (SE6). Danach muss kein v1-Backup mehr gelesen werden.
-- **App A-15 neu:** Papier ist der Standard, der Passwortdienst nur nach dem Hinweis
-  (Kap. 11, 2026-11-12).
+- **App A-15 neu:** Passwortmanager als Hauptweg, nur nach dem Hinweis (Ende-zu-Ende,
+  Papiercode des Passwortmanagers), Papier als Ausweg (Kap. 11, 2026-11-15): App V1.3c3, 2026-11-15, noch nicht installiert.
 - **`DIAGNOSE_KONTEN`** enthält nach Punkt 5 nur Kevins neues Konto (P9).
 - **Zugang nur nach Freigabe** (ID7) und **Kostengrenzen** (ID8, signierte
   Sitzungs-Token, Anfragealarm löst den Kill-Switch aus). Nach dem neuen Pfeffer

@@ -70,7 +70,8 @@ Angaben, Entscheidung).
    Platzhalter füllen, Mindestalter 16 (P8), Abschnitt Diagnose nur, wenn der Tester
    eine Diagnose-Erlaubnis bekommt (P9). Dem Tester vor der Freigabe geben.
 7. **DSFA abschließen** ([dsfa.md](dsfa.md)): R7 ist mit K2 erledigt; Ergebnis
-   bestätigen, sobald auch A-15 in der App ist (SE5: App V1.3c2, 2026-11-15).
+   bestätigen, sobald die App mit SE5 und A-15 installiert ist (V1.3c2, V1.3c3,
+   2026-11-15).
 8. **TOMs nachziehen:** Format v2 (SE6); die Liste in [toms.md](toms.md) markiert es als
    offen. Erledigt: GitHub mit Passkey (2026-11-14), Displaysperre (SE5, App V1.3c2,
    2026-11-15).

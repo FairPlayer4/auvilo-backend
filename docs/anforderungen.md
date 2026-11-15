@@ -62,9 +62,10 @@ liegt in einem Kotlin-Modul, das später in die App übernommen werden kann. [E]
 - ID4 **Wiederherstellungsschlüssel** (zum Ausdrucken oder im Passwortdienst, App-Anf. 7.33) entschlüsselt ein
   verschlüsseltes Schlüssel-Backup auf dem Server. Ohne ihn und ohne Gerät sind
   private Daten verloren (gewollt); Geteiltes kann man sich neu freigeben lassen.
-  **Papier ist der Standard;** den Passwortdienst bietet die App nur nach einem Hinweis
-  an: Ohne geräteinterne Verschlüsselung des Passwortmanagers hängt die
-  E2E-Verschlüsselung am Google-Konto (Kap. 11, 2026-11-12).
+  **Hauptweg ist ein Ende-zu-Ende-verschlüsselter Passwortmanager** (Kap. 11, 2026-11-15),
+  Papier der Ausweg. Vor dem Speichern sagt die App: Ohne geräteinterne Verschlüsselung
+  des Passwortmanagers hängt die E2E-Verschlüsselung am Google-Konto; den
+  Passwortmanager selbst mit seinem Wiederherstellungscode auf Papier schützen.
 - ID5 Missbrauchsschutz: Rate-Limits pro Konto und Gerät; später für den Play Store
   zusätzlich **Play Integrity API** (Anfrage kommt von der echten App). [E]
 - ID6 **Gerät abmelden/sperren** aus einem anderen Gerät heraus (verloren, gestohlen).
@@ -581,3 +582,4 @@ tragen die Tests die Spezifikation. Anleitung zum Review: [go-review.md](go-revi
 | 2026-11-14 | Backend wird mit der App veröffentlicht (App-Anf. 7.34, Kevin): Lizenz **Apache-2.0**; Historie bleibt (nur Gmail- und GitHub-Adressen, keine Testdaten); Doku war schon ohne Benutzerpfade; CI bei PRs und GitHub-Einstellungen erst kurz davor |
 | 2026-11-14 | **Konto löschen in der App** (K1, Kevin nach Vorschlag): ersetzt *Cloud-Daten löschen* (App R-3). Neu anfangen heißt Konto löschen und neu anmelden; die Kennung bleibt freigegeben. Ein nicht freigeschaltetes Gerät beantragt und behält seine Schlüssel; einen Termin, den der Server bei Anmeldung oder Erneuerung meldet, zeigt die App mit Benachrichtigung. Damit vorhandene Geräte innerhalb der 7 Tage davon erfahren, erneuert der stündliche Lauf die Sitzung spätestens nach 23 Stunden, auch ohne geänderte Daten; nur unter den Bedingungen der automatischen Sicherung (eingeschaltet, freigeschaltet, einmal von Hand gesichert) |
 | 2026-11-15 | **SE5 in der App** (Kevin): *Konto löschen* und *Sicherung löschen* (löscht ebenfalls alle Fassungen endgültig) erst nach der Displaysperre, abgefragt vor jedem Kontakt zum Server; ohne Displaysperre geht es weiter und wird protokolliert, damit Löschen (Art. 17) möglich bleibt. Abbrechen, Fehlversuche und fehlender Sensor heißen nein. Eine Wartezeit im Server weiterhin erst mit mehreren Nutzern |
+| 2026-11-15 | **Wiederherstellungsschlüssel: Passwortmanager als Hauptweg** (Kevin): Papier geht leicht verloren, weil man es fast nie braucht; einen Ende-zu-Ende-verschlüsselten Passwortmanager nutzt man regelmäßig. Die App bietet ihn als Hauptknopf an, aber nur nach dem Hinweis vom 2026-11-12 und mit dem Rat, den Passwortmanager selbst mit seinem Wiederherstellungscode auf Papier zu schützen (dort liegt das größte Risiko). Von selbst öffnet sich kein Speicher-Dialog; Papier bleibt der Weg ohne Passwortmanager. Die App kann nicht prüfen, ob der Passwortmanager Ende-zu-Ende verschlüsselt; das trägt der Hinweis. Ändert den Eintrag vom 2026-11-12; App V1.3c3, 2026-11-15, noch nicht installiert |

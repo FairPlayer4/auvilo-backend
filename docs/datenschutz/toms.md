@@ -56,8 +56,8 @@ Nutzer“). Einzelheiten stehen in den verlinkten Entwürfen und im Code (`// KR
 - Löschschutz für Firestore, Dienst und Bucket gegen `tofu destroy`.
 
 ## Wiederherstellbarkeit (lit. c)
-- Ältere Fassungen der Datensicherung 7 Tage; Wiederherstellungsschlüssel auf Papier
-  (Standard) für neue Geräte; lokales Backup der App unabhängig vom Server.
+- Ältere Fassungen der Datensicherung 7 Tage; Wiederherstellungsschlüssel im
+  Ende-zu-Ende-verschlüsselten Passwortmanager (Hauptweg) oder auf Papier für neue Geräte; lokales Backup der App unabhängig vom Server.
 - Infrastruktur vollständig in OpenTofu, Zustand versioniert.
 - **Offen:** Offline-Kopie des neuen Pfeffers (Sicherheitsphase); Wiederherstellung des
   Pfeffers einmal durchspielen (Kap. 11, 2026-11-07).
@@ -88,5 +88,6 @@ Nutzer“). Einzelheiten stehen in den verlinkten Entwürfen und im Code (`// KR
   (B4) mit. Betrifft erst B3.
 - **Passwortdienst:** Liegt der Wiederherstellungsschlüssel ohne geräteinterne
   Verschlüsselung im Passwortmanager, kann ein Angreifer mit dem Google-Konto alles
-  entschlüsseln. Deshalb ist Papier der Standard.
+  entschlüsseln. Deshalb sagt die App das vor dem Speichern und rät, den Passwortmanager
+  selbst mit seinem Wiederherstellungscode auf Papier zu schützen (A-15, App V1.3c3, 2026-11-15, noch nicht installiert).
 - **Admin-Audit-Log** liegt global (`_Required`), enthält aber nur Betreiberaktionen.
