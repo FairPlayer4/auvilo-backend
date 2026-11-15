@@ -79,7 +79,7 @@ Nutzer“). Einzelheiten stehen in den verlinkten Entwürfen und im Code (`// KR
 - Regeln für KI-Werkzeuge: Claude liest keine Geheimnisse und keine Daten anderer
   Nutzer (`CLAUDE.md`, ab der Sicherheitsphase streng).
 - Ablauf bei Datenpannen: [datenpannen.md](datenpannen.md).
-- **Offen:** Bestätigung zerstörerischer Aktionen mit der Displaysperre (SE5).
+- *Konto löschen* und *Sicherung löschen* erst nach der Displaysperre (SE5, umgesetzt in der App V1.3c2 (2026-11-15, noch nicht installiert)).
 
 ## Bekannte Grenzen
 - **Metadaten:** Größe und Zeitpunkt der Sicherungen zeigen, wie viel jemand die App

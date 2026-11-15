@@ -140,7 +140,8 @@ Revision `server-00024-2gg`, bereit; der Job `aufraeumen` hat dasselbe Image.
    Sicherheitsphase (Checkliste „Vor dem ersten weiteren Nutzer“ in b2b-entwurf.md;
    `CLAUDE.md`). Die Desktop-Client-ID des Test-Clients bleibt bis dahin.
    **Vorher fertig** (Sicherheits- und Datenschutzprüfung 2026-11-12, Liste dort):
-   Konto löschen, Bestätigung mit der Displaysperre, Format v2 mit HKDF-Labels,
+   Konto löschen, Bestätigung mit der Displaysperre (beide in der App V1.3c2, noch
+   nicht installiert), Format v2 mit HKDF-Labels,
    A-15 neu in der App, Dokumente. **Konto löschen:** Server und Client fertig
    (2026-11-12). Die Infrastruktur steht in `infra/aufraeumen.tf`
    (Cloud Run Job `aufraeumen`, täglich 4 Uhr per Cloud Scheduler, Rolle

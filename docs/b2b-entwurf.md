@@ -183,8 +183,8 @@ erster Tester, Veröffentlichung im Play Store.
   (2026-11-12, Abschnitt „Konto löschen“ oben); Infrastruktur in
   `infra/aufraeumen.tf` (angewendet 2026-11-13); in der Cloud getestet am
   2026-11-13 (Antrag mit Job und sofort, `stand.md`); App umgesetzt in V1.3c2 (App-Branch `feature/konto-loeschen`, 2026-11-14), noch nicht installiert.
-- **Bestätigung mit der Displaysperre** für *Konto löschen* und *Gerät sperren* (SE5;
-  *Cloud-Daten löschen* gibt es seit 2026-11-14 nicht mehr).
+- **Bestätigung mit der Displaysperre** für *Konto löschen* und *Sicherung löschen* (SE5;
+  *Cloud-Daten löschen* gibt es seit 2026-11-14 nicht mehr): umgesetzt in der App V1.3c2 (2026-11-15, noch nicht installiert).
 - **Format v2:** Schlüssel aus dem Wiederherstellungsschlüssel per HKDF mit eigenem
   Label (SE6). Danach muss kein v1-Backup mehr gelesen werden.
 - **App A-15 neu:** Papier ist der Standard, der Passwortdienst nur nach dem Hinweis
