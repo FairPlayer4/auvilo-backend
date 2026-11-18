@@ -38,15 +38,15 @@ class Personenschluessel private constructor(
      * für diese Person verpackt hat.
      *
      * KRITISCH: Gelingt nur mit dem passenden privaten Schlüssel und unveränderten Bytes.
+     * Sonst [EntschluesselnFehlgeschlagen], auch für einen echten Umschlag ohne Schlüssel
+     * darin: HPKE prüft den Absender nicht, bauen kann ihn jeder mit [oeffentlich].
      */
-    fun entpacken(umschlag: ByteArray): SymmetrischerSchluessel {
-        val bytes = try {
-            entpacken.getPrimitive(Tink.konfiguration, HybridDecrypt::class.java)
-                .decrypt(umschlag, Zweck.UMSCHLAG.toByteArray())
-        } catch (e: GeneralSecurityException) {
-            throw EntschluesselnFehlgeschlagen("Umschlag lässt sich nicht entpacken", e)
-        }
-        return SymmetrischerSchluessel.ausGeheimenBytes(bytes)
+    fun entpacken(umschlag: ByteArray): SymmetrischerSchluessel = try {
+        val bytes = entpacken.getPrimitive(Tink.konfiguration, HybridDecrypt::class.java)
+            .decrypt(umschlag, Zweck.UMSCHLAG.toByteArray())
+        SymmetrischerSchluessel.ausGeheimenBytes(bytes)
+    } catch (e: GeneralSecurityException) {
+        throw EntschluesselnFehlgeschlagen("Umschlag lässt sich nicht entpacken", e)
     }
 
     internal fun geheimeBytesEntpacken(): ByteArray =

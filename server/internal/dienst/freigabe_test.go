@@ -161,6 +161,31 @@ func TestErneuernPrueftDieFreigabe(t *testing.T) {
 	}
 }
 
+// Eine leere Kennung ist nie zugelassen, auch nicht durch einen leeren Eintrag
+// in der Liste; nur FreigabeAlle lässt alles zu (KRITISCH in erlaubt).
+func TestLeereKennungNurBeiFreigabeAlle(t *testing.T) {
+	kevin := kennungVon("google-kevin")
+	faelle := []struct {
+		name     string
+		freigabe Freigabe
+		kennung  string
+		erlaubt  bool
+	}{
+		{"Kennung auf der Liste ist zugelassen", FreigabeFuer([]string{kevin}), kevin, true},
+		{"alle freigegeben: auch die leere Kennung", FreigabeAlle(), "", true},
+		{"lehnt die leere Kennung ab", FreigabeFuer([]string{kevin}), "", false},
+		{"lehnt die leere Kennung trotz leerem Eintrag ab", FreigabeFuer([]string{kevin, ""}), "", false},
+		{"lehnt die leere Kennung bei leerer Liste ab", FreigabeFuer(nil), "", false},
+	}
+	for _, fall := range faelle {
+		t.Run(fall.name, func(t *testing.T) {
+			if got := fall.freigabe.erlaubt(fall.kennung); got != fall.erlaubt {
+				t.Errorf("erlaubt(%q) = %v, erwartet %v", fall.kennung, got, fall.erlaubt)
+			}
+		})
+	}
+}
+
 func TestKennungImLogIstGekuerzt(t *testing.T) {
 	faelle := []struct{ kennung, erwartet string }{
 		{kennungVon("google-kevin"), kennungVon("google-kevin")[:8]},
