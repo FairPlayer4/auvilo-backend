@@ -1,5 +1,5 @@
 # Review-Gedächtnis
-Letzter Lauf: 2026-11-09 @ 6d04e02, App `feature/backup` @ 4648692 (Fix 82528b0 auf App-Branch review/2026-11-09, nicht gemergt)   Laufzähler: 10
+Letzter Lauf: 2026-11-18 @ db22b1a (nur Backend; App zuletzt in Lauf 10 @ 4648692)   Laufzähler: 11
 Letztes Architektur-Review: Lauf 8 (2026-11-05); nächstes in Lauf 12.
 
 ## Beabsichtigte Architektur
@@ -32,14 +32,15 @@ Vom Entwickler bestätigt am 2026-11-01.
 ## Bereiche
 | Bereich | Pfade | Anforderungen/Doku | Tests | Zuletzt reviewt | Zustand |
 |---|---|---|---|---|---|
-| Kill-Switch | `infra/killswitch/` | anforderungen.md KO3, stand.md | `*_test.go` | 2026-11-05 (Lauf 8, IAM-Sperrweg) | gut; Sperrweg am 2026-11-06 in der Cloud getestet |
+| Kill-Switch | `infra/killswitch/` | anforderungen.md KO3, ID8, stand.md | `*_test.go` | 2026-11-18 (Lauf 11, nur `EntscheideAlarm` und Anfrage-Alarm in `alarm.tf`) | gut; Sperrweg am 2026-11-06 in der Cloud getestet; Alarm-Pfad ungetestet, kein Renotify (Frage 3 Lauf 11) |
 | Infrastruktur | `infra/*.tf`, `infra/*.sh` | anforderungen.md 4.3, 5, 6; gcp-einrichtung.md; stand.md | `infra/tests/` (tofu test), `pruefe-regionen.sh` | 2026-11-05 (Lauf 8, Modul `oeffentlich`, Löschschutz) | gut nach Fixes; CI-Gate und Textprüfung der Öffnung seit 2026-11-10 |
-| Server: Anmeldung/Sitzung | `server/internal/{geraeteschluessel,anmeldung,sitzung,dienst/dienst.go}`, `proto/` | b1-entwurf.md, proto-Kommentare, anforderungen.md Kap. 11 | `*_test.go` | 2026-11-05 (Lauf 8) | gut |
+| Server: Anmeldung/Sitzung | `server/internal/{geraeteschluessel,anmeldung,sitzung,dienst/dienst.go,dienst/freigabe.go}`, `proto/` | b1-entwurf.md (E-B1-3 veraltet), anforderungen.md ID7/ID8, proto-Kommentare | `*_test.go` | 2026-11-18 (Lauf 11, ID7/ID8, signierte Token) | gut; Token solide, minor offen (Token v2, Erneuern liest vor Prüfung, Kennung im Log) |
+| Konto löschen und Fristen | `server/internal/dienst/konto.go`, Konto/Antrag/Grabsteine in `speicher`, `Loeschen` beider Ablagen, `cmd/server` (aufraeumen), `infra/aufraeumen.tf`, Kotlin `KontoLoeschen` | anforderungen.md B1, P5, Kap. 11 2026-11-12/14; `docs/datenschutz/`; konto.proto | `konto_test.go`, `aufraeumen_test.go`, `vertrag_test.go`, `KontoLoeschenTest` | 2026-11-18 (Lauf 11, neu) | major offen (Frage 1 Lauf 11: kein `geloescht` nach Teilfehler); Mutanten M1–M4 alle rot |
 | Server: Speicher/Start | `server/internal/speicher`, `server/cmd/server` | b1-entwurf.md (Daten, Betrieb) | `vertrag_test.go` (auch Emulator), `main_test.go` | 2026-11-05 (Lauf 8) | gut; Entscheidungen als reine Funktionen (E10, 2026-11-10) |
 | Server: Datensicherung | `server/internal/datensicherung`, `dienst/datensicherung.go`, `datensicherung.proto` | b2b-entwurf.md, proto-Kommentare | `vertrag_test.go` (Arbeitsspeicher, fake-gcs), `datensicherung_test.go` | 2026-11-08 (Lauf 9, Tageslimits) | gut nach Fix (72faf01) |
 | CI, Deploy und Container | `.github/`, `server/Dockerfile`, `.golangci.yml`, `proto/buf*.yaml` | anforderungen.md Q4, go-review.md, stand.md | CI-Job `container` | 2026-11-03 (Lauf 6, CI-Fix) | gut; Emulator ohne feste Version (Nit) |
 | Doku | `docs/`, `CLAUDE.md`, `README.md`, beide `stand.md` | – | – | 2026-11-09 (Lauf 10, Kürzbarkeit beider Repos) | stand.md ist Tagebuch und teils falsch; Kürzungsplan in runs/2026-11-09.md |
-| Kotlin `protokoll` | `client/protokoll`, `proto/avlreminder/inhalt`, `proto/testvektoren` | b2-entwurf.md, b2b-entwurf.md, backup.proto | `*Test.kt`; Go prüft nur `geraetenachrichten.json` | 2026-11-09 (Lauf 10, als Aufrufer der App) | gut; Rückfragen `suspend` (e114120); Reset-Folge und W-7 gehören hierher (R3 Lauf 10) |
+| Kotlin `protokoll` | `client/protokoll`, `proto/avlreminder/inhalt`, `proto/testvektoren` | b2-entwurf.md, b2b-entwurf.md, backup.proto | `*Test.kt`; Go prüft nur `geraetenachrichten.json` | 2026-11-18 (Lauf 11, Krypto-Kern; davor als Krypto nur Lauf 4) | gut nach Fixes (c7f6b0a, fb5e626); Formate unabhängig in Python nachgerechnet; R-4 fehlt hier noch |
 | Kotlin `verbindung` | `client/verbindung` | b2b-entwurf.md, proto-Kommentare | `AdapterTest` (Connect-Nachbau) | 2026-11-08 (Lauf 9, mit App) | gut; ohne Netz `IOException`; Adapter mit Token-Lieferant (R2, 2026-11-10) |
 | Backup und Test-Client | `server/internal/dienst/schluessel.go`, Backup in `speicher`, `client/testclient`, `schluessel.proto` | b2-entwurf.md, proto-Kommentare | `schluessel_test.go`, `vertrag_test.go`, `EinrichtungTest`, `GoogleTest`, `AblageTest` | 2026-11-08 (Lauf 9, Test-Client) | gut; Meldung nach erfolgtem Löschen (minor) |
 | App-Einbindung (App-Repo) | `../avlreminder/app/…/cloud/`, Einstellungen, `gradle/backend-commit.txt`, Composite Build, App-CI | App `docs/backup-entwurf.md` (A-1…A-15), b2b-entwurf.md | `CloudBackupTest` (Attrappen), `CloudBackupUiTest`, App-CI mit Lint; Gerätetest von Hand | 2026-11-09 (Lauf 10, Schritte 3–5, zweiter Blick) | 3 major offen (Löschen ohne Sitzung, Automatik nach abgelehnter Sitzung, andere Geräte beim Löschen); Attrappe ohne Serverregeln (R4) |
@@ -51,14 +52,22 @@ Vom Entwickler bestätigt am 2026-11-01.
 
 ## Trends
 Das eigentliche Gedächtnis: wiederkehrende Muster, nach denen jeder Lauf gezielt schaut.
-- **Test hängt an der geprüften Konstante** (Lauf 2–5). Regel seit 2026-11-02 in
+- **Test hängt an der geprüften Konstante** (Lauf 2–5, wieder Lauf 11: Kotlin
+  `toString verrät den Schlüssel nicht` prüft `"…(***)"`). Regel seit 2026-11-02 in
   go-review.md und CLAUDE.md; alter Code nie gezielt durchsucht (E1 Lauf 5).
 - **Test kann nicht rot werden / trifft die Grenze nicht** (Lauf 5–7). Bei neuen Tests
   einen Gegenwert wählen.
-- **Schutz nur positiv geprüft** (Lauf 7–10). Bei
+- **Schutz nur positiv geprüft** (Lauf 7–11; Lauf 11: KRITISCH „leere Kennung nie“
+  ungetestet (M7), Erneuern-Ablehnung prüft keine Seiteneffekte). Bei
   Erlaubnis-Tests die Wirkung prüfen, bei Schutz-Tests auch „zusätzlich zu weit“.
-- **Testattrappe bildet Serverregel nicht nach** (Lauf 9, 10): `FalscheAblage`, App
-  `FakeServer` (R4 Lauf 10). Gemeinsamer Fake mit Serverregeln empfohlen.
+- **KRITISCH-Zweig ohne Test** (Lauf 11, neu: M7, M9, `KontoSperren`-Rennen, fälliger
+  Termin ohne Freischaltung). Mutanten gezielt an `// KRITISCH:`-Stellen setzen.
+- **Testattrappe bildet Serverregel nicht nach** (Lauf 9, 10, 11 – Trend): `FalscheAblage`,
+  App `FakeServer` (R4 Lauf 10), `datensicherung.Arbeitsspeicher.Loeschen("")` (Lauf 11).
+  Gemeinsamer Fake mit Serverregeln empfohlen.
+- **Entwürfe und Datenschutz-Doku laufen dem Code hinterher** (Lauf 11, neu): b1-entwurf
+  E-B1-3, b2-entwurf Schnittstelle, E-B2b-2, datenschutz/README „Kennung in keinem Log“,
+  konto.proto „zwei Tage“. Bei Datenschutz-Dokumenten zählt jede Abweichung als Fund.
 - **Abläufe außerhalb von `protokoll`** (Lauf 4, 5, 8, 10): Einrichtung, Sitzung,
   Rückfragen, Reset-Folge (`CloudLoeschen`) und W-7 sind umgezogen (zuletzt 2026-11-10).
   Beim nächsten App-Review prüfen, ob neue Regeln wieder in der App entstehen.
@@ -70,6 +79,11 @@ Das eigentliche Gedächtnis: wiederkehrende Muster, nach denen jeder Lauf geziel
   Erledigtes steht nur in Berichten und git, nicht in state.md oder stand.md.
 
 ## Offen (Details in den Berichten)
+- Lauf 11 (runs/2026-11-18.md, Fokus Datenschutz und Verschlüsselung): Fragen 1–4
+  (major `KontoLoeschen` nach Teilfehler; Kennung im Log; Anfrage-Alarm; verwaiste
+  Sicherung), Empfehlungen Token v2 (Sicherheitsphase), Erneuern-Reihenfolge,
+  Doku-Drift, Testlücken, Fingerabdruck-Vergleich in der Einrichtung, R-4 in `protokoll`.
+  Gefixt auf review/2026-11-18: f0e54ea, c7f6b0a, fb5e626.
 - Lauf 10 (runs/2026-11-09.md): erledigt am 2026-11-09 (Phase A) R1, R2, R4 (Regel fürs
   erste Schlüssel-Backup in beiden Attrappen, kein gemeinsames Modul), Fragen 1–3, die
   minor-Funde `setUp`/`unlocked` und Mutex in `work`, der wacklige Test; am 2026-11-10
@@ -93,10 +107,15 @@ Das eigentliche Gedächtnis: wiederkehrende Muster, nach denen jeder Lauf geziel
   optional).
 
 ## Offene Fragen an den Entwickler
-Keine (Lauf 9 und 10 am 2026-11-09 beantwortet).
+Lauf 11, Fragen 1–4 (runs/2026-11-18.md). Zuerst stellen.
 
 ## Getroffene Entscheidungen
 - 2026-11-01: Architekturbild bestätigt; `.review/` wird versioniert.
+- 2026-11-18: Der review-loop darf `review/<datum>` anlegen (Kevin auf Rückfrage, trotz
+  „Feature-Branches nur nach Bestätigung“ in CLAUDE.md). Kein Push, kein Merge.
+- 2026-11-18: Bekannt und nicht erneut melden: Umschlag ohne Absenderbindung und
+  Typprüfung (B3-2 bis B3-4), SE6, Rollback des Schlüssel-Backups, Desktop-Client-ID
+  bis zur Sicherheitsphase.
 - 2026-11-01: Keine Pflicht-Statuschecks (GitHub Free, privat) – Konvention reicht.
   Nicht erneut als Fund melden.
 - 2026-11-01: Kosten vor Verfügbarkeit: `tofu apply` darf gesperrte Dienste nicht wieder
