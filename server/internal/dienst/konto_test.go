@@ -208,6 +208,54 @@ func TestNichtFreigeschaltetesGeraetBeantragtNurDieLoeschung(t *testing.T) {
 	}
 }
 
+// KRITISCH (KontoLoeschen, Review-Lauf 11): Ist der beantragte Termin erreicht,
+// löscht auch ein nicht freigeschaltetes Gerät sofort, statt auf den Lauf am
+// nächsten Morgen zu warten. Eine Sekunde vorher bleibt es beim Antrag.
+func TestNichtFreigeschaltetesGeraetLoeschtAmTerminSofort(t *testing.T) {
+	termin := start.Add(7 * 24 * time.Hour)
+	faelle := []struct {
+		name      string
+		jetzt     time.Time
+		geloescht bool
+	}{
+		{"eine Sekunde vor dem Termin: weiter nur beantragt", termin.Add(-time.Second), false},
+		{"am Termin: sofort gelöscht", termin, true},
+		{"eine Stunde nach dem Termin: sofort gelöscht", termin.Add(time.Hour), true},
+	}
+	for _, fall := range faelle {
+		t.Run(fall.name, func(t *testing.T) {
+			lt := neuerLoeschTest(t)
+			if _, err := lt.kontoLoeschen(lt.k.laptopSitzung); err != nil {
+				t.Fatal(err)
+			}
+			lt.jetzt = fall.jetzt
+			laptop := lt.anmelden(t, "google-kevin", lt.k.laptop) // Sitzung zur neuen Uhrzeit
+			if laptop.Freigeschaltet {
+				t.Fatal("Laptop ist freigeschaltet, der Fall prüft dann nichts")
+			}
+			res, err := lt.kontoLoeschen(laptop.Sitzung.Token)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !fall.geloescht {
+				if res.Geloescht || res.LoeschenAb == nil || !res.LoeschenAb.AsTime().Equal(termin) {
+					t.Errorf("Antwort = %+v, erwartet weiter Termin %v", res, termin)
+				}
+				if _, err := lt.speicher.BackupHolen(context.Background(), lt.k.kontoID); err != nil {
+					t.Errorf("Backup vor dem Termin weg: %v", err)
+				}
+				return
+			}
+			if !res.Geloescht || res.LoeschenAb != nil {
+				t.Errorf("Antwort = %+v, erwartet gelöscht ohne Termin", res)
+			}
+			lt.jetzt = start // Annas Sitzung stammt von start
+			lt.erwarteKevinGeloescht(t)
+			lt.erwarteAnnaUnberuehrt(t)
+		})
+	}
+}
+
 func TestOhneAntragZeigenDieAntwortenKeinenTermin(t *testing.T) {
 	ts := neuerTestServer(t)
 	handy := testhilfe.NeuesGeraet(t)

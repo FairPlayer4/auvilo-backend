@@ -1424,6 +1424,73 @@ func pruefeVertrag(t *testing.T, neu func(t *testing.T) Speicher) {
 		})
 	}
 
+	// KRITISCH (Review-Lauf 11): Konto sperren und Anmeldungen desselben
+	// Google-Kontos überschneiden sich. Danach hat keine Anmeldung Zugang zum
+	// gesperrten Konto: Entweder landete sie in einem neuen Konto, oder ihr
+	// Gerät ist gesperrt und ihre Sitzung weg. Belegt den KRITISCH-Kommentar an
+	// Firestore.KontoSperren. Die neuen Anmeldungen landen alle im selben Konto.
+	t.Run("Konto sperren gewinnt gegen gleichzeitiges Anmelden", func(t *testing.T) {
+		var erfolge, imAltenKonto atomic.Int32
+		for runde := range gleichzeitigRunden {
+			s := neu(t)
+			a := anmelden(t, s, "kennung-a", "geraet-0", "hash-0", 0).KontoID
+			_, err := s.LoeschungBeantragen(ctx, a, t0)
+			muss(t, err)
+
+			type anmeldung struct {
+				geraetID, hash string
+				e              AnmeldeErgebnis
+				err            error
+			}
+			anmeldungen := make([]anmeldung, gleichzeitigAufrufe)
+			var wg sync.WaitGroup
+			var sperrFehler error
+			for i := range gleichzeitigAufrufe {
+				an := &anmeldungen[i] // jede Goroutine schreibt nur ihren eigenen Eintrag
+				an.geraetID = fmt.Sprintf("geraet-%d-%d", runde, i+1)
+				an.hash = fmt.Sprintf("hash-%d-%d", runde, i+1)
+				wg.Go(func() { an.e, an.err = s.Anmelden(ctx, "kennung-a", geraet(an.geraetID, 1), sitzung(an.hash)) })
+				if i == gleichzeitigAufrufe/2 { // Sperren mitten zwischen den Anmeldungen starten
+					wg.Go(func() { sperrFehler = s.KontoSperren(ctx, a, t0) })
+				}
+			}
+			wg.Wait()
+			muss(t, sperrFehler)
+
+			neuesKonto := ""
+			for _, an := range anmeldungen {
+				if an.err != nil {
+					t.Logf("Runde %d, %s: %v", runde, an.geraetID, an.err)
+					continue
+				}
+				erfolge.Add(1)
+				if an.e.KontoID != a {
+					if neuesKonto != "" && an.e.KontoID != neuesKonto {
+						t.Fatalf("Runde %d: zwei neue Konten für dieselbe Kennung (%s, %s)", runde, neuesKonto, an.e.KontoID)
+					}
+					neuesKonto = an.e.KontoID
+					continue
+				}
+				imAltenKonto.Add(1)
+				g, err := s.Geraet(ctx, an.geraetID)
+				muss(t, err)
+				if !g.Gesperrt {
+					t.Fatalf("Runde %d: %s im gesperrten Konto ist nicht gesperrt", runde, an.geraetID)
+				}
+				if _, err := s.Sitzung(ctx, an.hash); !errors.Is(err, ErrNichtGefunden) {
+					t.Fatalf("Runde %d: Sitzung %s im gesperrten Konto ist noch da (Fehler: %v)", runde, an.hash, err)
+				}
+			}
+			if k, err := s.KennungVon(ctx, a); !errors.Is(err, ErrNichtGefunden) {
+				t.Fatalf("Runde %d: Kennung des gesperrten Kontos = %q, %v", runde, k, err)
+			}
+		}
+		if erfolge.Load() == 0 {
+			t.Fatal("keine einzige Anmeldung gelungen – das Rennen hat nie stattgefunden")
+		}
+		t.Logf("%d Anmeldungen gelungen, davon %d im alten Konto (danach gesperrt)", erfolge.Load(), imAltenKonto.Load())
+	})
+
 	// KRITISCH: Freischalten und Sperren überschneiden sich (E18, Review-Lauf 8):
 	// Danach ist das Gerät gesperrt, egal in welcher Reihenfolge. Ein
 	// Freischalten, das den alten Stand zurückschreibt, höbe die Sperre auf.
