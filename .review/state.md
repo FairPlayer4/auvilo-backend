@@ -80,9 +80,9 @@ Das eigentliche Gedächtnis: wiederkehrende Muster, nach denen jeder Lauf geziel
 
 ## Offen (Details in den Berichten)
 - Lauf 11 (runs/2026-11-18.md, Fokus Datenschutz und Verschlüsselung): Fragen 1–4
-  umgesetzt am 2026-11-19 (c3a18da, 1204855, 2f42377, 3e92b78, 3508e95); offen davon
-  nur `tofu apply` (Renotify) und der Cloud-Test des Anfrage-Alarms, beide nach Kevins
-  Go, und `ServerKontoLoeschen` mit Anmeldung in der App. Offen: Empfehlungen Token v2 (Sicherheitsphase), Erneuern-Reihenfolge,
+  umgesetzt am 2026-11-19 (c3a18da, 1204855, 2f42377, 3e92b78, 3508e95), angewendet,
+  Anfrage-Alarm in der Cloud getestet (stand.md), App angepasst. Erledigt aus den
+  Testlücken: `Arbeitsspeicher.Loeschen("")` (3e92b78). Offen: Empfehlungen Token v2 (Sicherheitsphase), Erneuern-Reihenfolge,
   Doku-Drift, Testlücken, Fingerabdruck-Vergleich in der Einrichtung, R-4 in `protokoll`.
   Gefixt auf review/2026-11-18: f0e54ea, c7f6b0a, fb5e626.
 - Lauf 10 (runs/2026-11-09.md): erledigt am 2026-11-09 (Phase A) R1, R2, R4 (Regel fürs

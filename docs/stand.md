@@ -180,10 +180,16 @@ Revision `server-00024-2gg`, bereit; der Job `aufraeumen` hat dasselbe Image.
    nach einem Fehler per Erneuern; die Kennung kommt nicht mehr ins Log; der Lauf
    löscht Sicherungen und Schlüssel-Backups ohne Konto (älter als 1 h). Der
    Anfragealarm meldet sich alle 30 Minuten erneut beim Kill-Switch
-   (`renotify_interval`, noch nicht angewendet). Offen, je nach Kevins Go:
-   `tofu apply` und ein Cloud-Test des Pfads Anfragealarm → Kill-Switch
-   (eigene Richtlinie mit niedriger Schwelle auf einen Testdienst). Die App
-   braucht `ServerKontoLoeschen` mit Anmeldung (App-Repo).
+   (`renotify_interval`, angewendet 2026-11-19). **Pfad Anfragealarm →
+   Kill-Switch in der Cloud getestet am 2026-11-19:** eine vorübergehende
+   Richtlinie wie `anfragen`, aber mit Schwelle 5 (eigene OpenTofu-Wurzel mit
+   lokalem Zustand, danach zerstört); 10 Anfragen an den Server um 13:41 UTC,
+   um 13:45:26 „Alarm-Meldung verarbeitet“ (WARNING, Aktion „Dienste sperren“,
+   1 Dienst, Richtlinie genannt), ab 13:47 antwortete der Server mit 403. Mit
+   `-var=gesperrte_dienste_oeffnen=true` kam nur `allUsers` zurück, ab 13:48
+   wieder offen, danach `tofu plan` ohne Änderungen. Vom Alarm bis zur Sperre
+   etwa 4 Minuten, bis 403 noch 1–2 Minuten. Die App gibt `ServerKontoLoeschen`
+   die Anmeldung mit (App-Repo, 2026-11-19).
 
 ## Befehle
 ```bash
