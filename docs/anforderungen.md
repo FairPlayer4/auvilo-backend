@@ -107,6 +107,10 @@ liegt in einem Kotlin-Modul, das später in die App übernommen werden kann. [E]
     Umgesetzt: Token = base64url(256 Bit Zufall) „.“ base64url(HMAC, 128 Bit), Schlüssel
     aus dem Pfeffer abgeleitet (`sitzung.Aussteller`). Alte Tokens gelten nach dem
     Deploy nicht mehr; die Geräte erneuern einmal (wie nach einer Rotation).
+    Die Vorprüfung ohne Firestore gilt für Bearer-Tokens. Die offenen Prozeduren prüfen
+    vor dem Speicher nur, was nichts kostet: `SitzungErneuern` lehnt einen falschen
+    Zeitpunkt ohne Lesen ab (seit 2026-11-19, Review-Lauf 11); eine erfundene Geräte-ID
+    mit passendem Zeitpunkt kostet einen Lesezugriff. Das deckt der Anfrage-Alarm.
   - **Schneller als das Budget:** Abrechnungsdaten kommen mit Stunden Verzug, eine Flut
     kann bis dahin über 20 € kosten. Umgesetzt: Alarm `anfragen` (alarm.tf) auf
     `run.googleapis.com/request_count` des Servers, **mehr als 10.000 je Stunde**

@@ -34,7 +34,7 @@ Vom Entwickler bestätigt am 2026-11-01.
 |---|---|---|---|---|---|
 | Kill-Switch | `infra/killswitch/` | anforderungen.md KO3, ID8, stand.md | `*_test.go` | 2026-11-18 (Lauf 11, nur `EntscheideAlarm` und Anfrage-Alarm in `alarm.tf`) | gut; Sperrweg am 2026-11-06 in der Cloud getestet; Alarm-Pfad ungetestet, kein Renotify (Frage 3 Lauf 11) |
 | Infrastruktur | `infra/*.tf`, `infra/*.sh` | anforderungen.md 4.3, 5, 6; gcp-einrichtung.md; stand.md | `infra/tests/` (tofu test), `pruefe-regionen.sh` | 2026-11-05 (Lauf 8, Modul `oeffentlich`, Löschschutz) | gut nach Fixes; CI-Gate und Textprüfung der Öffnung seit 2026-11-10 |
-| Server: Anmeldung/Sitzung | `server/internal/{geraeteschluessel,anmeldung,sitzung,dienst/dienst.go,dienst/freigabe.go}`, `proto/` | b1-entwurf.md (E-B1-3 veraltet), anforderungen.md ID7/ID8, proto-Kommentare | `*_test.go` | 2026-11-18 (Lauf 11, ID7/ID8, signierte Token) | gut; Token solide, minor offen (Token v2, Erneuern liest vor Prüfung, Kennung im Log) |
+| Server: Anmeldung/Sitzung | `server/internal/{geraeteschluessel,anmeldung,sitzung,dienst/dienst.go,dienst/freigabe.go}`, `proto/` | b1-entwurf.md (E-B1-3 veraltet), anforderungen.md ID7/ID8, proto-Kommentare | `*_test.go` | 2026-11-18 (Lauf 11, ID7/ID8, signierte Token) | gut; Token solide, minor offen (Token v2, Kennung im Log) |
 | Konto löschen und Fristen | `server/internal/dienst/konto.go`, Konto/Antrag/Grabsteine in `speicher`, `Loeschen` beider Ablagen, `cmd/server` (aufraeumen), `infra/aufraeumen.tf`, Kotlin `KontoLoeschen` | anforderungen.md B1, P5, Kap. 11 2026-11-12/14; `docs/datenschutz/`; konto.proto | `konto_test.go`, `aufraeumen_test.go`, `vertrag_test.go`, `KontoLoeschenTest` | 2026-11-18 (Lauf 11, neu) | major offen (Frage 1 Lauf 11: kein `geloescht` nach Teilfehler); Mutanten M1–M4 alle rot |
 | Server: Speicher/Start | `server/internal/speicher`, `server/cmd/server` | b1-entwurf.md (Daten, Betrieb) | `vertrag_test.go` (auch Emulator), `main_test.go` | 2026-11-05 (Lauf 8) | gut; Entscheidungen als reine Funktionen (E10, 2026-11-10) |
 | Server: Datensicherung | `server/internal/datensicherung`, `dienst/datensicherung.go`, `datensicherung.proto` | b2b-entwurf.md, proto-Kommentare | `vertrag_test.go` (Arbeitsspeicher, fake-gcs), `datensicherung_test.go` | 2026-11-08 (Lauf 9, Tageslimits) | gut nach Fix (72faf01) |
@@ -83,8 +83,8 @@ Das eigentliche Gedächtnis: wiederkehrende Muster, nach denen jeder Lauf geziel
 - Lauf 11 (runs/2026-11-18.md, Fokus Datenschutz und Verschlüsselung): Fragen 1–4
   umgesetzt am 2026-11-19 (c3a18da, 1204855, 2f42377, 3e92b78, 3508e95), angewendet,
   Anfrage-Alarm in der Cloud getestet (stand.md), App angepasst, Testlücken geschlossen
-  (auch die aus Lauf 5). Offen: Empfehlungen Token v2 (Sicherheitsphase),
-  Erneuern-Reihenfolge, Doku-Drift, Fingerabdruck-Vergleich in der Einrichtung, R-4 in
+  (auch die aus Lauf 5), Erneuern-Reihenfolge umgestellt. Offen: Empfehlungen Token v2
+  (Sicherheitsphase), Doku-Drift, Fingerabdruck-Vergleich in der Einrichtung, R-4 in
   `protokoll`.
   Gefixt auf review/2026-11-18: f0e54ea, c7f6b0a, fb5e626.
 - Lauf 10 (runs/2026-11-09.md): erledigt am 2026-11-09 (Phase A) R1, R2, R4 (Regel fürs

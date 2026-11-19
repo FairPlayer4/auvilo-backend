@@ -744,3 +744,60 @@ func TestGeraeteDienstMeldetSpeicherausfall(t *testing.T) {
 		})
 	}
 }
+
+// geraetLeseSpion zählt, wie oft ein Gerät gelesen wird.
+type geraetLeseSpion struct {
+	speicher.Speicher
+	gelesen int
+}
+
+func (s *geraetLeseSpion) Geraet(ctx context.Context, geraetID string) (speicher.Geraet, error) {
+	s.gelesen++
+	return s.Speicher.Geraet(ctx, geraetID)
+}
+
+// KRITISCH (ID8, Review-Lauf 11): Ein Erneuern mit falschem Zeitpunkt wird
+// abgelehnt, ohne dass der Server Firestore liest. Gegenprobe: Mit passendem
+// Zeitpunkt wird gelesen, auch für ein unbekanntes Gerät.
+func TestErneuernMitFalschemZeitpunktLiestNichts(t *testing.T) {
+	faelle := []struct {
+		name     string
+		bekannt  bool
+		abstand  time.Duration // Zeitpunkt der Anfrage minus Serverzeit
+		wantCode connect.Code  // 0 = erneuert
+		liest    bool
+	}{
+		{"passender Zeitpunkt: liest und erneuert", true, 0, 0, true},
+		{"unbekanntes Gerät mit passendem Zeitpunkt: liest und lehnt ab", false, 0, connect.CodeUnauthenticated, true},
+		{"alter Zeitpunkt: lehnt ohne Lesen ab", true, -3 * time.Minute, connect.CodeUnauthenticated, false},
+		{"Zeitpunkt in der Zukunft: lehnt ohne Lesen ab", true, 3 * time.Minute, connect.CodeUnauthenticated, false},
+		{"unbekanntes Gerät mit altem Zeitpunkt: lehnt ohne Lesen ab", false, -3 * time.Minute, connect.CodeUnauthenticated, false},
+	}
+	for _, fall := range faelle {
+		t.Run(fall.name, func(t *testing.T) {
+			spion := &geraetLeseSpion{}
+			ts := neuerTestServerMit(t, datensicherung.NeuerArbeitsspeicher(), 0, func(k *Konfiguration) {
+				spion.Speicher = k.Speicher
+				k.Speicher = spion
+			})
+			handy := testhilfe.NeuesGeraet(t)
+			if fall.bekannt {
+				ts.anmelden(t, "google-kevin", handy)
+			}
+			spion.gelesen = 0
+
+			_, err := ts.anmelde.SitzungErneuern(context.Background(), connect.NewRequest(ts.erneuerAnfrage(t, handy, ts.jetzt.Add(fall.abstand))))
+
+			if fall.wantCode == 0 {
+				if err != nil {
+					t.Fatalf("unerwarteter Fehler: %v", err)
+				}
+			} else {
+				erwarteCode(t, err, fall.wantCode)
+			}
+			if (spion.gelesen > 0) != fall.liest {
+				t.Errorf("Gerät %d-mal gelesen, erwartet gelesen = %v", spion.gelesen, fall.liest)
+			}
+		})
+	}
+}
