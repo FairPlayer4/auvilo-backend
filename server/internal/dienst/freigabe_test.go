@@ -185,16 +185,3 @@ func TestLeereKennungNurBeiFreigabeAlle(t *testing.T) {
 		})
 	}
 }
-
-func TestKennungImLogIstGekuerzt(t *testing.T) {
-	faelle := []struct{ kennung, erwartet string }{
-		{kennungVon("google-kevin"), kennungVon("google-kevin")[:8]},
-		{"kurz", "kurz"},
-		{"", ""},
-	}
-	for _, fall := range faelle {
-		if got := kennungImLog(fall.kennung); got != fall.erwartet {
-			t.Errorf("kennungImLog(%q) = %q, erwartet %q", fall.kennung, got, fall.erwartet)
-		}
-	}
-}

@@ -13,7 +13,7 @@ option java_package = "com.avlreminder.schnittstelle.v1";
 // Fassungen, Schlüssel-Backup, Diagnosen, Geräte, Sitzungen und die Kennung
 // (HMAC der Google-Konto-ID). Danach legt ein neues Anmelden mit demselben
 // Google-Konto ein neues, leeres Konto an. Die Tageszähler laufen von selbst ab
-// (höchstens zwei Tage).
+// (nach wenigen Tagen; Firestore löscht abgelaufene Zähler verzögert).
 //
 // Ein freigeschaltetes Gerät löscht sofort. Ein nicht freigeschaltetes Gerät
 // (nur der Google-Login, z. B. Handy und Wiederherstellungsschlüssel verloren)

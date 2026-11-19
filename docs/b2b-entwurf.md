@@ -361,7 +361,8 @@ nicht; sie werden beim Zurücksetzen vor dem ersten weiteren Nutzer ohnehin gel�
   dann liegen, ohne Konto (nur Chiffrat). Selten (Millisekunden); ein Aufräumen
   verwaister Objekte gehört zu den Fristen aus P5.
 - **Konto löschen und die Tageszähler.** Sie bleiben bis zu ihrem Ablauf (TTL,
-  höchstens zwei Tage); sie enthalten nur die Konto-ID und Zahlen.
+  nach wenigen Tagen); sie enthalten nur Zahlen und in der Dokument-ID die
+  Konto-ID, die Geräte-ID oder, beim Zähler für neue Geräte, die Kennung.
 - **Zwischen Sperren und Entfernen** (nur nach einem Abbruch) meldet sich ein altes
   Gerät mit seinem Schlüssel als fremdes Gerät; ein neuer Geräteschlüssel bekommt
   ein neues Konto.

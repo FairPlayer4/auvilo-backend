@@ -37,7 +37,7 @@ Damit die Tätigkeiten unten kurz bleiben, hier einmal, was wo liegt.
 | Firestore `geraete_grabsteine` | Geräte-ID und Konto-ID eines Geräts, das 90 Tage gesperrt war | Pseudonym | bis Konto löschen (hält das gestohlene Gerät gesperrt) |
 | Firestore `sitzungen` | Hash des Tokens, Konto-ID, Geräte-ID, Ablauf | Pseudonym | 1 Stunde, dann TTL |
 | Firestore `backups` | Schlüssel-Backup (Chiffrat), Version, öffentlicher Freischaltschlüssel | Pseudonym, Inhalt verschlüsselt | bis Konto oder Backup löschen |
-| Firestore `kontingente` | Zähler je Art, Tag und Konto | Pseudonym | TTL nach etwa 2 Tagen, dann wenige Tage Verzögerung |
+| Firestore `kontingente` | Zähler je Art und Tag, je Konto oder Gerät; neue Geräte je Kennung (HMAC der Google-ID) | Pseudonym | TTL nach etwa 2 Tagen, dann wenige Tage Verzögerung |
 | Bucket `…-datensicherung` | Datensicherung der App (Chiffrat bis 8 MiB), Größe, Zeitpunkt; ältere Fassungen | Pseudonym, Inhalt verschlüsselt | bis Löschen; ältere Fassungen 7 Tage, höchstens 200 |
 | Bucket `…-diagnose` | Diagnose-Log (unverschlüsselt, ohne Inhalte) | Pseudonym | 14 Tage |
 | Log-Bucket `logs-eu` | Anfrage-Logs von Cloud Run (IP-Adresse, User-Agent, Prozedur, Zeit, Status), Server-Logs (Konto-ID, Geräte-ID, Größe, Ergebnis) | IP-Adresse; Pseudonyme | 30 Tage |
