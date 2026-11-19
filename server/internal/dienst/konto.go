@@ -140,7 +140,7 @@ type AufraeumErgebnis struct {
 	Verwaist   int // Sicherungen und Schlüssel-Backups ohne Konto, gelöscht
 }
 
-// FristVerwaist: So alt muss eine Sicherung oder ein Backup ohne Konto sein,
+// FristVerwaist ist das Mindestalter einer Sicherung oder eines Backups ohne Konto,
 // bevor der Lauf es löscht. Abstand zu einem Löschen, das gerade läuft, und zu
 // einer Anfrage, die kurz vor dem Sperren angenommen wurde.
 const FristVerwaist = time.Hour
