@@ -17,9 +17,24 @@ import java.time.Instant
 
 class SicherungsablaufTest {
 
-    /** Server-Ablage im Speicher; Versionen springen wie bei Cloud Storage (nicht +1). */
-    class FalscheAblage(var sicherung: GeholteSicherung? = null) : SicherungsAblage {
+    /**
+     * Server-Ablage im Speicher; Versionen springen wie bei Cloud Storage (nicht +1).
+     * Hält wie der Server die älteren Fassungen, bis die Sicherung gelöscht wird (R-4).
+     */
+    class FalscheAblage(sicherung: GeholteSicherung? = null) : SicherungsAblage, FassungsArchiv {
         var gespeichert = 0
+        private val archiv = linkedMapOf<Long, GeholteSicherung>()
+
+        /** Die neueste Fassung; Setzen legt eine neue Fassung an wie beim Server. */
+        var sicherung: GeholteSicherung? = null
+            set(neu) {
+                field = neu
+                if (neu == null) archiv.clear() else archiv[neu.version] = neu
+            }
+
+        init {
+            this.sicherung = sicherung
+        }
 
         /** Alle Aufrufe beim Server, auch abgelehnte: Jeder zählt dort zum Tageslimit. */
         var aufrufe = 0
@@ -55,6 +70,18 @@ class SicherungsablaufTest {
         }
 
         fun inhalt() = Datensicherung.entschluesseln(sicherung!!.chiffrat, tresor, KONTO)
+
+        override suspend fun fassungen(): List<SicherungsFassung> {
+            aufrufe++
+            return archiv.values.reversed().map { SicherungsFassung(it.version, JETZT, it.chiffrat.size.toLong()) }
+        }
+
+        /** Wie der Server: 0 hieße „die neueste“ und gehört nicht hierher. */
+        override suspend fun holen(version: Long): GeholteSicherung? {
+            aufrufe++
+            require(version > 0)
+            return archiv[version]
+        }
     }
 
     class FalscherStand(var stand: GemerkteSicherung? = null) : SicherungsStand {
@@ -452,6 +479,144 @@ class SicherungsablaufTest {
         assertNull(g.gefragt)
     }
 
+    // --- Ältere Fassung einspielen (R-4) ---------------------------------------
+
+    private fun fassungEinspielen(
+        server: FalscheAblage,
+        version: Long,
+        stand: FalscherStand = FalscherStand(),
+        bestaetigt: Boolean = true,
+        hoechste: Int = SCHEMA,
+        angewendet: MutableList<Sicherung> = mutableListOf(),
+    ) = runBlocking {
+        Sicherungsablauf(KONTO, "handy", tresor, server, stand, uebernehmen = { false }, uhr = { JETZT })
+            .fassungEinspielen(server, version, hoechste, bestaetigen = { bestaetigt }, anwenden = { angewendet += it })
+    }
+
+    /** Die Version der Fassung mit [zaehler], wie die App sie aus der Liste wählt. */
+    private fun versionMit(server: FalscheAblage, zaehler: Long): Long = runBlocking {
+        server.fassungen().map { it.version }.single { v ->
+            Datensicherung.entschluesseln(server.holen(v)!!.chiffrat, tresor, KONTO).kopf.zaehler == zaehler
+        }
+    }
+
+    data class Fassungsfall(
+        val name: String,
+        val gemerkt: GemerkteSicherung?,
+        /** Fassungen auf dem Server, älteste zuerst: Gerät und Zähler. */
+        val verlauf: List<Pair<String, Long>>,
+        val gewaehlt: Long,
+        val danach: GemerkteSicherung,
+    ) {
+        override fun toString() = name
+    }
+
+    // KRITISCH (E-B2b-3): Eine bewusst gewählte ältere Fassung wird eingespielt, der
+    // gemerkte Zähler sinkt aber nie; die Version ist danach 0 (W-7).
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("fassungsfaelle")
+    fun `spielt eine gewählte Fassung ein, ohne den gemerkten Zähler zu senken`(fall: Fassungsfall) {
+        val server = FalscheAblage()
+        fall.verlauf.forEach { (geraet, zaehler) -> server.vonGeraet(geraet, zaehler, nutzlast = "$geraet $zaehler") }
+        val stand = FalscherStand(fall.gemerkt)
+        val angewendet = mutableListOf<Sicherung>()
+        val gewaehlt = versionMit(server, fall.gewaehlt)
+
+        val ergebnis = fassungEinspielen(server, gewaehlt, stand, angewendet = angewendet)
+
+        assertEquals(fall.gewaehlt, (ergebnis as Wiederhergestellt.Ja).kopf.zaehler)
+        assertEquals(fall.gewaehlt, angewendet.single().kopf.zaehler)
+        assertEquals(fall.danach, stand.stand)
+    }
+
+    @Test
+    fun `nach einer älteren eigenen Fassung ersetzt die nächste Sicherung die neueste ohne Rückfrage`() {
+        val g = Geraet(FalscheAblage())
+        g.sichern("eins")
+        g.sichern("zwei")
+        g.sichern("drei")
+        fassungEinspielen(g.server, versionMit(g.server, 1), g.stand)
+
+        assertInstanceOf(Gesichert.Ja::class.java, g.sichern("eins wieder"))
+
+        assertNull(g.gefragt)
+        assertEquals(4, g.server.inhalt().kopf.zaehler)
+        assertArrayEquals("eins wieder".toByteArray(), g.server.inhalt().nutzlast)
+    }
+
+    // KRITISCH (W-7): Ist die neueste Fassung von einem anderen Gerät, ersetzt die nächste
+    // Sicherung sie nur nach Rückfrage, und dann mit einem Zähler über ihrem.
+    @ParameterizedTest(name = "übernimmt = {0}")
+    @ValueSource(booleans = [true, false])
+    fun `nach einer älteren Fassung fragt die nächste Sicherung vor dem Ersetzen einer fremden`(uebernimmt: Boolean) {
+        val g = Geraet(FalscheAblage(), uebernimmt = uebernimmt)
+        g.sichern("eins")
+        g.server.vonGeraet("tablet", zaehler = 5, nutzlast = "vom Tablet")
+        fassungEinspielen(g.server, versionMit(g.server, 1), g.stand)
+
+        val ergebnis = g.sichern("eins wieder", automatisch = false)
+
+        assertEquals("tablet", g.gefragt?.geraetId)
+        if (uebernimmt) {
+            assertInstanceOf(Gesichert.Ja::class.java, ergebnis)
+            assertEquals(6, g.server.inhalt().kopf.zaehler)
+        } else {
+            assertInstanceOf(Gesichert.AnderesGeraet::class.java, ergebnis)
+            assertArrayEquals("vom Tablet".toByteArray(), g.server.inhalt().nutzlast)
+        }
+    }
+
+    // KRITISCH (W-7): Auch die neueste Fassung eines anderen Geräts, über die Liste
+    // eingespielt, ersetzt die nächste Sicherung nur nach Rückfrage.
+    @Test
+    fun `nach der neuesten fremden Fassung aus der Liste fragt die nächste Sicherung`() {
+        val g = Geraet(FalscheAblage(), uebernimmt = false)
+        g.server.vonGeraet("tablet", zaehler = 5, nutzlast = "vom Tablet")
+        fassungEinspielen(g.server, versionMit(g.server, 5), g.stand)
+
+        assertInstanceOf(Gesichert.AnderesGeraet::class.java, g.sichern(automatisch = false))
+
+        assertEquals("tablet", g.gefragt?.geraetId)
+        assertArrayEquals("vom Tablet".toByteArray(), g.server.inhalt().nutzlast)
+    }
+
+    data class Fassungsablehnung(
+        val name: String,
+        val server: () -> FalscheAblage,
+        /** Die gewählte Version; null = die einzige Fassung auf dem Server. */
+        val version: Long? = null,
+        val bestaetigt: Boolean = true,
+        val hoechste: Int = SCHEMA,
+        val erwartet: Class<out Throwable>? = null,
+        val ergebnis: Wiederhergestellt? = null,
+    ) {
+        override fun toString() = name
+    }
+
+    // KRITISCH: Zu „spielt eine gewählte Fassung ein“ die Ablehnungen. Danach ist nichts
+    // angewendet und der gemerkte Stand unverändert; auch das Ruhen beginnt nicht.
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("fassungsablehnungen")
+    fun `spielt die Fassung nicht ein`(fall: Fassungsablehnung) {
+        val gemerkt = GemerkteSicherung(3, 99)
+        val stand = FalscherStand(gemerkt)
+        val angewendet = mutableListOf<Sicherung>()
+        val server = fall.server()
+        val version = fall.version ?: runBlocking { server.fassungen().single().version }
+        server.aufrufe = 0
+
+        val ergebnis = runCatching { fassungEinspielen(server, version, stand, fall.bestaetigt, fall.hoechste, angewendet) }
+
+        if (fall.erwartet != null) {
+            assertInstanceOf(fall.erwartet, ergebnis.exceptionOrNull())
+        } else {
+            assertEquals(fall.ergebnis, ergebnis.getOrThrow())
+        }
+        assertTrue(angewendet.isEmpty())
+        assertEquals(gemerkt, stand.stand)
+        if (fall.version == 0L) assertEquals(0, server.aufrufe, "ohne gültige Version kein Abruf")
+    }
+
     // --- Löschen --------------------------------------------------------------
 
     // KRITISCH: Nach dem Löschen zählt das Gerät weiter, damit andere Geräte, die
@@ -587,6 +752,35 @@ class SicherungsablaufTest {
                 { FalscheAblage(GeholteSicherung(SymmetrischerSchluessel.erzeugen().verschluesseln(ByteArray(8), ByteArray(0)), 5)) },
                 erwartet = EntschluesselnFehlgeschlagen::class.java,
             ),
+        )
+
+        @JvmStatic
+        fun fassungsfaelle() = listOf(
+            Fassungsfall("eigene ältere Fassung: der Zähler bleibt", GemerkteSicherung(3, 99), listOf("handy" to 1L, "handy" to 2L, "handy" to 3L), 1, GemerkteSicherung(3, 0)),
+            Fassungsfall("fremde ältere Fassung: der gesehene Zähler zählt mit", GemerkteSicherung(3, 99, gesehen = 6), listOf("tablet" to 4L, "tablet" to 6L), 4, GemerkteSicherung(6, 0)),
+            Fassungsfall("Fassung neuer als bekannt: der Zähler steigt", GemerkteSicherung(2, 99), listOf("tablet" to 5L, "tablet" to 7L), 5, GemerkteSicherung(5, 0)),
+            Fassungsfall("frisches Gerät ohne Stand", null, listOf("tablet" to 4L, "tablet" to 6L), 4, GemerkteSicherung(4, 0)),
+            // Einspielen ist eine Handlung des Menschen wie Wiederherstellen: Das Ruhen endet.
+            Fassungsfall("nach abgelehnter Übernahme endet das Ruhen", GemerkteSicherung(2, 99, gesehen = 6, abgelehnt = true), listOf("tablet" to 4L, "tablet" to 6L), 4, GemerkteSicherung(6, 0)),
+        )
+
+        private fun eineFassung(geraet: String = "tablet", schema: Int = SCHEMA, konto: String = KONTO) = FalscheAblage(
+            GeholteSicherung(Datensicherung.verschluesseln(Sicherung(Sicherungskopf(2, JETZT, geraet, schema), "alt".toByteArray()), tresor, konto), 5),
+        )
+
+        @JvmStatic
+        fun fassungsablehnungen() = listOf(
+            Fassungsablehnung("nicht ohne Bestätigung", { eineFassung() }, bestaetigt = false, ergebnis = Wiederhergestellt.Abgelehnt),
+            Fassungsablehnung("nicht ohne Bestätigung, auch die eigene Fassung", { eineFassung("handy") }, bestaetigt = false, ergebnis = Wiederhergestellt.Abgelehnt),
+            Fassungsablehnung("Fassung nicht mehr auf dem Server", { eineFassung() }, version = 4242, ergebnis = Wiederhergestellt.KeineSicherung),
+            Fassungsablehnung("keine Fassung aus einer neueren App-Version", { eineFassung(schema = SCHEMA + 1) }, erwartet = NeueresSchema::class.java),
+            Fassungsablehnung("keine Fassung eines anderen Kontos", { eineFassung(konto = "konto-b") }, erwartet = EntschluesselnFehlgeschlagen::class.java),
+            Fassungsablehnung(
+                "keine Fassung, die sich nicht entschlüsseln lässt",
+                { FalscheAblage(GeholteSicherung(SymmetrischerSchluessel.erzeugen().verschluesseln(ByteArray(8), ByteArray(0)), 5)) },
+                erwartet = EntschluesselnFehlgeschlagen::class.java,
+            ),
+            Fassungsablehnung("Version 0 ist keine Fassung aus der Liste", { eineFassung() }, version = 0, erwartet = IllegalArgumentException::class.java),
         )
     }
 }

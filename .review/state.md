@@ -40,7 +40,7 @@ Vom Entwickler bestätigt am 2026-11-01.
 | Server: Datensicherung | `server/internal/datensicherung`, `dienst/datensicherung.go`, `datensicherung.proto` | b2b-entwurf.md, proto-Kommentare | `vertrag_test.go` (Arbeitsspeicher, fake-gcs), `datensicherung_test.go` | 2026-11-08 (Lauf 9, Tageslimits) | gut nach Fix (72faf01) |
 | CI, Deploy und Container | `.github/`, `server/Dockerfile`, `.golangci.yml`, `proto/buf*.yaml` | anforderungen.md Q4, go-review.md, stand.md | CI-Job `container` | 2026-11-03 (Lauf 6, CI-Fix) | gut; Emulator ohne feste Version (Nit) |
 | Doku | `docs/`, `CLAUDE.md`, `README.md`, beide `stand.md` | – | – | 2026-11-09 (Lauf 10, Kürzbarkeit beider Repos) | stand.md ist Tagebuch und teils falsch; Kürzungsplan in runs/2026-11-09.md |
-| Kotlin `protokoll` | `client/protokoll`, `proto/avlreminder/inhalt`, `proto/testvektoren` | b2-entwurf.md, b2b-entwurf.md, backup.proto | `*Test.kt`; Go prüft nur `geraetenachrichten.json` | 2026-11-18 (Lauf 11, Krypto-Kern; davor als Krypto nur Lauf 4) | gut nach Fixes (c7f6b0a, fb5e626); Formate unabhängig in Python nachgerechnet; R-4 fehlt hier noch |
+| Kotlin `protokoll` | `client/protokoll`, `proto/avlreminder/inhalt`, `proto/testvektoren` | b2-entwurf.md, b2b-entwurf.md, backup.proto | `*Test.kt`; Go prüft nur `geraetenachrichten.json` | 2026-11-18 (Lauf 11, Krypto-Kern; davor als Krypto nur Lauf 4) | gut nach Fixes (c7f6b0a, fb5e626); Formate unabhängig in Python nachgerechnet |
 | Kotlin `verbindung` | `client/verbindung` | b2b-entwurf.md, proto-Kommentare | `AdapterTest` (Connect-Nachbau) | 2026-11-08 (Lauf 9, mit App) | gut; ohne Netz `IOException`; Adapter mit Token-Lieferant (R2, 2026-11-10) |
 | Backup und Test-Client | `server/internal/dienst/schluessel.go`, Backup in `speicher`, `client/testclient`, `schluessel.proto` | b2-entwurf.md, proto-Kommentare | `schluessel_test.go`, `vertrag_test.go`, `EinrichtungTest`, `GoogleTest`, `AblageTest` | 2026-11-08 (Lauf 9, Test-Client) | gut; Meldung nach erfolgtem Löschen (minor) |
 | App-Einbindung (App-Repo) | `../avlreminder/app/…/cloud/`, Einstellungen, `gradle/backend-commit.txt`, Composite Build, App-CI | App `docs/backup-entwurf.md` (A-1…A-15), b2b-entwurf.md | `CloudBackupTest` (Attrappen), `CloudBackupUiTest`, App-CI mit Lint; Gerätetest von Hand | 2026-11-09 (Lauf 10, Schritte 3–5, zweiter Blick) | 3 major offen (Löschen ohne Sitzung, Automatik nach abgelehnter Sitzung, andere Geräte beim Löschen); Attrappe ohne Serverregeln (R4) |
@@ -84,9 +84,8 @@ Das eigentliche Gedächtnis: wiederkehrende Muster, nach denen jeder Lauf geziel
 - Lauf 11 (runs/2026-11-18.md, Fokus Datenschutz und Verschlüsselung): Fragen 1–4
   umgesetzt am 2026-11-19 (c3a18da, 1204855, 2f42377, 3e92b78, 3508e95), angewendet,
   Anfrage-Alarm in der Cloud getestet (stand.md), App angepasst, Testlücken geschlossen
-  (auch die aus Lauf 5), Erneuern-Reihenfolge umgestellt, Entwürfe angeglichen. Offen:
-  Empfehlungen Token v2 (Sicherheitsphase), Fingerabdruck-Vergleich in der Einrichtung, R-4 in
-  `protokoll`.
+  (auch die aus Lauf 5), Erneuern-Reihenfolge umgestellt, Entwürfe angeglichen, R-4 in `protokoll`.
+  Offen: Empfehlungen Token v2 (Sicherheitsphase), Fingerabdruck-Vergleich in der Einrichtung.
   Gefixt auf review/2026-11-18: f0e54ea, c7f6b0a, fb5e626.
 - Lauf 10 (runs/2026-11-09.md): erledigt am 2026-11-09 (Phase A) R1, R2, R4 (Regel fürs
   erste Schlüssel-Backup in beiden Attrappen, kein gemeinsames Modul), Fragen 1–3, die

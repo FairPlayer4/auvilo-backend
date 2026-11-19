@@ -68,8 +68,9 @@ private const val HILFE = """Befehle:
   freischalten <id> anderes Gerät des Kontos freischalten (E-B2b-13)
   schluessel        Fingerabdruck des Personenschlüssels zeigen
   sichern <datei>   Inhalt der Datei als Datensicherung hochladen (verschlüsselt)
-  wiederherstellen <datei>
-                    neueste Datensicherung holen und in die Datei schreiben
+  wiederherstellen <datei> [<version>]
+                    neueste Datensicherung (oder die Fassung <version> aus
+                    „fassungen“, R-4) holen und in die Datei schreiben
   fassungen         Fassungen der Datensicherung auf dem Server auflisten (R-4)
   sicherung-loeschen
                     Datensicherung des Kontos mit allen Fassungen löschen
@@ -158,6 +159,7 @@ private suspend fun ausfuehren(args: List<String>) {
         rest == listOf("schluessel") -> werkzeug.schluessel()
         rest.size == 2 && rest[0] == "sichern" -> werkzeug.sichern(File(rest[1]))
         rest.size == 2 && rest[0] == "wiederherstellen" -> werkzeug.wiederherstellen(File(rest[1]))
+        rest.size == 3 && rest[0] == "wiederherstellen" -> werkzeug.fassungEinspielen(File(rest[1]), version(rest[2]))
         rest == listOf("fassungen") -> werkzeug.fassungen()
         rest == listOf("sicherung-loeschen") -> werkzeug.sicherungLoeschen()
         rest == listOf("schluessel-loeschen") -> werkzeug.schluesselLoeschen()
@@ -187,6 +189,10 @@ private fun pruefeServer(server: String) {
 
 private fun wert(it: Iterator<String>, schalter: String): String =
     if (it.hasNext()) it.next() else throw Bedienfehler("$schalter braucht einen Wert")
+
+/** Eine Fassung aus „fassungen“; 0 und Unsinn lehnt schon die Eingabe ab. */
+private fun version(text: String): Long =
+    text.toLongOrNull()?.takeIf { it > 0 } ?: throw Bedienfehler("Version: eine Zahl aus „fassungen“, größer als 0")
 
 private class Werkzeug(
     private val verbindung: Verbindung,
@@ -304,6 +310,22 @@ private class Werkzeug(
         when (ergebnis) {
             is Wiederhergestellt.Ja -> println("Wiederhergestellt: Zähler ${ergebnis.kopf.zaehler} nach $datei")
             Wiederhergestellt.KeineSicherung -> println("Das Konto hat keine Datensicherung.")
+            Wiederhergestellt.Abgelehnt -> println("Nichts geändert.")
+        }
+    }
+
+    suspend fun fassungEinspielen(datei: File, version: Long) {
+        // Wie wiederherstellen; der Zähler auf diesem Gerät sinkt dabei nicht (Sicherungsablauf).
+        val ergebnis = sicherungsablauf { false }.fassungEinspielen(
+            ServerSicherungsAblage(verbindung, ablage.sitzung(name).token),
+            version,
+            SCHEMA_VERSION,
+            bestaetigen = { sicherung -> frage("Fassung $version von ${beschreibe(sicherung.kopf)} nach $datei schreiben?") },
+            anwenden = { sicherung -> schreibeDatei(datei, sicherung.nutzlast) },
+        )
+        when (ergebnis) {
+            is Wiederhergestellt.Ja -> println("Fassung $version eingespielt: Zähler ${ergebnis.kopf.zaehler} nach $datei")
+            Wiederhergestellt.KeineSicherung -> println("Diese Fassung hat der Server nicht (mehr); siehe „fassungen“.")
             Wiederhergestellt.Abgelehnt -> println("Nichts geändert.")
         }
     }

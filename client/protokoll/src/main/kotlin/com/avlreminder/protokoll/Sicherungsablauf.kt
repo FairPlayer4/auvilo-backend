@@ -249,6 +249,50 @@ class Sicherungsablauf(
     }
 
     /**
+     * Spielt eine ältere Fassung ein (R-4): die Fassung mit [version] aus [archiv]
+     * holen (aus [FassungsArchiv.fassungen], größer als 0), entschlüsseln, dem Menschen
+     * zeigen und erst nach Bestätigung [anwenden]. Hat der Server die Fassung nicht
+     * mehr, ist das [Wiederhergestellt.KeineSicherung].
+     *
+     * Anders als [wiederherstellen] nimmt es eine Fassung an, die älter ist, als dieses
+     * Gerät kennt: Der Mensch hat sie gerade deshalb gewählt.
+     *
+     * KRITISCH (E-B2b-3): Der gemerkte Zähler sinkt dabei nie. Die nächste Sicherung
+     * zählt über dem höchsten bekannten Zähler weiter; finge sie beim Zähler der alten
+     * Fassung an, lehnten andere Geräte sie als [AeltereSicherung] ab.
+     *
+     * KRITISCH (W-7): Danach merkt sich das Gerät die Version 0, gleich von welchem
+     * Gerät die Fassung stammt. Die nächste Sicherung trifft also auf die neueste
+     * Fassung des Servers und ersetzt sie: ohne Rückfrage, wenn sie von diesem Gerät
+     * ist, sonst erst nach Rückfrage (E-B2b-6).
+     *
+     * KRITISCH: Nichts wird angewendet oder gemerkt, wenn die Fassung sich nicht
+     * entschlüsseln lässt, eine Schema-Version über [hoechsteSchemaVersion] hat,
+     * [bestaetigen] wirft oder der Mensch ablehnt. Eine abgelehnte alte Fassung ist
+     * keine abgelehnte Übernahme: Das automatische Sichern läuft weiter.
+     */
+    suspend fun fassungEinspielen(
+        archiv: FassungsArchiv,
+        version: Long,
+        hoechsteSchemaVersion: Int,
+        bestaetigen: suspend (Sicherung) -> Boolean,
+        anwenden: (Sicherung) -> Unit,
+    ): Wiederhergestellt {
+        // 0 hieße beim Server „die neueste“; dafür ist [wiederherstellen] da.
+        require(version > 0) { "Version $version: nur Fassungen aus der Liste (größer als 0)" }
+        val geholt = archiv.holen(version) ?: return Wiederhergestellt.KeineSicherung
+        val sicherung = Datensicherung.entschluesseln(geholt.chiffrat, tresor, kontoId)
+        if (sicherung.kopf.schemaVersion > hoechsteSchemaVersion) {
+            throw NeueresSchema(sicherung.kopf.schemaVersion, hoechsteSchemaVersion)
+        }
+        if (!bestaetigen(sicherung)) return Wiederhergestellt.Abgelehnt
+        anwenden(sicherung)
+        val bisher = stand.laden()?.untergrenze ?: 0
+        stand.speichern(GemerkteSicherung(maxOf(bisher, sicherung.kopf.zaehler), version = 0))
+        return Wiederhergestellt.Ja(sicherung.kopf)
+    }
+
+    /**
      * Löscht die Sicherung mit allen älteren Fassungen auf dem Server.
      *
      * KRITISCH: Der gemerkte Zähler bleibt, nur die Version wird 0. Die nächste
