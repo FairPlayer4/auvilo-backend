@@ -80,8 +80,9 @@ Das eigentliche Gedächtnis: wiederkehrende Muster, nach denen jeder Lauf geziel
 
 ## Offen (Details in den Berichten)
 - Lauf 11 (runs/2026-11-18.md, Fokus Datenschutz und Verschlüsselung): Fragen 1–4
-  (major `KontoLoeschen` nach Teilfehler; Kennung im Log; Anfrage-Alarm; verwaiste
-  Sicherung), Empfehlungen Token v2 (Sicherheitsphase), Erneuern-Reihenfolge,
+  umgesetzt am 2026-11-19 (c3a18da, 1204855, 2f42377, 3e92b78, 3508e95); offen davon
+  nur `tofu apply` (Renotify) und der Cloud-Test des Anfrage-Alarms, beide nach Kevins
+  Go, und `ServerKontoLoeschen` mit Anmeldung in der App. Offen: Empfehlungen Token v2 (Sicherheitsphase), Erneuern-Reihenfolge,
   Doku-Drift, Testlücken, Fingerabdruck-Vergleich in der Einrichtung, R-4 in `protokoll`.
   Gefixt auf review/2026-11-18: f0e54ea, c7f6b0a, fb5e626.
 - Lauf 10 (runs/2026-11-09.md): erledigt am 2026-11-09 (Phase A) R1, R2, R4 (Regel fürs
@@ -107,7 +108,7 @@ Das eigentliche Gedächtnis: wiederkehrende Muster, nach denen jeder Lauf geziel
   optional).
 
 ## Offene Fragen an den Entwickler
-Lauf 11, Fragen 1–4 (runs/2026-11-18.md). Zuerst stellen.
+Keine.
 
 ## Getroffene Entscheidungen
 - 2026-11-01: Architekturbild bestätigt; `.review/` wird versioniert.
@@ -116,6 +117,12 @@ Lauf 11, Fragen 1–4 (runs/2026-11-18.md). Zuerst stellen.
 - 2026-11-18: Bekannt und nicht erneut melden: Umschlag ohne Absenderbindung und
   Typprüfung (B3-2 bis B3-4), SE6, Rollback des Schlüssel-Backups, Desktop-Client-ID
   bis zur Sicherheitsphase.
+- 2026-11-19 (Lauf 11, Fragen 1–4, Kevin: „Alle Fragen nach Vorschlag umsetzen“):
+  `KontoLoeschen` meldet gelöscht, sobald der Zugang gesperrt ist, der Rest kommt im
+  Lauf; der Client prüft nach einem Fehler per `SitzungErneuern`. Die Google-Kennung
+  kommt nie ins Log, auch nicht gekürzt. Der Anfrage-Alarm bleibt bei 10.000/h und ist
+  für jeden billig auslösbar (bewusst, anforderungen.md Kap. 11); nicht erneut melden.
+  Der Lauf löscht Sicherungen und Schlüssel-Backups ohne Konto nach 1 h.
 - 2026-11-01: Keine Pflicht-Statuschecks (GitHub Free, privat) – Konvention reicht.
   Nicht erneut als Fund melden.
 - 2026-11-01: Kosten vor Verfügbarkeit: `tofu apply` darf gesperrte Dienste nicht wieder
