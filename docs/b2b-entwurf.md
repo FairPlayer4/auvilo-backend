@@ -197,6 +197,10 @@ erster Tester, Veröffentlichung im Play Store.
 - **Zugang nur nach Freigabe** (ID7) und **Kostengrenzen** (ID8, signierte
   Sitzungs-Token, Anfragealarm löst den Kill-Switch aus). Nach dem neuen Pfeffer
   (Punkt 3) die Liste der Kennungen neu füllen, zuerst Kevins.
+- **Schwelle des Anfragealarms prüfen** (10.000 Anfragen je Stunde, `infra/alarm.tf`):
+  Passt sie zu den erwarteten Anfragen mehrerer Nutzer? Sie ist für jeden auslösbar
+  und sperrt dann alle Dienste (bewusst, Kap. 11, 2026-11-19). Der Cloud-Test des
+  Alarmpfads muss bis dahin gelaufen sein.
 - **GitHub-Konto** mit Passkey oder Sicherheitsschlüssel: Ohne Branch-Schutz kann ein
   übernommenes Konto über `main` deployen. **Erledigt 2026-11-14:** Passkey für die
   Anmeldung; Authenticator-App und GitHub Mobile bleiben als Reserve (lassen sich

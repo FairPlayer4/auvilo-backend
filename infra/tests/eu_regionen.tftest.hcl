@@ -373,6 +373,12 @@ run "kill_switch_bei_vielen_anfragen" {
     error_message = "Der Anfrage-Alarm geht nicht an den Kill-Switch und per Mail."
   }
   assert {
+    # KRITISCH: Eventarc wiederholt nicht; nur die erneute Meldung sperrt nach
+    # einem gescheiterten ersten Versuch doch noch.
+    condition     = google_monitoring_alert_policy.anfragen.alert_strategy[0].notification_channel_strategy[0].renotify_interval == "1800s" && one(google_monitoring_alert_policy.anfragen.alert_strategy[0].notification_channel_strategy[0].notification_channel_names) == google_monitoring_notification_channel.killswitch.id
+    error_message = "Der Anfrage-Alarm meldet sich bei offenem Vorfall nicht alle 30 Minuten erneut beim Kill-Switch."
+  }
+  assert {
     condition     = google_pubsub_topic_iam_member.monitoring_meldet.topic == "budget-meldungen" && google_pubsub_topic_iam_member.monitoring_meldet.role == "roles/pubsub.publisher" && google_pubsub_topic_iam_member.monitoring_meldet.member == "serviceAccount:service-123456789@gcp-sa-monitoring-notification.iam.gserviceaccount.com"
     error_message = "Cloud Monitoring darf nicht im Thema des Kill-Switch veröffentlichen."
   }

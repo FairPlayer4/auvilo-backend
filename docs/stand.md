@@ -175,6 +175,15 @@ Revision `server-00024-2gg`, bereit; der Job `aufraeumen` hat dasselbe Image.
    Test-Konto; der Test-Client wurde vorher wie erwartet abgelehnt und meldet sich danach an. Offen: die App
    zeigt die Kennung bei „nicht freigegeben“ an (App-Repo). Die Server-URL bleibt
    beim Zurücksetzen dieselbe.
+6. **Review Lauf 11 umgesetzt (2026-11-19, auf `develop`, noch nicht in `main`):**
+   Konto löschen meldet gelöscht, sobald der Zugang weg ist, und der Client prüft
+   nach einem Fehler per Erneuern; die Kennung kommt nicht mehr ins Log; der Lauf
+   löscht Sicherungen und Schlüssel-Backups ohne Konto (älter als 1 h). Der
+   Anfragealarm meldet sich alle 30 Minuten erneut beim Kill-Switch
+   (`renotify_interval`, noch nicht angewendet). Offen, je nach Kevins Go:
+   `tofu apply` und ein Cloud-Test des Pfads Anfragealarm → Kill-Switch
+   (eigene Richtlinie mit niedriger Schwelle auf einen Testdienst). Die App
+   braucht `ServerKontoLoeschen` mit Anmeldung (App-Repo).
 
 ## Befehle
 ```bash
