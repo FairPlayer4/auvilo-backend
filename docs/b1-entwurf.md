@@ -18,7 +18,7 @@ E2E-Schlüssel (B2/B3).
 |---|---|---|---|
 | E-B1-1 | Wie weist sich ein Gerät nach dem ersten Login aus? | Mit seinem **Geräteschlüssel**: Es signiert eine Anfrage, der Server gibt ein neues Sitzungs-Token. Kein langlebiges Refresh-Token. | Auf dem Server liegt nur der öffentliche Schlüssel – nichts, was ein Angreifer aus der Datenbank nutzen könnte. Der private Schlüssel verlässt das Gerät nie (Android Keystore). |
 | E-B1-2 | Verfahren für den Geräteschlüssel | **ECDSA P-256** statt Ed25519 | Der Geräteschlüssel ist der einzige Schlüssel, der fest im Android Keystore liegt (Personen- und Freigabeschlüssel müssen zwischen Geräten wandern und laufen über Tink, wie in Kap. 4.1). P-256 wird dort überall in Hardware unterstützt, auch im separaten Sicherheitschip (StrongBox); Ed25519 hängt von der Keystore-Version des Herstellers ab (KeyMint ≥ 2), nicht nur von der Android-Version, und StrongBox kann es nicht. Sicherheitsniveau gleich (~128 Bit). |
-| E-B1-3 | Form des Sitzungs-Tokens | **Zufälliger Wert**, auf dem Server nur als Hash gespeichert, gültig **1 Stunde**. Kein JWT. | Gesperrte Geräte sind **sofort** draußen (Anforderung F6). Kostet einen Firestore-Lesezugriff je Anfrage – weit im Gratis-Kontingent (50.000/Tag). Kein Signierschlüssel, den man verwalten oder rotieren müsste. |
+| E-B1-3 | Form des Sitzungs-Tokens | **Zufälliger Wert**, auf dem Server nur als Hash gespeichert, gültig **1 Stunde**. Kein JWT. | Gesperrte Geräte sind **sofort** draußen (Anforderung F6). Kostet einen Firestore-Lesezugriff je Anfrage – weit im Gratis-Kontingent (50.000/Tag). Kein Signierschlüssel, den man verwalten oder rotieren müsste. **Geändert 2026-11-14 (ID8):** Das Token trägt jetzt eine Server-Signatur (HMAC, Schlüssel aus dem Pfeffer abgeleitet, rotiert mit ihm); erfundene Tokens lehnt der Server ohne Firestore ab. Hash, 1 Stunde und das Lesen je echter Anfrage bleiben. |
 | E-B1-4 | Wie wird die Google-Konto-ID gespeichert? | Als **HMAC mit geheimem Pfeffer** (Secret Manager), nicht im Klartext | Gelangt die Datenbank nach außen, lässt sie sich nicht mit Google-Konten verknüpfen. Kostet nichts (Gratis-Kontingent Secret Manager). Geht der Pfeffer verloren, muss man sich neu registrieren. (Ergänzung 2026-11-03: Seit B2 hängen Schlüssel-Backup und Datensicherung an der Konto-ID; ohne Pfeffer sind sie nicht mehr auffindbar, siehe [b2b-entwurf.md](b2b-entwurf.md), „Vor echten Daten“.) |
 | E-B1-5 | Womit testen wir B1, bevor es den Kotlin-Client gibt? | Kleines **Go-Werkzeug** `server/cmd/testanmeldung` | Der Kotlin-Test-Client kommt mit dem Schlüsselmodell in B2. Für B1 reicht ein Werkzeug, das den Google-Login im Browser macht und den Server aufruft. |
 | E-B1-6 | Namen in Schnittstelle und Code | **Deutsch** ohne Umlaute (`AnmeldenRequest`, `geraet_id`) | Wie im Kill-Switch. `buf lint` verlangt die Endungen `Request`/`Response`. |
@@ -59,14 +59,20 @@ dazu: Ein neues Gerät kann dann zwar angemeldet sein, aber nichts lesen, bis ei
 vorhandenes Gerät (QR) oder der Wiederherstellungsschlüssel es freischaltet.
 
 ### Sitzung verlängern
-`SitzungErneuern(Geräte-ID, Zeitpunkt, Signatur)`. Der Server prüft:
-Gerät existiert und ist **aktiv**, Zeitpunkt höchstens 2 Minuten entfernt, Signatur
-mit dem gespeicherten öffentlichen Schlüssel stimmt. Kein Google-Login nötig.
+`SitzungErneuern(Geräte-ID, Zeitpunkt, Signatur)`. Der Server prüft in dieser
+Reihenfolge: Zeitpunkt höchstens 2 Minuten entfernt (ohne Firestore, seit
+2026-11-19), Gerät existiert, Signatur mit dem gespeicherten öffentlichen Schlüssel
+stimmt, Gerät ist **aktiv** (zuletzt: Nur wer den Geräteschlüssel hat, erfährt von
+der Sperre), Konto ist freigegeben (ID7), Tageslimit. Kein Google-Login nötig.
 
 ### Jede andere Anfrage
 Header `Authorization: Bearer <Token>`. Ein Connect-Interceptor (Vorschaltstufe vor
-allen Diensten) sucht den Hash des Tokens in Firestore, prüft die Ablaufzeit und
-legt Konto- und Geräte-ID in den Kontext. Ohne gültige Sitzung: `unauthenticated`.
+allen Diensten) prüft zuerst die Server-Signatur des Tokens ohne Firestore (ID8),
+sucht dann den Hash in Firestore, prüft die Ablaufzeit, liest das Gerät (gesperrt
+oder in einem anderen Konto: abgelehnt) und legt Konto- und Geräte-ID in den
+Kontext. Ohne gültige Sitzung: `unauthenticated`. Große Anfragen prüft er schon
+vor dem Lesen des Inhalts (`VorDemLesen`). Was danach erlaubt ist, regelt die
+Richtlinie je Prozedur (`dienst/richtlinie.go`).
 
 ### Gerät sperren
 `GeraetSperren(Geräte-ID)` – nur für Geräte des **eigenen** Kontos. Setzt den Status

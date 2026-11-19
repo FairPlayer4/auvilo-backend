@@ -85,17 +85,22 @@ speichert nichts. Ein Backup eines anderen Kontos scheitert an den zugehörigen 
 
 ## Schnittstelle (neu, `proto/avlreminder/v1/schluessel.proto`)
 
+Skizze, Stand 2026-11-19; maßgeblich für Felder, Bytes und Fehlercodes ist die proto.
+
 ```protobuf
 // Ablage für das verschlüsselte Schlüssel-Backup. Braucht eine Sitzung.
 // Der Server kann den Inhalt nicht lesen und prüft nur Größe und Version.
 service SchluesselDienst {
   rpc BackupSpeichern(BackupSpeichernRequest) returns (BackupSpeichernResponse);
   rpc BackupHolen(BackupHolenRequest) returns (BackupHolenResponse);
+  // Löscht Backup und Freischaltschlüssel des eigenen Kontos (Neuanfang, Art. 17).
+  rpc BackupLoeschen(BackupLoeschenRequest) returns (BackupLoeschenResponse);
 }
 
 message BackupSpeichernRequest {
   bytes chiffrat = 1;            // höchstens 16 KiB
   int64 erwartete_version = 2;   // 0 = es gibt noch keins
+  bytes freischaltschluessel = 3; // Ed25519, aus dem Wiederherstellungsschlüssel (b2b)
 }
 message BackupSpeichernResponse { int64 version = 1; }
 
@@ -104,6 +109,9 @@ message BackupHolenResponse {
   bytes chiffrat = 1;
   int64 version = 2;             // not_found, wenn es keins gibt
 }
+
+message BackupLoeschenRequest {}
+message BackupLoeschenResponse {}
 ```
 Fehlercodes:
 - `failed_precondition`: Die erwartete Version passt nicht; ein anderes Gerät war
