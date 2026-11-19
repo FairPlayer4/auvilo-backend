@@ -353,7 +353,7 @@ private class Werkzeug(
         if (!frage("Konto ${s.kontoId} mit Datensicherung, Schlüssel-Backup, Diagnosen und allen Geräten auf dem Server löschen?")) {
             return println("Nichts gelöscht.")
         }
-        when (val ergebnis = KontoLoeschen.loeschen(ServerKontoLoeschen(verbindung, s.token)) { ablage.vergessen(name) }) {
+        when (val ergebnis = KontoLoeschen.loeschen(ServerKontoLoeschen(verbindung, s.token, anmeldung())) { ablage.vergessen(name) }) {
             KontoLoeschung.Geloescht -> println("Konto gelöscht. Gerät \"$name\" ist vergessen; ein neues Anmelden legt ein neues Konto an.")
             is KontoLoeschung.Beantragt -> {
                 println("Dieses Gerät ist nicht freigeschaltet: Löschung beantragt.")

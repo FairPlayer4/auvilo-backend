@@ -306,7 +306,48 @@ class AnmeldungTest {
         assertEquals("Bearer token-alt", anfragen.first().token)
     }
 
+    data class Zugang(val name: String, val antwort: Any, val erwartet: Any) {
+        override fun toString() = name
+    }
+
+    // KRITISCH (Konto löschen nach einem Fehler): Nur wenn der Dienst selbst das Gerät
+    // abweist, ist der Zugang weg; dann verwirft die App ihre Schlüssel. Ein 403 vom
+    // gesperrten Dienst (Kill-Switch) und jeder andere Fehler heißen nicht „weg“.
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("zugaenge")
+    fun `Zugang nach Konto löschen`(fall: Zugang) {
+        antwort = fall.antwort as Antwort
+        val geraetId = Geraetenachrichten.geraetId(schluessel.oeffentlich)
+        val a = anmeldung(Speicher(Sitzung("konto-1", geraetId, "token-alt", jetzt + 3600)))
+        val verbindung = Verbindung("http://127.0.0.1:${server.address.port}")
+
+        val ergebnis = runCatching { runBlocking { ServerKontoLoeschen(verbindung, "token-alt", a).zugangWeg() } }
+
+        when (val erwartet = fall.erwartet) {
+            is KClass<*> -> assertTrue(erwartet.isInstance(ergebnis.exceptionOrNull()), "erwartet ${erwartet.simpleName}, bekommen $ergebnis")
+            else -> assertEquals(erwartet, ergebnis.getOrThrow())
+        }
+        assertEquals(listOf("/avlreminder.v1.AnmeldeDienst/SitzungErneuern"), anfragen.map { it.pfad })
+    }
+
+    @Test
+    fun `ohne Anmeldung ist der Zugang nicht weg, und es geht keine Anfrage raus`() {
+        val verbindung = Verbindung("http://127.0.0.1:${server.address.port}")
+        assertEquals(false, runBlocking { ServerKontoLoeschen(verbindung, "token-alt").zugangWeg() })
+        assertEquals(0, anfragen.size)
+    }
+
     companion object {
+        @JvmStatic
+        fun zugaenge() = listOf(
+            Zugang("Erneuern gelingt: Zugang da", erneuert, false),
+            Zugang("Gerät gesperrt: Zugang weg", Antwort.Fehler("permission_denied"), true),
+            Zugang("Gerät unbekannt: Zugang weg", Antwort.Fehler("unauthenticated"), true),
+            Zugang("403 vor dem Dienst (Kill-Switch): kein Löschen", html403, Serverfehler::class),
+            Zugang("Dienst gestört: unklar", Antwort.Fehler("unavailable"), Serverfehler::class),
+            Zugang("nicht freigegeben: unklar", Antwort.Fehler("failed_precondition"), KontoNichtFreigegeben::class),
+        )
+
         private val liste = Antwort.Ok(
             GeraeteAuflistenResponse.newBuilder().addGeraete(Geraet.newBuilder().setGeraetId("g-1").setDiesesGeraet(true)).build(),
         )
