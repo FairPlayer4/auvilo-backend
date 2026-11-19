@@ -32,6 +32,18 @@ class SchluesselbundTest {
         assertArrayEquals(daten, wieder.tresor.entschluesseln(bund.tresor.verschluesseln(daten, byteArrayOf()), byteArrayOf()))
     }
 
+    data class Vergleich(val name: String, val gleich: Boolean, val anderer: (Schluesselbund) -> Schluesselbund) {
+        override fun toString() = name
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("vergleiche")
+    fun `vergleicht Schlüsselbunde`(fall: Vergleich) {
+        val bund = Schluesselbund.erzeugen()
+        assertEquals(fall.gleich, bund.gleicheSchluessel(fall.anderer(bund)))
+        assertEquals(fall.gleich, fall.anderer(bund).gleicheSchluessel(bund), "in beide Richtungen")
+    }
+
     @Test
     fun `lehnt kaputte lokale Ablage ab`() {
         assertThrows<EntschluesselnFehlgeschlagen> { Schluesselbund.ausGeheimenBytes(byteArrayOf(10, 3, 1, 2, 3)) }
@@ -63,6 +75,15 @@ class SchluesselbundTest {
         private const val KONTO = "konto-a"
         private val wh = Wiederherstellungsschluessel.erzeugen()
         private val daten = "Einkaufsliste".toByteArray()
+
+        @JvmStatic
+        fun vergleiche() = listOf(
+            Vergleich("gleich nach lokaler Ablage", true) { Schluesselbund.ausGeheimenBytes(it.geheimeBytes()) },
+            Vergleich("gleich nach dem Backup", true) { Schluesselbund.ausBackup(it.backupVerschluesseln(wh, KONTO), wh, KONTO) },
+            Vergleich("anders mit anderem Personenschlüssel", false) { Schluesselbund(Personenschluessel.erzeugen(), it.tresor) },
+            Vergleich("anders mit anderem Tresor", false) { Schluesselbund(it.person, SymmetrischerSchluessel.erzeugen()) },
+            Vergleich("anders mit einer Tresor-Version mehr", false) { Schluesselbund(it.person, it.tresor.neueVersion()) },
+        )
 
         @JvmStatic
         fun ablehnungen() = listOf(

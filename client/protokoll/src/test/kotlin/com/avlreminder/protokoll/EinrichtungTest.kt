@@ -307,15 +307,60 @@ class EinrichtungTest {
 
     @Test
     fun `ein eingerichtetes, nicht freigeschaltetes Gerät schaltet sich mit dem Wiederherstellungsschlüssel frei`() {
-        val stand = LokalerStand(Schluesselbund.erzeugen(), null)
+        val stand = vorhanden.stand()
         val lauf = Lauf(vorhanden.server(), FalscherLokalerSpeicher(stand), vorhanden.text)
         val ergebnis = lauf.ausfuehren()
 
         assertInstanceOf(Eingerichtet.Vorhanden::class.java, ergebnis)
         assertTrue((ergebnis as Eingerichtet.Vorhanden).freigeschaltet, "Ergebnis meldet die Freischaltung")
+        assertSame(stand.bund, ergebnis.bund)
         assertTrue(lauf.server.freigeschaltet)
-        assertSame(stand, lauf.lokal.stand)
+        assertSame(stand, lauf.lokal.stand, "ein passender Bund bleibt, wie er ist")
         assertEquals(0, lauf.server.gespeichert)
+        assertFalse(lauf.meldungen.any { "passen nicht" in it }, lauf.meldungen.toString())
+    }
+
+    data class Abweichung(val name: String, val lokalerBund: (Schluesselbund) -> Schluesselbund) {
+        override fun toString() = name
+    }
+
+    // KRITISCH (Review Lauf 11): Passt der Bund auf dem Gerät nicht zum Backup des
+    // Kontos, gilt das Backup. Mit einem eigenen Bund verschlüsselte das Gerät
+    // Sicherungen, die kein anderes Gerät lesen kann. Die Gegenprobe (passender
+    // Bund bleibt) steht direkt darüber; ohne gültigen Schlüssel bleibt der
+    // abweichende Bund (die beiden Tests darunter).
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("abweichungen")
+    fun `übernimmt den Bund aus dem Backup, wenn der auf dem Gerät nicht passt`(fall: Abweichung) {
+        val lauf = Lauf(vorhanden.server(), FalscherLokalerSpeicher(LokalerStand(fall.lokalerBund(vorhanden.bund), null)), vorhanden.text)
+        val ergebnis = lauf.ausfuehren()
+
+        assertInstanceOf(Eingerichtet.AusBackup::class.java, ergebnis)
+        assertTrue(ergebnis.bund.gleicheSchluessel(vorhanden.bund), "Ergebnis hat den Bund aus dem Backup")
+        assertSame(ergebnis.bund, lauf.lokal.stand!!.bund)
+        assertNull(lauf.lokal.stand!!.offenesBackup)
+        assertTrue(lauf.server.freigeschaltet)
+        assertEquals(0, lauf.server.gespeichert)
+        assertSame(vorhanden.backup, lauf.server.backup)
+        assertTrue(lauf.meldungen.any { "passen nicht" in it }, lauf.meldungen.toString())
+    }
+
+    // KRITISCH: Erst der Bund aus dem Backup, dann die Freischaltung. Scheitert
+    // sie, ist das Gerät nicht mit dem abweichenden Bund freigeschaltet, und der
+    // nächste Lauf fragt wieder und schaltet frei.
+    @Test
+    fun `legt den Bund aus dem Backup ab, bevor das Gerät sich freischaltet`() {
+        val server = vorhanden.server().apply { nichtErreichbar = true }
+        val lokal = FalscherLokalerSpeicher(LokalerStand(Schluesselbund.erzeugen(), null))
+        assertThrows<Netzfehler> { Lauf(server, lokal, vorhanden.text).ausfuehren() }
+        assertTrue(lokal.stand!!.bund.gleicheSchluessel(vorhanden.bund), "vor der Freischaltung abgelegt")
+        assertFalse(server.freigeschaltet)
+
+        server.nichtErreichbar = false
+        val ergebnis = Lauf(server, lokal, vorhanden.text).ausfuehren()
+        assertInstanceOf(Eingerichtet.Vorhanden::class.java, ergebnis)
+        assertTrue((ergebnis as Eingerichtet.Vorhanden).freigeschaltet)
+        assertTrue(server.freigeschaltet)
     }
 
     @Test
@@ -400,7 +445,7 @@ class EinrichtungTest {
 
     /** Ein Konto, dessen Schlüssel schon ein anderes Gerät angelegt hat. */
     class Vorhanden(kontoId: String) {
-        private val bund = Schluesselbund.erzeugen()
+        val bund = Schluesselbund.erzeugen()
         private val schluessel = Wiederherstellungsschluessel.erzeugen()
         val text = schluessel.alsText()
         val fingerabdruck = bund.person.oeffentlich.fingerabdruck()
@@ -409,6 +454,9 @@ class EinrichtungTest {
 
         /** Ein Server, auf dem dieses Backup samt Freischaltschlüssel liegt. */
         fun server() = FalscheAblage(backup, freischaltschluessel)
+
+        /** Derselbe Bund auf einem Gerät, wie er aus der lokalen Ablage kommt (eigenes Objekt). */
+        fun stand() = LokalerStand(Schluesselbund.ausGeheimenBytes(bund.geheimeBytes()), null)
     }
 
     companion object {
@@ -416,6 +464,14 @@ class EinrichtungTest {
         private const val GERAET = "d0e5518e666349cb0a3637c6b536b1cd"
         private val vorhanden = Vorhanden(KONTO)
         private val fremdes = Vorhanden("konto-b")
+
+        @JvmStatic
+        fun abweichungen() = listOf(
+            Abweichung("ganz anderer Bund") { Schluesselbund.erzeugen() },
+            Abweichung("anderer Personenschlüssel, derselbe Tresor") { Schluesselbund(Personenschluessel.erzeugen(), it.tresor) },
+            Abweichung("derselbe Personenschlüssel, anderer Tresor") { Schluesselbund(it.person, SymmetrischerSchluessel.erzeugen()) },
+            Abweichung("Tresor mit einer Version mehr") { Schluesselbund(it.person, it.tresor.neueVersion()) },
+        )
 
         @JvmStatic
         fun ablehnungen() = listOf(

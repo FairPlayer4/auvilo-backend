@@ -71,7 +71,10 @@ sealed interface Eingerichtet {
     /** Dieses Gerät hat die Schlüssel erzeugt und das Backup hochgeladen. */
     class Neu(override val bund: Schluesselbund) : Eingerichtet
 
-    /** Die Schlüssel kommen aus dem Backup eines anderen Geräts. */
+    /**
+     * Die Schlüssel kommen aus dem Backup eines anderen Geräts; auch, wenn die
+     * Schlüssel, die dieses Gerät schon hatte, nicht zum Backup passten.
+     */
     class AusBackup(override val bund: Schluesselbund) : Eingerichtet
 
     /**
@@ -126,11 +129,12 @@ class Einrichtung(
                 meldung("Das Backup dieses Geräts ist noch nicht sicher hochgeladen - versuche es erneut.")
                 return hochladen(stand.bund, offen)
             }
+            if (freigeschaltet) return Eingerichtet.Vorhanden(stand.bund, freigeschaltet = true)
             // Schlüssel da, aber nicht freigeschaltet (z. B. neu angemeldet mit
             // neuem Geräteschlüssel): ohne diesen Schritt bliebe das Gerät
             // ohne zweites Gerät für immer nur lesend.
-            val jetztFrei = freigeschaltet || (server.holen()?.let { freischalten(it) } ?: false)
-            return Eingerichtet.Vorhanden(stand.bund, jetztFrei)
+            val backup = server.holen() ?: return Eingerichtet.Vorhanden(stand.bund, freigeschaltet = false)
+            return freischalten(stand.bund, backup)
         }
         server.holen()?.let { return wiederherstellen(it) }
 
@@ -196,34 +200,60 @@ class Einrichtung(
     /**
      * Ein Gerät mit Schlüsseln, aber ohne Freischaltung, schaltet sich mit dem
      * Wiederherstellungsschlüssel frei. Ohne Eingabe bleibt es nur lesend; ein
-     * freigeschaltetes Gerät kann es dann noch bestätigen. Der lokale
-     * Schlüsselbund bleibt, wie er ist.
-     *
-     * @return ob das Gerät jetzt freigeschaltet ist.
+     * freigeschaltetes Gerät kann es dann noch bestätigen. Passt der lokale
+     * Schlüsselbund zum Backup, bleibt er, wie er ist ([Eingerichtet.Vorhanden]);
+     * sonst übernimmt das Gerät den Bund aus dem Backup ([Eingerichtet.AusBackup]).
      */
-    private suspend fun freischalten(backup: GeholtesBackup): Boolean {
+    private suspend fun freischalten(lokalerBund: Schluesselbund, backup: GeholtesBackup): Eingerichtet {
         meldung(
             "Dieses Gerät ist noch nicht freigeschaltet. Zum Freischalten den Wiederherstellungsschlüssel " +
                 "eingeben (leer = später; ein freigeschaltetes Gerät kann es auch bestätigen).",
         )
-        if (mitWiederherstellungsschluessel(backup) == null) {
+        val bund = mitWiederherstellungsschluessel(backup, lokalerBund)
+        if (bund == null) {
             meldung("Nicht freigeschaltet - dieses Gerät kann Daten holen, aber nichts ändern oder löschen.")
-            return false
+            return Eingerichtet.Vorhanden(lokalerBund, freigeschaltet = false)
         }
-        return true
+        return if (bund === lokalerBund) Eingerichtet.Vorhanden(bund, freigeschaltet = true) else Eingerichtet.AusBackup(bund)
     }
 
     /**
      * Fragt nach dem Wiederherstellungsschlüssel, bis er das Backup öffnet, und
      * schaltet das Gerät damit frei, falls nötig. Null heißt: Der Mensch hat
      * abgebrochen.
+     *
+     * KRITISCH: Hat das Gerät schon einen Schlüsselbund ([lokalerBund]), wird er
+     * mit dem aus dem Backup verglichen (Review Lauf 11). Weicht er ab, etwa weil
+     * ein anderes Gerät die Schlüssel des Kontos neu angelegt hat, gilt das
+     * Backup: Mit einem eigenen Bund verschlüsselte das Gerät Sicherungen, die
+     * kein anderes Gerät lesen kann, und könnte deren Sicherungen nicht lesen.
+     * Der Bund aus dem Backup wird abgelegt, bevor das Gerät sich freischaltet:
+     * So ist es nie mit dem abweichenden Bund freigeschaltet, auch wenn danach
+     * etwas scheitert. Scheitert die Freischaltung, fragt der nächste Lauf wieder.
+     *
+     * @return [lokalerBund] selbst, wenn er passt, sonst der Bund aus dem Backup.
      */
-    private suspend fun mitWiederherstellungsschluessel(backup: GeholtesBackup): Schluesselbund? {
+    private suspend fun mitWiederherstellungsschluessel(
+        backup: GeholtesBackup,
+        lokalerBund: Schluesselbund? = null,
+    ): Schluesselbund? {
         repeat(VERSUCHE) { versuch ->
             val text = frageSchluessel() ?: return null
             try {
                 val schluessel = Wiederherstellungsschluessel.ausText(text)
-                val bund = Schluesselbund.ausBackup(backup.chiffrat, schluessel, kontoId)
+                val ausBackup = Schluesselbund.ausBackup(backup.chiffrat, schluessel, kontoId)
+                val bund = when {
+                    lokalerBund == null -> ausBackup
+                    lokalerBund.gleicheSchluessel(ausBackup) -> lokalerBund
+                    else -> {
+                        lokal.speichern(LokalerStand(ausBackup, offenesBackup = null))
+                        meldung(
+                            "Die Schlüssel auf diesem Gerät passen nicht zum Backup des Kontos - " +
+                                "dieses Gerät übernimmt die Schlüssel aus dem Backup.",
+                        )
+                        ausBackup
+                    }
+                }
                 if (!freigeschaltet) {
                     freischaltung.mitWiederherstellung(schluessel.signiereFreischaltung(geraetId))
                     meldung("Dieses Gerät ist jetzt freigeschaltet.")

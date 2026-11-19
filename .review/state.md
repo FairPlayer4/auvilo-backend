@@ -84,8 +84,8 @@ Das eigentliche Gedächtnis: wiederkehrende Muster, nach denen jeder Lauf geziel
 - Lauf 11 (runs/2026-11-18.md, Fokus Datenschutz und Verschlüsselung): Fragen 1–4
   umgesetzt am 2026-11-19 (c3a18da, 1204855, 2f42377, 3e92b78, 3508e95), angewendet,
   Anfrage-Alarm in der Cloud getestet (stand.md), App angepasst, Testlücken geschlossen
-  (auch die aus Lauf 5), Erneuern-Reihenfolge umgestellt, Entwürfe angeglichen, R-4 in `protokoll`.
-  Offen: Empfehlungen Token v2 (Sicherheitsphase), Fingerabdruck-Vergleich in der Einrichtung.
+  (auch die aus Lauf 5), Erneuern-Reihenfolge umgestellt, Entwürfe angeglichen, R-4 in `protokoll`,
+  Bund-Vergleich in der Einrichtung. Offen: Empfehlung Token v2 (Sicherheitsphase).
   Gefixt auf review/2026-11-18: f0e54ea, c7f6b0a, fb5e626.
 - Lauf 10 (runs/2026-11-09.md): erledigt am 2026-11-09 (Phase A) R1, R2, R4 (Regel fürs
   erste Schlüssel-Backup in beiden Attrappen, kein gemeinsames Modul), Fragen 1–3, die

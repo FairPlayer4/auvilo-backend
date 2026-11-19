@@ -307,6 +307,10 @@ alles: andere Geräte sperren, Backup und Datensicherung löschen oder überschr
      gemeinsame Testvektoren in `proto/testvektoren/freischaltung.json`). Der Wiederherstellungsschlüssel verlässt
      das Gerät nie, und der Server kann aus dem öffentlichen Schlüssel nichts
      entschlüsseln. Das hilft, wenn kein vertrautes Gerät mehr da ist.
+     Hat das Gerät schon Schlüssel (etwa nach einer Neuanmeldung), vergleicht die
+     Einrichtung sie mit dem Bund aus dem Backup (seit 2026-11-19, Review Lauf 11).
+     Weichen sie ab, gilt das Backup: Das Gerät legt dessen Bund ab, bevor es sich
+     freischaltet, sagt das dem Menschen und meldet `AusBackup` statt `Vorhanden`.
 - **Vorhandene Geräte erfahren davon:** `GeraeteAuflisten` liefert, ob ein Gerät
   freigeschaltet ist und wann es sich angemeldet hat. Die App zeigt beim Start einen
   Hinweis „Neues Gerät angemeldet – freischalten oder sperren“. Eine Push-Nachricht

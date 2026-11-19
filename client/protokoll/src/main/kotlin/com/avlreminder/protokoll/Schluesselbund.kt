@@ -4,6 +4,7 @@ import com.avlreminder.protokoll.inhalt.v1.SchluesselBackup
 import com.google.protobuf.ByteString
 import com.google.protobuf.InvalidProtocolBufferException
 import java.security.GeneralSecurityException
+import java.security.MessageDigest
 
 /**
  * Alle Schlüssel einer Person, die zwischen ihren Geräten wandern: Personen-
@@ -34,6 +35,15 @@ class Schluesselbund(
             .setTresor(ByteString.copyFrom(tresor.geheimeBytes()))
             .build()
             .toByteArray()
+
+    /**
+     * Ob [anderer] genau dieselben Schlüssel enthält: Personenschlüssel und alle
+     * Versionen des Tresors. Der Fingerabdruck allein reicht dafür nicht, er
+     * deckt nur den öffentlichen Teil des Personenschlüssels ab, nicht den Tresor.
+     * Verglichen werden die geheimen Bytes, ohne Abbruch beim ersten Unterschied.
+     */
+    fun gleicheSchluessel(anderer: Schluesselbund): Boolean =
+        MessageDigest.isEqual(geheimeBytes(), anderer.geheimeBytes())
 
     companion object {
         /** Neue Schlüssel für das erste Gerät eines Kontos. */
