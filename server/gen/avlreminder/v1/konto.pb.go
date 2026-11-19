@@ -62,7 +62,9 @@ type KontoLoeschenResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// true: Das Konto ist gelöscht; die Sitzung gilt nicht mehr. Die App
 	// verwirft dann wie beim Abmelden Sitzung, Geräteschlüssel und die Schlüssel
-	// der Sicherung und legt für ein späteres Anmelden neue an.
+	// der Sicherung und legt für ein späteres Anmelden neue an. Der Zugang ist
+	// sofort weg; was der Server danach nicht gleich löschen konnte, löscht sein
+	// regelmäßiger Lauf (Daten nach spätestens einem Tag).
 	Geloescht bool `protobuf:"varint,1,opt,name=geloescht,proto3" json:"geloescht,omitempty"`
 	// Ohne geloescht: Zeitpunkt, ab dem der Server löscht.
 	LoeschenAb    *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=loeschen_ab,json=loeschenAb,proto3" json:"loeschen_ab,omitempty"`

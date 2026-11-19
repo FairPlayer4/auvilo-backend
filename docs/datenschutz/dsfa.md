@@ -44,11 +44,11 @@ mittel / hoch, **nach** den Maßnahmen aus [toms.md](toms.md).
 | Nr. | Risiko | Maßnahmen | E | S |
 |---|---|---|---|---|
 | R1 | Angriff auf Server oder Speicher legt Inhalte offen | E2E: Schlüssel nie auf dem Server; Server sieht nur Chiffrate | gering | gering (nur Metadaten) |
-| R2 | Übernahme des Google-Kontos | Neues Gerät braucht Freischaltung oder Wiederherstellungsschlüssel; Löschen ohne Freischaltung nur mit 7 Tagen Wartezeit, sichtbar auf allen Geräten | mittel | gering; **hoch**, wenn der Wiederherstellungsschlüssel ungeschützt im Passwortdienst liegt (daher Papier als Standard) |
+| R2 | Übernahme des Google-Kontos | Neues Gerät braucht Freischaltung oder Wiederherstellungsschlüssel; Löschen ohne Freischaltung nur mit 7 Tagen Wartezeit, sichtbar auf allen Geräten | mittel | gering; **hoch**, wenn der Wiederherstellungsschlüssel ungeschützt im Passwortdienst liegt (daher vor dem Speichern der Hinweis auf Ende-zu-Ende-Verschlüsselung; A-15, App V1.3c3) |
 | R3 | Übernahme der Betreiberkonten (GCP, GitHub) | Krypto nur im Client: Ein manipulierter Server kann nichts entschlüsseln. Möglich: Daten löschen, Metadaten lesen, Dienst sperren | gering | mittel (Verfügbarkeit, Metadaten). GitHub mit Passkey seit 2026-11-14 |
 | R4 | Fehler in der Kryptografie | Tink statt Eigenbau, feste Testvektoren, Reviews, Format v2 (SE6, offen) | gering | hoch |
 | R5 | Metadaten verraten Nutzungsmuster (Größe, Zeitpunkt, IP-Adresse) | 30 Tage Logs, Zugriff nur Kevin, kein Profil | mittel | gering |
-| R6 | Datenverlust (Kill-Switch, Löschung durch Fremden mit entsperrtem Handy, Fehler) | lokal-first, ältere Fassungen 7 Tage, lokales Backup; Displaysperre (SE5, offen) | mittel | mittel |
+| R6 | Datenverlust (Kill-Switch, Löschung durch Fremden mit entsperrtem Handy, Fehler) | lokal-first, ältere Fassungen 7 Tage, lokales Backup; Displaysperre vor dem Löschen (SE5, App V1.3c2) | mittel | mittel |
 | R7 | Daten bleiben unbegrenzt, wenn die Person ihr Google-Konto verliert | Frist 24 Monate ohne Anmeldung oder Erneuerung (P5, seit 2026-11-14): Termin in 7 Tagen, dann Löschung wie B1; gesperrte Geräte nach 90 Tagen nur noch als Grabstein | gering | gering (nur Chiffrate) |
 | R8 | Diagnose enthält doch einen Inhalt und geht an Anthropic | Logger ohne freie Zeichenketten; nur Kevins Konto (P9); 14 Tage | gering | mittel |
 | R9 | Zugriff von Behörden auf Google (auch aus Drittländern) | EU-Region; nur Chiffrate und pseudonyme Metadaten | gering | gering |
@@ -60,7 +60,8 @@ kann. Zwei Punkte müssen vor dem ersten weiteren Nutzer erledigt sein, damit da
 gilt:
 - ~~**R7:** Frist aus P5 mit `zuletzt_aktiv` ([README.md](README.md), K2).~~
   Umgesetzt 2026-11-14 (wirkt nach dem Deploy).
-- **R2/R6:** Displaysperre (SE5) und A-15 neu (Papier als Standard) in der App.
+- ~~**R2/R6:** Displaysperre (SE5) und A-15 neu in der App.~~ Umgesetzt in der App
+  V1.3c2 und V1.3c3 (2026-11-15, noch nicht installiert).
 
 Danach Ergebnis hier mit Datum eintragen. Keine Konsultation der Aufsichtsbehörde
 nötig (Art. 36), solange kein hohes Restrisiko bleibt.
@@ -70,3 +71,4 @@ nötig (Art. 36), solange kein hohes Restrisiko bleibt.
 |---|---|---|
 | 2026-11-14 | Entwurf | vorläufig, siehe 5 |
 | 2026-11-14 | Fristen aus P5 umgesetzt (K2) | R7 gering; weiter vorläufig wegen SE5 und A-15 |
+| 2026-11-15 | SE5 und A-15 in der App (V1.3c2, V1.3c3) | Maßnahmen umgesetzt; Kevin bestätigt das Ergebnis, sobald die App installiert ist |

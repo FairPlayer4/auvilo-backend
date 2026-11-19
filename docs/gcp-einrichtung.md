@@ -210,8 +210,11 @@ offline sichern.
 ### B6: Play Store
 - Google-Play-Konsole: einmalig 25 US-$ Entwicklergebühr; Identitätsprüfung.
 - Datenschutzerklärung und Löschseite brauchen eine öffentliche URL. **Eine eigene
-  Domain ist nicht nötig** – GitHub Pages reicht. Eine Domain (ca. 10–15 €/Jahr)
-  lohnt sich erst, wenn du eine GCP-Organisation willst.
+  Domain ist für Play nicht nötig:** Ein eigener Cloud-Run-Dienst `web` in der
+  EU-Region unter `*.run.app` reicht und bleibt im kostenlosen Kontingent
+  ([anforderungen.md](anforderungen.md) P10). Eine Domain (etwa 5–15 €/Jahr) braucht
+  es wahrscheinlich erst, wenn der OAuth-Zustimmungsbildschirm in *Produktion* geht
+  (Kap. 10, Frage 4), oder für eine GCP-Organisation.
 
 ## Warum keine Domain/Organisation jetzt
 Eine Organisation würde u. a. erlauben, Regionen außerhalb der EU technisch zu

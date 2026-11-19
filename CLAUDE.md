@@ -85,7 +85,9 @@ Kommunikation auf **Deutsch, mit ß**.
 
 ## Git
 - Remote `origin`: GitHub `FairPlayer4/avlreminder-backend` (privat). `develop` ist der
-  Hauptarbeitsbranch; `main` nur per Pull Request.
+  Arbeitsbranch; `main` nur per Pull Request.
+- **Feature-Branches nur nach Kevins Bestätigung anlegen** (sonst kommt er durcheinander,
+  2026-11-15); ohne Bestätigung direkt auf `develop` arbeiten, in beiden Repos.
 - Commit-Nachrichten auf Deutsch.
 - Vor Commit/Push fragen, solange Kevin das nicht anders sagt (er schaut vorher drüber).
 - CI läuft nur auf `main` (GitHub-Minuten, Entscheidung 2026-11-13), nicht auf

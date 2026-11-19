@@ -270,6 +270,16 @@ resource "google_monitoring_alert_policy" "anfragen" {
 
   alert_strategy {
     auto_close = "3600s"
+
+    # KRITISCH: Solange der Vorfall offen ist, meldet Monitoring ihn alle 30
+    # Minuten erneut an den Kill-Switch. Eventarc wiederholt nicht
+    # (RETRY_POLICY_DO_NOT_RETRY): Ohne das bliebe der Dienst offen, wenn das
+    # erste Sperren scheitert oder er bei offenem Vorfall wieder geöffnet wird.
+    # Sperren ist wiederholbar; eine weitere Meldung schadet nicht.
+    notification_channel_strategy {
+      notification_channel_names = [google_monitoring_notification_channel.killswitch.id]
+      renotify_interval          = "1800s"
+    }
   }
 
   documentation {

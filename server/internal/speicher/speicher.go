@@ -254,6 +254,18 @@ type Speicher interface {
 	// das Konto zuletzt: Solange es da ist, findet FaelligeLoeschungen den Rest.
 	KontoEntfernen(ctx context.Context, kontoID string, jetzt time.Time) error
 
+	// KontoBekannt sagt, ob es zum Konto noch etwas gibt, das auf es zeigt: das
+	// Konto selbst, eine Kennung, ein Gerät oder einen Grabstein.
+	//
+	// KRITISCH: Für den regelmäßigen Lauf heißt false „Daten ohne Konto,
+	// löschen“. Deshalb zählt jeder Verweis, nicht nur das Konto-Dokument.
+	KontoBekannt(ctx context.Context, kontoID string) (bool, error)
+
+	// BackupKonten listet die Konten, deren Schlüssel-Backup vor vor zuletzt
+	// geändert wurde, sortiert. Für den regelmäßigen Lauf: Er sucht darunter
+	// Backups, deren Konto es nicht mehr gibt.
+	BackupKonten(ctx context.Context, vor time.Time) ([]string, error)
+
 	// Fristen aus P5 (docs/anforderungen.md Kap. 4.4, datenschutz/README.md K2)
 	// für den regelmäßigen Lauf.
 

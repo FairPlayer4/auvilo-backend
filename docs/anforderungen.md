@@ -62,13 +62,14 @@ liegt in einem Kotlin-Modul, das später in die App übernommen werden kann. [E]
 - ID4 **Wiederherstellungsschlüssel** (zum Ausdrucken oder im Passwortdienst, App-Anf. 7.33) entschlüsselt ein
   verschlüsseltes Schlüssel-Backup auf dem Server. Ohne ihn und ohne Gerät sind
   private Daten verloren (gewollt); Geteiltes kann man sich neu freigeben lassen.
-  **Papier ist der Standard;** den Passwortdienst bietet die App nur nach einem Hinweis
-  an: Ohne geräteinterne Verschlüsselung des Passwortmanagers hängt die
-  E2E-Verschlüsselung am Google-Konto (Kap. 11, 2026-11-12).
+  **Hauptweg ist ein Ende-zu-Ende-verschlüsselter Passwortmanager** (Kap. 11, 2026-11-15),
+  Papier der Ausweg. Vor dem Speichern sagt die App: Ohne geräteinterne Verschlüsselung
+  des Passwortmanagers hängt die E2E-Verschlüsselung am Google-Konto; den
+  Passwortmanager selbst mit seinem Wiederherstellungscode auf Papier schützen.
 - ID5 Missbrauchsschutz: Rate-Limits pro Konto und Gerät; später für den Play Store
   zusätzlich **Play Integrity API** (Anfrage kommt von der echten App). [E]
 - ID6 **Gerät abmelden/sperren** aus einem anderen Gerät heraus (verloren, gestohlen).
-- ID7 **Zugang nur nach Freigabe** (2026-11-14, umgesetzt, noch nicht deployt; App-Anf. 7.34 OV1): Der Server
+- ID7 **Zugang nur nach Freigabe** (2026-11-14, umgesetzt und deployt mit PR #25; App-Anf. 7.34 OV1): Der Server
   nimmt nur Google-Konten an, deren **Kennung** (`anmeldung.Kennung`, HMAC aus Pfeffer
   und `sub`) auf einer Liste steht. Nicht die Konto-ID: Die ist zufällig und nach
   *Konto löschen* neu.
@@ -94,7 +95,7 @@ liegt in einem Kotlin-Modul, das später in die App übernommen werden kann. [E]
     Liste neu füllen (zuerst Kevins neue Kennung).
   - Wer einen eigenen Server betreibt, setzt in der App eigene Server-URL und
     Web-Client-ID (App-Anf. 7.34 OV1); der offizielle Server bleibt geschlossen.
-- ID8 **Kosten bei Angriffen begrenzen** (2026-11-14, umgesetzt, noch nicht deployt): Die Adresse ist kein
+- ID8 **Kosten bei Angriffen begrenzen** (2026-11-14, umgesetzt und deployt mit PR #25): Die Adresse ist kein
   Geheimnis (sie steht in jeder APK und im Repo); geschützt wird über Grenzen, nicht
   über Verstecken. Schon da: `max_instance_count` 2, Timeout 30 s, Größenlimits je
   Methode, Tageszähler je Konto, Alarm bei viel ausgehendem Verkehr, Kill-Switch über
@@ -106,6 +107,10 @@ liegt in einem Kotlin-Modul, das später in die App übernommen werden kann. [E]
     Umgesetzt: Token = base64url(256 Bit Zufall) „.“ base64url(HMAC, 128 Bit), Schlüssel
     aus dem Pfeffer abgeleitet (`sitzung.Aussteller`). Alte Tokens gelten nach dem
     Deploy nicht mehr; die Geräte erneuern einmal (wie nach einer Rotation).
+    Die Vorprüfung ohne Firestore gilt für Bearer-Tokens. Die offenen Prozeduren prüfen
+    vor dem Speicher nur, was nichts kostet: `SitzungErneuern` lehnt einen falschen
+    Zeitpunkt ohne Lesen ab (seit 2026-11-19, Review-Lauf 11); eine erfundene Geräte-ID
+    mit passendem Zeitpunkt kostet einen Lesezugriff. Das deckt der Anfrage-Alarm.
   - **Schneller als das Budget:** Abrechnungsdaten kommen mit Stunden Verzug, eine Flut
     kann bis dahin über 20 € kosten. Umgesetzt: Alarm `anfragen` (alarm.tf) auf
     `run.googleapis.com/request_count` des Servers, **mehr als 10.000 je Stunde**
@@ -183,6 +188,24 @@ liegt in einem Kotlin-Modul, das später in die App übernommen werden kann. [E]
   Modell- und Promptversion gehen mit der Antwort zurück. [E]
 - K5 Modell austauschbar (Gemini zuerst, weil auf Vertex AI mit EU-Endpunkt). [P]
 - K6 Kontingent pro Konto und Tag; lokale KI hat Vorrang, wo sie reicht.
+- K7 **Erster Anwendungsfall: Schnellerinnerung aus Sprache** (App-Anf. 7.35,
+  2026-11-15). Die App erkennt Sprache und Zeitangabe lokal und legt die Erinnerung
+  sofort an. Das Backend wertet nur Sätze aus, die der lokale Parser nicht versteht
+  („nach dem Essen“, „morgen früh vor der Arbeit“), und nur nach Freigabe je Anfrage
+  (K3). Die App bleibt ohne Backend voll nutzbar. [E]
+  - Schnittstelle wie sonst Protobuf über Connect; JSON nur zwischen Go und Vertex AI,
+    mit strukturierter Ausgabe (`responseSchema`), damit die Antwort dem Schema folgt.
+  - Anfrage: der Satz, dazu Ortszeit mit Zeitzone und Wochentag. Antwort: Text,
+    `in_minuten` oder eine Uhrzeit, `sicher` (ja/nein), Modell- und Promptversion (K4).
+    Die KI rechnet keine Uhrzeiten um; das macht die App.
+  - Der Server prüft die Antwort (`// KRITISCH:`, tabellengetrieben mit
+    Ablehnungsfällen): Text nicht leer und begrenzt lang, Zeit zwischen 1 min und
+    7 Tagen. Ist sie ungültig, gibt es einen zweiten Versuch, danach einen Fehler; die
+    App behält dann ihre lokale Erinnerung. Die App prüft die Antwort noch einmal.
+  - Modell: ein kleines, schnelles auf dem EU-Endpunkt (z. B. Gemini Flash-Lite). Ein
+    Aufruf kostet Bruchteile eines Cents; das Kontingent aus K6 gilt.
+  - Der Satz wird nicht gespeichert und nicht geloggt (K4); diktierte Sätze enthalten
+    leicht Dritte oder Gesundheitsdaten.
 
 ### 3.5 Verwaltung und Betrieb
 - B1 **Konto löschen** in der App **und über eine Webseite** (Pflicht im Play Store)
@@ -306,6 +329,35 @@ nicht (Kap. 11, 2026-11-12). Wird in der Datenschutzerklärung so benannt.
 - P9 **Diagnosen von Testern** liest Claude erst, wenn es dafür einen
   Auftragsverarbeitungsvertrag mit Anthropic gibt (Übermittlung in die USA). Bis dahin
   hat nur Kevins Konto eine Diagnose-Erlaubnis (E-D-3).
+- P10 **Löschseite im Web** (Play-Richtlinie zur Kontolöschung, festgehalten 2026-11-15):
+  Wer die App nicht mehr hat, kann dort die Löschung seines Kontos beantragen, ohne die
+  App neu zu installieren. Die Adresse kommt ins Formular zur Datensicherheit der
+  Play Console. **Vor dem Play-Store-Release** (frühestens mit App-V2), nicht vorher.
+  - Die Seite nennt App- und Entwicklernamen wie im Store, die Schritte, was gelöscht
+    wird (alles des Kontos, für alle Geräte), was bleibt und wie lange (Server-Logs
+    30 Tage, Grabsteine, Kap. 3.5) und den Weg in der App (*Konto löschen*, R-3).
+  - **Mit Google anmelden** auf der Seite: Der Server bildet aus dem ID-Token das
+    Pseudonym wie bei der App-Anmeldung und stellt einen **Löschantrag** (B1, K1): Ohne
+    freigeschaltetes Gerät gilt die Wartezeit von 7 Tagen, die anderen Geräte zeigen
+    den Antrag an und können ihn abbrechen. Eine E-Mail allein reicht nicht, weil der
+    Server keine E-Mail-Adressen kennt und sie keinem Konto zuordnen kann; eine
+    Kontaktadresse steht trotzdem als Ausweg da (z. B. wenn der Dienst gesperrt ist).
+  - Keine Cookies außer für die Anmeldung, keine Analyse, keine fremden Skripte außer
+    Googles Anmeldung. Server-Logs wie beim Dienst (30 Tage).
+  - Auf derselben Seite die **Datenschutzerklärung** (P4, öffentliche Adresse für Play
+    und den OAuth-Zustimmungsbildschirm).
+  - **Hosting:** eigener kleiner Cloud-Run-Dienst `web` in `var.region` (statische
+    Seiten), mit eigenem Dienstkonto und öffentlich über `infra/module/oeffentlich`.
+    Den Löschantrag nimmt der bestehende Dienst an (neue Zielgruppe: Web-Client-ID).
+    Kosten im kostenlosen Kontingent von Cloud Run, Adresse `*.run.app` ohne Domain.
+    Nicht GitHub Pages, Firebase Hosting oder ein öffentlicher Bucket: Die ersten beiden
+    liefern nicht nur aus der EU aus, ein Bucket mit HTTPS unter eigener Adresse braucht
+    einen Load Balancer (rund 18 €/Monat).
+  - **Domain** (offene Frage Kap. 10): Für Play reicht `*.run.app`. Geht der
+    OAuth-Zustimmungsbildschirm von *Testen* in *Produktion*, verlangt Google für Startseite
+    und Datenschutzerklärung wahrscheinlich eine eigene, in der Search Console bestätigte
+    Domain (`run.app` lässt sich nicht bestätigen). Dann eine günstige Domain (etwa
+    5–15 €/Jahr) per Domain-Zuordnung auf denselben Dienst.
 
 ### 4.5 Sicherheit
 - SE1 Nur HTTPS; Sitzungs-Tokens kurzlebig; Signaturen jeder Operation (gemeint sind
@@ -320,7 +372,8 @@ nicht (Kap. 11, 2026-11-12). Wird in der Datenschutzerklärung so benannt.
   Geräteschlüssel, Freischalten mit dem aus dem Wiederherstellungsschlüssel
   abgeleiteten Schlüssel). Begriffe: Ein Gerät ist *freigeschaltet* (E-B2b-13), ein
   Konto hat eine *Diagnose-Erlaubnis* (E-D-3).
-- SE5 **Zerstörerische Aktionen** (Cloud-Daten löschen, Konto löschen, Gerät sperren)
+- SE5 **Zerstörerische Aktionen** (Konto löschen, Sicherung löschen, Gerät sperren;
+  umgesetzt in der App V1.3c2 (2026-11-15, noch nicht installiert); Gerät sperren gibt es nur im Test-Client)
   nur nach Bestätigung mit der Displaysperre des Geräts (BiometricPrompt, auch mit
   Geräte-PIN). Sonst löscht, wer ein entsperrtes Handy in die Hand bekommt, alle
   Fassungen endgültig (kein Soft Delete). Eine Wartezeit im Server erst, wenn es
@@ -451,7 +504,7 @@ tragen die Tests die Spezifikation. Anleitung zum Review: [go-review.md](go-revi
 | B2b | Daten-Backup für eine Person (Tresorschlüssel, Cloud Storage EU, ältere Fassungen), Formate festschreiben, `client/` bereit für die App; danach Einbindung als Backup in eine interne App-Variante ([b2b-entwurf.md](b2b-entwurf.md)) |
 | B3 | Kontakte per QR (im Test-Client als Text), Freigaben, Append-only-Log, Konfliktauflösung |
 | B4 | FCM-Push, Snapshots, Ablaufzeiten, Person entfernen + faule Rotation (Konto löschen kommt vorher, Kap. 11, 2026-11-12) |
-| B5 | KI-Proxy (Text) mit Vertex AI EU, Freigabe-Ablauf im Test-Client, Kontingente |
+| B5 | KI-Proxy (Text) mit Vertex AI EU, Freigabe-Ablauf im Test-Client, Kontingente; erster Anwendungsfall Schnellerinnerung aus Sprache (K7) |
 | B6 | Play-Store-Vorbereitung: Play Integrity, Datenschutzerklärung, Löschseite, Härtung |
 
 ## 10. Offene Fragen
@@ -461,6 +514,9 @@ tragen die Tests die Spezifikation. Anleitung zum Review: [go-review.md](go-revi
    Eltern teilen (P8)? Vor B3.
 3. **Diagnosen von Testern:** AV-Vertrag mit Anthropic, oder bleiben Tester ohne
    Diagnose-Erlaubnis (P9)? Vor dem ersten Tester, der Diagnosen senden soll.
+4. **Eigene Domain** für Löschseite und Datenschutzerklärung (P10)? Für Play reicht
+   `*.run.app`; vor dem Wechsel des OAuth-Zustimmungsbildschirms in *Produktion*
+   prüfen, ob Google eine bestätigte Domain verlangt. Vor dem Play-Store-Release.
 
 ## 11. Entscheidungen
 
@@ -578,3 +634,9 @@ tragen die Tests die Spezifikation. Anleitung zum Review: [go-review.md](go-revi
 | 2026-11-14 | ID7/ID8 umgesetzt (Kevin): Entzug der Freigabe wirkt auch beim Erneuern der Sitzung; Kill-Switch sperrt ab mehr als 10.000 Anfragen je Stunde; Startliste App- und Test-Konto. Kürzerer Timeout und Grenze je IP bewusst nicht |
 | 2026-11-14 | **Fristen aus P5 umgesetzt** ([datenschutz/README.md](datenschutz/README.md) K2): Das Konto speichert `zuletzt_aktiv` (nur der Tag), gesetzt beim Anmelden und Erneuern, höchstens ein Schreibvorgang je Konto und Tag. Der tägliche Lauf merkt Konten nach 24 vollen Monaten ohne Aktivität zur Löschung in 7 Tagen vor. Der Termin wirkt wie ein Antrag: Die Geräte sehen ihn, nur ein freigeschaltetes Gerät bricht ab, eine Anmeldung allein hebt ihn nicht auf (der Speicher unterscheidet die beiden nicht). Gesperrte Geräte ersetzt der Lauf nach 90 Tagen durch einen **Grabstein** (Kevin): Schlüssel und Zeitpunkte verschwinden, Geräte-ID und Konto bleiben in `geraete_grabsteine`, bis das Konto gelöscht wird. Sonst meldete sich ein gestohlenes Handy mit seinem alten Schlüssel als neues Gerät an. Konten aus der Zeit davor erfasst die Frist erst nach ihrer nächsten Anmeldung; Firestore wird zu Beginn der Sicherheitsphase ohnehin geleert |
 | 2026-11-14 | Backend wird mit der App veröffentlicht (App-Anf. 7.34, Kevin): Lizenz **Apache-2.0**; Historie bleibt (nur Gmail- und GitHub-Adressen, keine Testdaten); Doku war schon ohne Benutzerpfade; CI bei PRs und GitHub-Einstellungen erst kurz davor |
+| 2026-11-14 | **Konto löschen in der App** (K1, Kevin nach Vorschlag): ersetzt *Cloud-Daten löschen* (App R-3). Neu anfangen heißt Konto löschen und neu anmelden; die Kennung bleibt freigegeben. Ein nicht freigeschaltetes Gerät beantragt und behält seine Schlüssel; einen Termin, den der Server bei Anmeldung oder Erneuerung meldet, zeigt die App mit Benachrichtigung. Damit vorhandene Geräte innerhalb der 7 Tage davon erfahren, erneuert der stündliche Lauf die Sitzung spätestens nach 23 Stunden, auch ohne geänderte Daten; nur unter den Bedingungen der automatischen Sicherung (eingeschaltet, freigeschaltet, einmal von Hand gesichert) |
+| 2026-11-15 | **SE5 in der App** (Kevin): *Konto löschen* und *Sicherung löschen* (löscht ebenfalls alle Fassungen endgültig) erst nach der Displaysperre, abgefragt vor jedem Kontakt zum Server; ohne Displaysperre geht es weiter und wird protokolliert, damit Löschen (Art. 17) möglich bleibt. Abbrechen, Fehlversuche und fehlender Sensor heißen nein. Eine Wartezeit im Server weiterhin erst mit mehreren Nutzern |
+| 2026-11-15 | **Wiederherstellungsschlüssel: Passwortmanager als Hauptweg** (Kevin): Papier geht leicht verloren, weil man es fast nie braucht; einen Ende-zu-Ende-verschlüsselten Passwortmanager nutzt man regelmäßig. Die App bietet ihn als Hauptknopf an, aber nur nach dem Hinweis vom 2026-11-12 und mit dem Rat, den Passwortmanager selbst mit seinem Wiederherstellungscode auf Papier zu schützen (dort liegt das größte Risiko). Von selbst öffnet sich kein Speicher-Dialog; Papier bleibt der Weg ohne Passwortmanager. Die App kann nicht prüfen, ob der Passwortmanager Ende-zu-Ende verschlüsselt; das trägt der Hinweis. Ändert den Eintrag vom 2026-11-12; App V1.3c3, 2026-11-15, noch nicht installiert |
+| 2026-11-15 | **Löschseite im Web** (P10, Kevin): Pflicht für den Play Store, vor dem Release. *Mit Google anmelden* stellt einen Löschantrag wie in der App (7 Tage Wartezeit ohne freigeschaltetes Gerät), weil der Server keine E-Mail-Adressen kennt. Hosting als eigener Cloud-Run-Dienst `web` in der EU-Region unter `*.run.app`, im kostenlosen Kontingent; eine günstige eigene Domain erst, wenn der OAuth-Zustimmungsbildschirm in *Produktion* geht und Google sie verlangt (Kap. 10, Frage 4). Ersetzt den Hinweis „GitHub Pages reicht“ in gcp-einrichtung.md (nicht nur EU) |
+| 2026-11-15 | **Erster KI-Anwendungsfall: Schnellerinnerung aus Sprache** (K7, Kevin: „Ja alle Punkte passen, erst lokal, dann per Bestätigung mit Hinweis Cloud KI“): Spracherkennung und Zeitangabe zuerst lokal in der App, die Erinnerung entsteht sofort und auch ohne Netz. Die Cloud-KI wertet nur Sätze aus, die der lokale Parser nicht versteht, und nur nach Freigabe je Anfrage; K3 bleibt unverändert. Strukturierte Ausgabe statt mehrerer Versuche, Prüfung im Server und in der App, die KI rechnet keine Uhrzeiten. Teil von B5; App-Seite in App-Anf. 7.35 |
+| 2026-11-19 | **Anfragealarm bleibt bei 10.000 Anfragen je Stunde** (Review Lauf 11, Frage 3; Kevin: „Alle Fragen nach Vorschlag umsetzen“): Jeder, auch ohne Konto, kann den Kill-Switch so mit Anfragen für weniger als einen Cent auslösen (Cloud Run: 0,40 $ je Million Anfragen) und alle Dienste der Region sperren. Das ist bewusst so: Kosten gehen vor Verfügbarkeit, und abgelehnte Anfragen kosten genauso. Die Richtlinie meldet sich alle 30 Minuten erneut beim Kill-Switch (`renotify_interval`), weil Eventarc eine verlorene Meldung nicht wiederholt. Der Pfad Alarm → Pub/Sub → Kill-Switch wird einmal in der Cloud getestet (eigene Richtlinie mit niedriger Schwelle auf einen Testdienst). Die Schwelle prüfen vor dem ersten weiteren Nutzer ([b2b-entwurf.md](b2b-entwurf.md)) |

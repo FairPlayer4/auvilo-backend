@@ -13,7 +13,7 @@ option java_package = "com.avlreminder.schnittstelle.v1";
 // Fassungen, Schlüssel-Backup, Diagnosen, Geräte, Sitzungen und die Kennung
 // (HMAC der Google-Konto-ID). Danach legt ein neues Anmelden mit demselben
 // Google-Konto ein neues, leeres Konto an. Die Tageszähler laufen von selbst ab
-// (höchstens zwei Tage).
+// (nach wenigen Tagen; Firestore löscht abgelaufene Zähler verzögert).
 //
 // Ein freigeschaltetes Gerät löscht sofort. Ein nicht freigeschaltetes Gerät
 // (nur der Google-Login, z. B. Handy und Wiederherstellungsschlüssel verloren)
@@ -30,8 +30,10 @@ option java_package = "com.avlreminder.schnittstelle.v1";
 //   failed_precondition KontoLoeschenAbbrechen: Die Löschung ist schon fällig
 //                       oder läuft (dann gibt es nichts mehr abzubrechen).
 //   unavailable         vorübergehend; später wiederholen. Bei KontoLoeschen
-//                       ist das Konto dann schon als fällig markiert, und der
-//                       regelmäßige Lauf des Servers löscht den Rest.
+//                       ist der Zugang dann noch da (gelöscht wurde nichts).
+//                       Kam die Antwort nicht an, kann das Konto trotzdem
+//                       gelöscht sein: Lehnt danach SitzungErneuern das Gerät
+//                       ab (gesperrt oder unbekannt), gilt es als gelöscht.
 //   internal            Fehler im Server.
 service KontoDienst {
   // Löscht das eigene Konto (freigeschaltetes Gerät) oder beantragt die
@@ -49,7 +51,9 @@ message KontoLoeschenRequest {}
 message KontoLoeschenResponse {
   // true: Das Konto ist gelöscht; die Sitzung gilt nicht mehr. Die App
   // verwirft dann wie beim Abmelden Sitzung, Geräteschlüssel und die Schlüssel
-  // der Sicherung und legt für ein späteres Anmelden neue an.
+  // der Sicherung und legt für ein späteres Anmelden neue an. Der Zugang ist
+  // sofort weg; was der Server danach nicht gleich löschen konnte, löscht sein
+  // regelmäßiger Lauf (Daten nach spätestens einem Tag).
   bool geloescht = 1;
   // Ohne geloescht: Zeitpunkt, ab dem der Server löscht.
   google.protobuf.Timestamp loeschen_ab = 2;

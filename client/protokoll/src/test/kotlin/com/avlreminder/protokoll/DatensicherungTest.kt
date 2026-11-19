@@ -58,6 +58,14 @@ class DatensicherungTest {
                 tresor,
                 KONTO,
             ),
+            // Richtig verschlüsselt, aber kein lesbares Protobuf (Feld 1 als Bytes mit
+            // Länge 5, abgeschnitten): ein Fehler der sichernden App, kein Angriff.
+            Ablehnung(
+                "lehnt richtig verschlüsselten unlesbaren Inhalt ab",
+                tresor.verschluesseln(byteArrayOf(10, 5, 1), (Zweck.DATENSICHERUNG + KONTO).toByteArray()),
+                tresor,
+                KONTO,
+            ),
         )
     }
 }

@@ -299,6 +299,46 @@ func pruefeVertrag(t *testing.T, neu func(t *testing.T) Ablage) {
 			t.Errorf("Fehler = %v", err)
 		}
 	})
+
+	t.Run("Löschen ohne Konto-ID ist ein Fehler", func(t *testing.T) {
+		if err := neu(t).Loeschen(ctx, ""); err == nil {
+			t.Error("kein Fehler")
+		}
+	})
+
+	// Konten (für den Lauf, der Sicherungen ohne Konto löscht). Die Grenze liegt
+	// eine Stunde neben jetzt, damit die Uhr des Emulators nicht stört.
+	konten := func(t *testing.T, a Ablage, vor time.Time) []string {
+		t.Helper()
+		ids, err := a.Konten(ctx, vor)
+		if err != nil {
+			t.Fatalf("Konten: %v", err)
+		}
+		return ids
+	}
+	t.Run("Konten nennt jedes Konto mit Fassungen vor der Grenze einmal", func(t *testing.T) {
+		a := neu(t)
+		v1 := speichere(t, a, "konto-1", "erste", 0)
+		speichere(t, a, "konto-1", "zweite", v1)
+		speichere(t, a, "konto-10", "anderes Konto", 0)
+		if ids := konten(t, a, time.Now().Add(time.Hour)); !slices.Equal(ids, []string{"konto-1", "konto-10"}) {
+			t.Errorf("Konten = %v, erwartet [konto-1 konto-10]", ids)
+		}
+	})
+	t.Run("Konten lässt neuere Fassungen und gelöschte Sicherungen weg", func(t *testing.T) {
+		a := neu(t)
+		speichere(t, a, "konto-1", "erste", 0)
+		speichere(t, a, "konto-2", "zweite", 0)
+		if ids := konten(t, a, time.Now().Add(-time.Hour)); len(ids) != 0 {
+			t.Errorf("Konten vor einer Stunde = %v, erwartet keine", ids)
+		}
+		if err := a.Loeschen(ctx, "konto-1"); err != nil {
+			t.Fatal(err)
+		}
+		if ids := konten(t, a, time.Now().Add(time.Hour)); !slices.Equal(ids, []string{"konto-2"}) {
+			t.Errorf("Konten = %v, erwartet [konto-2]", ids)
+		}
+	})
 }
 
 // KRITISCH: In Cloud Storage bleiben nach dem Löschen auch keine älteren Fassungen

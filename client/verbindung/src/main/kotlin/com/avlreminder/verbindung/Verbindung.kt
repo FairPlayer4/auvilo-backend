@@ -332,11 +332,16 @@ internal fun Timestamp.instant(): Instant = Instant.ofEpochSecond(seconds, nanos
  *
  * KRITISCH: geloescht = true ist die einzige Antwort, nach der die App ihre Schlüssel
  * verwirft. Ohne geloescht und ohne Termin antwortet der Server nicht wie vereinbart;
- * das ist ein Fehler, kein Löschen.
+ * das ist ein Fehler, kein Löschen. Nach einem Fehler fragt [zugangWeg] mit
+ * [anmeldung] nach; ohne [anmeldung] bleibt es beim Fehler.
  */
-class ServerKontoLoeschen(private val verbindung: Verbindung, private val token: suspend () -> String) : KontoLoeschenAmServer {
+class ServerKontoLoeschen(
+    private val verbindung: Verbindung,
+    private val token: suspend () -> String,
+    private val anmeldung: Anmeldung? = null,
+) : KontoLoeschenAmServer {
     /** Mit festem Token (Tests, kurze Abläufe). */
-    constructor(verbindung: Verbindung, token: String) : this(verbindung, { token })
+    constructor(verbindung: Verbindung, token: String, anmeldung: Anmeldung? = null) : this(verbindung, { token }, anmeldung)
 
     override suspend fun loeschen(): KontoLoeschung {
         val antwort = verbindung.konto.kontoLoeschen(KontoLoeschenRequest.getDefaultInstance(), mitSitzung(token())).ergebnis()
@@ -353,6 +358,27 @@ class ServerKontoLoeschen(private val verbindung: Verbindung, private val token:
         } catch (e: Serverfehler) {
             if (e.vomDienst && e.code == Code.FAILED_PRECONDITION) throw LoeschungLaeuft()
             throw e.nichtFreigeschaltetOder()
+        }
+    }
+
+    /**
+     * Erneuert die Sitzung: Weist der Dienst das Gerät ab (gesperrt oder unbekannt),
+     * ist der Zugang weg. Nach KontoLoeschen ist das Gerät erst gesperrt und später
+     * ganz entfernt; beides heißt gelöscht.
+     *
+     * KRITISCH: Nur Ablehnungen des Dienstes selbst zählen (dafür sorgt [Anmeldung]):
+     * Ein 403 vom gesperrten Dienst (Kill-Switch) ist kein Löschen, sonst würfe die App
+     * ihre Schlüssel weg. Jeder andere Fehler geht an den Aufrufer (= unklar).
+     */
+    override suspend fun zugangWeg(): Boolean {
+        val a = anmeldung ?: return false
+        return try {
+            a.erneuern()
+            false
+        } catch (_: GeraetGesperrt) {
+            true
+        } catch (_: AnmeldungAbgelehnt) {
+            true
         }
     }
 }

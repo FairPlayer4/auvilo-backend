@@ -112,14 +112,14 @@ Du hast das Recht auf Auskunft (Art. 15), Berichtigung (Art. 16), Löschung (Art
 Einschränkung (Art. 18), Datenübertragbarkeit (Art. 20) und Widerspruch gegen
 Verarbeitungen aus berechtigtem Interesse (Art. 21). Eine Einwilligung kannst du
 jederzeit für die Zukunft widerrufen. Schreib dazu an [E-Mail] und gib die
-**Konto-ID** an, die dir die App anzeigt; ohne sie können wir dich nicht zuordnen, weil
+**Konto-ID** an, die dir die App unter *Einstellungen → Cloud-Backup (experimentell)* anzeigt; ohne sie können wir dich nicht zuordnen, weil
 wir weder Namen noch E-Mail-Adressen speichern (Art. 11 DSGVO).
 
 Du kannst dich bei einer Datenschutz-Aufsichtsbehörde beschweren, z. B. bei der für
 deinen Wohnort.
 
 ## 10. Konto löschen
-In der App unter [Pfad]: *Konto löschen*. Von einem eingerichteten Gerät löschen wir
+In der App unter *Einstellungen → Cloud-Backup (experimentell)*: *Konto löschen*. Von einem eingerichteten Gerät löschen wir
 sofort alles: Konto, Geräte, Sitzungen, Schlüssel-Backup, Datensicherung mit allen
 früheren Fassungen und Diagnosen. Hast du kein eingerichtetes Gerät mehr (nur dein
 Google-Konto), löschen wir **nach 7 Tagen**: So kann niemand, der dein Google-Konto

@@ -75,6 +75,21 @@ class PersonenschluesselTest {
         assertThrows<EntschluesselnFehlgeschlagen> { ben.entpacken(fremd) }
     }
 
+    // HPKE prüft den Absender nicht: Jeder mit Bens öffentlichem Schlüssel kann einen
+    // echten Umschlag bauen. Steckt darin kein Schlüssel, gilt das als gescheitertes
+    // Entpacken, nicht als anderer Fehler.
+    @ParameterizedTest(name = "lehnt echten Umschlag mit Inhalt {0} ab")
+    @MethodSource("inhalteOhneSchluessel")
+    fun `lehnt echten Umschlag ohne Schlüssel darin ab`(inhalt: String) {
+        val ben = Personenschluessel.erzeugen()
+        val oeffentlich = TinkProtoKeysetFormat
+            .parseKeyset(ben.geheimeBytesEntpacken(), InsecureSecretKeyAccess.get(), Tink.konfiguration)
+            .publicKeysetHandle
+        val umschlag = oeffentlich.getPrimitive(Tink.konfiguration, HybridEncrypt::class.java)
+            .encrypt(inhalt.toByteArray(), Zweck.UMSCHLAG.toByteArray())
+        assertThrows<EntschluesselnFehlgeschlagen> { ben.entpacken(umschlag) }
+    }
+
     // --- Fingerabdruck -----------------------------------------------------
 
     @Test
@@ -118,6 +133,9 @@ class PersonenschluesselTest {
                 a.oeffentlich.pruefen(Signaturzweck.OPERATION, daten, sig)
             },
         )
+
+        @JvmStatic
+        fun inhalteOhneSchluessel() = listOf("„kein Schlüssel“", "")
 
         @JvmStatic
         fun ungueltigesEntpacken() = listOf(

@@ -42,7 +42,7 @@ oder das Projekt vom Rechnungskonto trennen. Deshalb gilt für die App:
 | # | Frage | Empfehlung | Warum |
 |---|---|---|---|
 | E-B2b-1 | Was wird gesichert? | **Eine undurchsichtige Nutzlast**: Für `protokoll` und Server sind es nur Bytes. Die App legt dort ihre Room-Datenbank ab (Kopie per `VACUUM INTO`, gzip-komprimiert). Fotos und Audio nicht (3.6). | So bleibt `protokoll` ohne Android und ohne SQLite. Die App braucht kein zweites Datenformat: Beim Wiederherstellen laufen ihre Room-Migrationen wie bei einem Update. Ein eigenes, app-unabhängiges Format kommt erst mit der Synchronisation (B3), wo es ohnehin nötig ist. Verweise auf Fotos zeigen nach dem Wiederherstellen ins Leere; die App muss damit umgehen. |
-| E-B2b-2 | Format der Sicherung | Klartext = `Datensicherung` (proto, `inhalt/v1`): **Kopf** (Formatversion, Schema-Version der App, Zeitpunkt, Geräte-ID, fortlaufender Zähler) und Nutzlast. Verschlüsselt mit dem **Tresorschlüssel** (XChaCha20-Poly1305), zugehörige Daten `"avlreminder/datensicherung/v1\n" + konto_id`. | Tresorschlüssel, weil es private Daten sind (4.1). Er liegt schon im Schlüssel-Backup; ein neues Gerät hat ihn nach der Einrichtung aus B2. Der Kopf steht **im** Chiffrat; so kann der Server ihn weder lesen noch fälschen. |
+| E-B2b-2 | Format der Sicherung | Klartext = `Datensicherung` (proto, `inhalt/v1`): **Kopf** (Schema-Version der App, Zeitpunkt, Geräte-ID, fortlaufender Zähler) und Nutzlast. Die Formatversion steckt nicht im Kopf, sondern im Präfix der zugehörigen Daten (`/v1`); ein neues Format bekommt ein neues Präfix (Stand 2026-11-19, maßgeblich ist `datensicherung.proto`). Verschlüsselt mit dem **Tresorschlüssel** (XChaCha20-Poly1305), zugehörige Daten `"avlreminder/datensicherung/v1\n" + konto_id`. | Tresorschlüssel, weil es private Daten sind (4.1). Er liegt schon im Schlüssel-Backup; ein neues Gerät hat ihn nach der Einrichtung aus B2. Der Kopf steht **im** Chiffrat; so kann der Server ihn weder lesen noch fälschen. |
 | E-B2b-3 | Schutz gegen ältere Fassung vom Server | Das Gerät merkt sich den höchsten Zähler, den es gesichert oder gesehen hat. Liefert der Server einen kleineren, **warnt** die App und stellt nicht still wieder her. | Behebt für Daten die bekannte Grenze aus B2 („älteres Backup vom Server“): Ein bösartiger Server kann eine alte, gültige Fassung ausliefern; der Zähler im Chiffrat verrät das. Ein ganz neues Gerät kennt noch keinen Zähler; dort zeigt die App den Zeitpunkt der Sicherung zur Kontrolle. |
 | E-B2b-4 | Wo liegt die Sicherung? | **Cloud Storage**, ein Bucket in `var.region`, ein Objekt je Konto (`sicherung/<konto_id>`). Objekt-Versionierung an, Lebenszyklus: ältere Fassungen **7 Tage** aufbewahren, höchstens 200 (geändert am 2026-11-03, vorher 3 Fassungen und 30 Tage; am 2026-11-04 von 100 auf 200). Nicht öffentlich (`public_access_prevention`), einheitlicher Zugriff; von den Diensten hat nur das Dienstkonto des Servers Zugriff (Projekt-Owner über ihre Projektrollen). | Firestore erlaubt höchstens 1 MiB je Dokument, eine Datenbank kann größer werden. Speicher kostet ca. 2 Cent je GB und Monat. Die älteren Fassungen schützen vor dem wichtigsten Fehler: Eine fehlerhafte App lädt kaputte Daten hoch und überschreibt damit das einzige Backup. Nach Alter statt Anzahl, weil ein Fehler oft erst nach Tagen auffällt. Die App sichert höchstens stündlich (7 × 24 = 168 Fassungen) plus manuell; die Höchstzahl 200 begrenzt nur den Fall, dass mehr gesichert wird als vorgesehen. 200 × 8 MiB im schlimmsten Fall kosten etwa 3 Cent im Monat je Konto. |
 | E-B2b-5 | Nie ein neueres Backup überschreiben | Wie in B2: Hochladen nur mit der **erwarteten Version** (0 = noch keins). Der Server setzt das mit der Vorbedingung `ifGenerationMatch` von Cloud Storage um. Die Generation reicht er als Version durch. | Cloud Storage prüft das selbst, ohne Transaktion in Firestore. Gleiches Verhalten wie beim Schlüssel-Backup: `failed_precondition`, neu holen, nicht überschreiben. |
@@ -114,13 +114,17 @@ in dieser Reihenfolge (`dienst.Loescher`):
    dem Termin.
 
 Jeder Schritt ist wiederholbar. Bricht einer ab, bleibt der Termin, und der
-regelmäßige Lauf (`server aufraeumen`, täglich) holt das Konto nach. Derselbe Lauf
+regelmäßige Lauf (`server aufraeumen`, täglich) holt das Konto nach. Ist Schritt 1
+gelungen, antwortet der Server trotzdem `geloescht = true` (seit 2026-11-19): Ohne
+Zugang könnte die App mit einem Fehler nichts mehr anfangen. Derselbe Lauf
 setzt die Fristen aus P5 um: Er ersetzt Geräte, die seit 90 Tagen gesperrt sind,
 durch einen Grabstein (Geräte-ID und Konto bleiben, die Sperre auch) und merkt
 Konten, die sich 24 Monate weder angemeldet noch eine Sitzung erneuert haben
-(`zuletzt_aktiv`), zur Löschung in 7 Tagen vor; dann löscht er sie wie oben. Deshalb lehnt `KontoLoeschenAbbrechen` ab dem Termin ab. Die App verwirft
+(`zuletzt_aktiv`), zur Löschung in 7 Tagen vor; dann löscht er sie wie oben. Zuletzt
+löscht er Sicherungen und Schlüssel-Backups ohne Konto (Grenzfälle unten). Deshalb lehnt `KontoLoeschenAbbrechen` ab dem Termin ab. Die App verwirft
 Sitzung, Geräteschlüssel und Schlüssel nur nach `geloescht = true`
-(`protokoll.KontoLoeschen`); bei einem Antrag zeigt sie den Termin, den alle Geräte
+(`protokoll.KontoLoeschen`) oder wenn nach einem Fehler (z. B. verlorene Antwort)
+`SitzungErneuern` das Gerät als gesperrt oder unbekannt ablehnt; bei einem Antrag zeigt sie den Termin, den alle Geräte
 in Anmelden, SitzungErneuern und GeraeteAuflisten sehen. Test-Client:
 `konto-loeschen`, `konto-loeschen-abbrechen`.
 
@@ -182,17 +186,21 @@ erster Tester, Veröffentlichung im Play Store.
   sich auch Punkt 1 und 2 unten je Konto erledigen. Server und Client fertig
   (2026-11-12, Abschnitt „Konto löschen“ oben); Infrastruktur in
   `infra/aufraeumen.tf` (angewendet 2026-11-13); in der Cloud getestet am
-  2026-11-13 (Antrag mit Job und sofort, `stand.md`); offen ist die App.
-- **Bestätigung mit der Displaysperre** für *Cloud-Daten löschen*, *Konto löschen*
-  und *Gerät sperren* (SE5).
+  2026-11-13 (Antrag mit Job und sofort, `stand.md`); App umgesetzt in V1.3c2 (App-Branch `feature/konto-loeschen`, 2026-11-14), noch nicht installiert.
+- **Bestätigung mit der Displaysperre** für *Konto löschen* und *Sicherung löschen* (SE5;
+  *Cloud-Daten löschen* gibt es seit 2026-11-14 nicht mehr): umgesetzt in der App V1.3c2 (2026-11-15, noch nicht installiert).
 - **Format v2:** Schlüssel aus dem Wiederherstellungsschlüssel per HKDF mit eigenem
   Label (SE6). Danach muss kein v1-Backup mehr gelesen werden.
-- **App A-15 neu:** Papier ist der Standard, der Passwortdienst nur nach dem Hinweis
-  (Kap. 11, 2026-11-12).
+- **App A-15 neu:** Passwortmanager als Hauptweg, nur nach dem Hinweis (Ende-zu-Ende,
+  Papiercode des Passwortmanagers), Papier als Ausweg (Kap. 11, 2026-11-15): App V1.3c3, 2026-11-15, noch nicht installiert.
 - **`DIAGNOSE_KONTEN`** enthält nach Punkt 5 nur Kevins neues Konto (P9).
 - **Zugang nur nach Freigabe** (ID7) und **Kostengrenzen** (ID8, signierte
   Sitzungs-Token, Anfragealarm löst den Kill-Switch aus). Nach dem neuen Pfeffer
   (Punkt 3) die Liste der Kennungen neu füllen, zuerst Kevins.
+- **Schwelle des Anfragealarms prüfen** (10.000 Anfragen je Stunde, `infra/alarm.tf`):
+  Passt sie zu den erwarteten Anfragen mehrerer Nutzer? Sie ist für jeden auslösbar
+  und sperrt dann alle Dienste (bewusst, Kap. 11, 2026-11-19). Der Cloud-Test des
+  Alarmpfads muss bis dahin gelaufen sein.
 - **GitHub-Konto** mit Passkey oder Sicherheitsschlüssel: Ohne Branch-Schutz kann ein
   übernommenes Konto über `main` deployen. **Erledigt 2026-11-14:** Passkey für die
   Anmeldung; Authenticator-App und GitHub Mobile bleiben als Reserve (lassen sich
@@ -358,10 +366,17 @@ nicht; sie werden beim Zurücksetzen vor dem ersten weiteren Nutzer ohnehin gel�
   `schluessel.proto`); ein Grabstein kommt, wenn Clients höhere Versionen nutzen.
 - **Konto löschen und ein laufender Upload.** Eine Datensicherung, die schon vor dem
   Sperren angenommen war, kann nach dem Löschen der Inhalte noch ankommen und bleibt
-  dann liegen, ohne Konto (nur Chiffrat). Selten (Millisekunden); ein Aufräumen
-  verwaister Objekte gehört zu den Fristen aus P5.
+  dann liegen, ohne Konto (nur Chiffrat). Selten (Millisekunden). Seit 2026-11-19
+  löscht der tägliche Lauf Datensicherungen und Schlüssel-Backups ohne Konto, sobald
+  sie älter als eine Stunde sind (Schritt 4 von `Aufraeumen`). „Ohne Konto“ heißt:
+  kein Konto-Dokument, keine Kennung, kein Gerät, kein Grabstein
+  (`speicher.KontoBekannt`). Dafür liest der Lauf täglich die Liste aller
+  Sicherungen (eine Anfrage je 1000 Objekte) und je Schlüssel-Backup einen Eintrag,
+  dazu ein Konto-Dokument je Konto; bei wenigen Nutzern im Freikontingent.
+  Diagnosen ohne Konto laufen nach 14 Tagen über die Lebenszyklusregel ab.
 - **Konto löschen und die Tageszähler.** Sie bleiben bis zu ihrem Ablauf (TTL,
-  höchstens zwei Tage); sie enthalten nur die Konto-ID und Zahlen.
+  nach wenigen Tagen); sie enthalten nur Zahlen und in der Dokument-ID die
+  Konto-ID, die Geräte-ID oder, beim Zähler für neue Geräte, die Kennung.
 - **Zwischen Sperren und Entfernen** (nur nach einem Abbruch) meldet sich ein altes
   Gerät mit seinem Schlüssel als fremdes Gerät; ein neuer Geräteschlüssel bekommt
   ein neues Konto.

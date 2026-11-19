@@ -49,6 +49,7 @@ func neuerLoeschTest(t *testing.T) *loeschTest {
 	t.Helper()
 	ablage := &loeschAblage{Arbeitsspeicher: datensicherung.NeuerArbeitsspeicher()}
 	ts := neuerTestServerMit(t, ablage, 0)
+	ablage.Uhr = func() time.Time { return ts.jetzt } // Sicherungen zur Uhr des Servers
 	lt := &loeschTest{testServer: ts, ablage: ablage, loescher: NeuerLoescher(ts.speicher, ablage, ts.diagnosen)}
 	lt.k = ts.kontoMitNeuemGeraet(t)
 	ts.diagnoseKonten[lt.k.kontoID] = true
@@ -207,6 +208,54 @@ func TestNichtFreigeschaltetesGeraetBeantragtNurDieLoeschung(t *testing.T) {
 	}
 }
 
+// KRITISCH (KontoLoeschen, Review-Lauf 11): Ist der beantragte Termin erreicht,
+// löscht auch ein nicht freigeschaltetes Gerät sofort, statt auf den Lauf am
+// nächsten Morgen zu warten. Eine Sekunde vorher bleibt es beim Antrag.
+func TestNichtFreigeschaltetesGeraetLoeschtAmTerminSofort(t *testing.T) {
+	termin := start.Add(7 * 24 * time.Hour)
+	faelle := []struct {
+		name      string
+		jetzt     time.Time
+		geloescht bool
+	}{
+		{"eine Sekunde vor dem Termin: weiter nur beantragt", termin.Add(-time.Second), false},
+		{"am Termin: sofort gelöscht", termin, true},
+		{"eine Stunde nach dem Termin: sofort gelöscht", termin.Add(time.Hour), true},
+	}
+	for _, fall := range faelle {
+		t.Run(fall.name, func(t *testing.T) {
+			lt := neuerLoeschTest(t)
+			if _, err := lt.kontoLoeschen(lt.k.laptopSitzung); err != nil {
+				t.Fatal(err)
+			}
+			lt.jetzt = fall.jetzt
+			laptop := lt.anmelden(t, "google-kevin", lt.k.laptop) // Sitzung zur neuen Uhrzeit
+			if laptop.Freigeschaltet {
+				t.Fatal("Laptop ist freigeschaltet, der Fall prüft dann nichts")
+			}
+			res, err := lt.kontoLoeschen(laptop.Sitzung.Token)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !fall.geloescht {
+				if res.Geloescht || res.LoeschenAb == nil || !res.LoeschenAb.AsTime().Equal(termin) {
+					t.Errorf("Antwort = %+v, erwartet weiter Termin %v", res, termin)
+				}
+				if _, err := lt.speicher.BackupHolen(context.Background(), lt.k.kontoID); err != nil {
+					t.Errorf("Backup vor dem Termin weg: %v", err)
+				}
+				return
+			}
+			if !res.Geloescht || res.LoeschenAb != nil {
+				t.Errorf("Antwort = %+v, erwartet gelöscht ohne Termin", res)
+			}
+			lt.jetzt = start // Annas Sitzung stammt von start
+			lt.erwarteKevinGeloescht(t)
+			lt.erwarteAnnaUnberuehrt(t)
+		})
+	}
+}
+
 func TestOhneAntragZeigenDieAntwortenKeinenTermin(t *testing.T) {
 	ts := neuerTestServer(t)
 	handy := testhilfe.NeuesGeraet(t)
@@ -298,13 +347,16 @@ func TestLaufLoeschtBeantragteKontenAmTermin(t *testing.T) {
 	lt.erwarteAnnaUnberuehrt(t)
 }
 
-// KRITISCH: Scheitert das Löschen mittendrin, ist der Zugang schon weg, das
-// Konto bleibt fällig, und der nächste Lauf löscht den Rest.
+// KRITISCH: Scheitert das Löschen nach dem Sperren, ist der Zugang schon weg,
+// die App bekommt „gelöscht“ (sie könnte sonst nichts mehr tun), das Konto
+// bleibt fällig, und der nächste Lauf löscht den Rest.
 func TestAbgebrochenesLoeschenHoltDerLaufNach(t *testing.T) {
 	lt := neuerLoeschTest(t)
 	lt.ablage.kaputt = true
-	_, err := lt.kontoLoeschen(lt.k.handySitzung)
-	erwarteCode(t, err, connect.CodeUnavailable)
+	res, err := lt.kontoLoeschen(lt.k.handySitzung)
+	if err != nil || !res.Geloescht {
+		t.Fatalf("KontoLoeschen mit kaputter Ablage = %+v, Fehler %v; erwartet gelöscht", res, err)
+	}
 	_, err = lt.geraete.GeraeteAuflisten(context.Background(), mitSitzung(&v1.GeraeteAuflistenRequest{}, lt.k.handySitzung))
 	erwarteCode(t, err, connect.CodeUnauthenticated)
 
@@ -362,4 +414,29 @@ func (a *kaputteAblageFuer) Loeschen(ctx context.Context, kontoID string) error 
 		return errors.New("Cloud Storage nicht erreichbar")
 	}
 	return a.loeschAblage.Loeschen(ctx, kontoID)
+}
+
+// sperrFehlerSpeicher scheitert bei KontoSperren, sonst wie der Arbeitsspeicher.
+type sperrFehlerSpeicher struct{ *speicher.Arbeitsspeicher }
+
+func (sperrFehlerSpeicher) KontoSperren(context.Context, string, time.Time) error {
+	return errors.New("Firestore gestört")
+}
+
+// Ablehnungsfall zu TestAbgebrochenesLoeschenHoltDerLaufNach: Scheitert schon
+// das Sperren, meldet der Server nicht „gelöscht“, sondern unavailable, und
+// der Zugang bleibt (die App fragt später wieder).
+func TestGescheitertesSperrenMeldetNichtGeloescht(t *testing.T) {
+	vorher := neuerTestServer(t)
+	k := vorher.kontoMitNeuemGeraet(t)
+	nachher := neuerTestServerMit(t, datensicherung.NeuerArbeitsspeicher(), 0,
+		func(c *Konfiguration) { c.Speicher = sperrFehlerSpeicher{vorher.speicher} })
+	res, err := nachher.kontoLoeschen(k.handySitzung)
+	if res != nil {
+		t.Errorf("Antwort = %+v, erwartet keine", res)
+	}
+	erwarteCode(t, err, connect.CodeUnavailable)
+	if _, err := nachher.geraete.GeraeteAuflisten(context.Background(), mitSitzung(&v1.GeraeteAuflistenRequest{}, k.handySitzung)); err != nil {
+		t.Errorf("Zugang weg nach gescheitertem Sperren: %v", err)
+	}
 }

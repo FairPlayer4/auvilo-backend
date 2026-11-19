@@ -894,6 +894,91 @@ func pruefeVertrag(t *testing.T, neu func(t *testing.T) Speicher) {
 		})
 	}
 
+	bekannt := func(t *testing.T, s Speicher, kontoID string) bool {
+		t.Helper()
+		ok, err := s.KontoBekannt(ctx, kontoID)
+		muss(t, err)
+		return ok
+	}
+	t.Run("Konto bekannt bis zum Entfernen, unbekannte ID nie", func(t *testing.T) {
+		s := neu(t)
+		a, b := bereiteZweiKontenVor(t, s)
+		if !bekannt(t, s, a) || !bekannt(t, s, b) {
+			t.Fatal("angemeldetes Konto unbekannt")
+		}
+		if bekannt(t, s, "gibt-es-nicht") {
+			t.Error("unbekannte ID gilt als bekannt")
+		}
+		muss(t, s.KontoSperren(ctx, a, t0))
+		if !bekannt(t, s, a) {
+			t.Error("gesperrtes Konto (Löschung läuft) gilt als unbekannt")
+		}
+		muss(t, s.KontoEntfernen(ctx, a, t0))
+		if bekannt(t, s, a) {
+			t.Error("entferntes Konto gilt als bekannt")
+		}
+		if !bekannt(t, s, b) {
+			t.Error("Konto b unbekannt")
+		}
+	})
+
+	// KRITISCH: Auch ohne Konto-Dokument ist ein Konto bekannt, solange etwas auf
+	// es zeigt; sonst löschte der Lauf seine Sicherung und sein Backup.
+	ohneKontoDokument := []struct {
+		name    string
+		vorher  func(t *testing.T, s Speicher, a string)
+		bekannt bool
+	}{
+		{"mit Kennung und Geräten", func(*testing.T, Speicher, string) {}, true},
+		{"nur mit Kennung", func(t *testing.T, s Speicher, a string) {
+			entferneGeraeteDokumente(t, s, a)
+		}, true},
+		{"nur mit gesperrten Geräten", func(t *testing.T, s Speicher, a string) {
+			muss(t, s.KontoSperren(ctx, a, t0))
+		}, true},
+		{"nur mit Grabsteinen", func(t *testing.T, s Speicher, a string) {
+			muss(t, s.KontoSperren(ctx, a, t0))
+			for _, g := range []string{"geraet-1", "geraet-2"} {
+				muss(t, s.GeraetBegraben(ctx, g, t0.Add(time.Millisecond)))
+			}
+		}, true},
+		{"ohne alles", func(t *testing.T, s Speicher, a string) {
+			muss(t, s.KontoEntfernen(ctx, a, t0))
+		}, false},
+	}
+	for _, fall := range ohneKontoDokument {
+		t.Run("Konto ohne Konto-Dokument "+fall.name, func(t *testing.T) {
+			s := neu(t)
+			a, _ := bereiteZweiKontenVor(t, s)
+			fall.vorher(t, s, a)
+			entferneKontoDokument(t, s, a)
+			if got := bekannt(t, s, a); got != fall.bekannt {
+				t.Errorf("bekannt = %v, erwartet %v", got, fall.bekannt)
+			}
+		})
+	}
+
+	t.Run("Backup-Konten: nur vor der Grenze geänderte, gelöschte nicht", func(t *testing.T) {
+		s := neu(t)
+		a, b := bereiteZweiKontenVor(t, s) // Backups von a und b zu t0
+		ids, err := s.BackupKonten(ctx, t0)
+		muss(t, err)
+		if len(ids) != 0 {
+			t.Errorf("vor t0 = %v, erwartet keine", ids)
+		}
+		ids, err = s.BackupKonten(ctx, t0.Add(time.Millisecond))
+		muss(t, err)
+		if want := sortiert(a, b); !slices.Equal(ids, want) {
+			t.Errorf("Backup-Konten = %v, erwartet %v", ids, want)
+		}
+		muss(t, s.BackupLoeschen(ctx, a))
+		ids, err = s.BackupKonten(ctx, t0.Add(time.Millisecond))
+		muss(t, err)
+		if !slices.Equal(ids, []string{b}) {
+			t.Errorf("nach dem Löschen = %v, erwartet [%s]", ids, b)
+		}
+	})
+
 	t.Run("Sperren und Entfernen eines gelöschten Kontos ist kein Fehler", func(t *testing.T) {
 		s := neu(t)
 		a, _ := bereiteZweiKontenVor(t, s)
@@ -1339,6 +1424,73 @@ func pruefeVertrag(t *testing.T, neu func(t *testing.T) Speicher) {
 		})
 	}
 
+	// KRITISCH (Review-Lauf 11): Konto sperren und Anmeldungen desselben
+	// Google-Kontos überschneiden sich. Danach hat keine Anmeldung Zugang zum
+	// gesperrten Konto: Entweder landete sie in einem neuen Konto, oder ihr
+	// Gerät ist gesperrt und ihre Sitzung weg. Belegt den KRITISCH-Kommentar an
+	// Firestore.KontoSperren. Die neuen Anmeldungen landen alle im selben Konto.
+	t.Run("Konto sperren gewinnt gegen gleichzeitiges Anmelden", func(t *testing.T) {
+		var erfolge, imAltenKonto atomic.Int32
+		for runde := range gleichzeitigRunden {
+			s := neu(t)
+			a := anmelden(t, s, "kennung-a", "geraet-0", "hash-0", 0).KontoID
+			_, err := s.LoeschungBeantragen(ctx, a, t0)
+			muss(t, err)
+
+			type anmeldung struct {
+				geraetID, hash string
+				e              AnmeldeErgebnis
+				err            error
+			}
+			anmeldungen := make([]anmeldung, gleichzeitigAufrufe)
+			var wg sync.WaitGroup
+			var sperrFehler error
+			for i := range gleichzeitigAufrufe {
+				an := &anmeldungen[i] // jede Goroutine schreibt nur ihren eigenen Eintrag
+				an.geraetID = fmt.Sprintf("geraet-%d-%d", runde, i+1)
+				an.hash = fmt.Sprintf("hash-%d-%d", runde, i+1)
+				wg.Go(func() { an.e, an.err = s.Anmelden(ctx, "kennung-a", geraet(an.geraetID, 1), sitzung(an.hash)) })
+				if i == gleichzeitigAufrufe/2 { // Sperren mitten zwischen den Anmeldungen starten
+					wg.Go(func() { sperrFehler = s.KontoSperren(ctx, a, t0) })
+				}
+			}
+			wg.Wait()
+			muss(t, sperrFehler)
+
+			neuesKonto := ""
+			for _, an := range anmeldungen {
+				if an.err != nil {
+					t.Logf("Runde %d, %s: %v", runde, an.geraetID, an.err)
+					continue
+				}
+				erfolge.Add(1)
+				if an.e.KontoID != a {
+					if neuesKonto != "" && an.e.KontoID != neuesKonto {
+						t.Fatalf("Runde %d: zwei neue Konten für dieselbe Kennung (%s, %s)", runde, neuesKonto, an.e.KontoID)
+					}
+					neuesKonto = an.e.KontoID
+					continue
+				}
+				imAltenKonto.Add(1)
+				g, err := s.Geraet(ctx, an.geraetID)
+				muss(t, err)
+				if !g.Gesperrt {
+					t.Fatalf("Runde %d: %s im gesperrten Konto ist nicht gesperrt", runde, an.geraetID)
+				}
+				if _, err := s.Sitzung(ctx, an.hash); !errors.Is(err, ErrNichtGefunden) {
+					t.Fatalf("Runde %d: Sitzung %s im gesperrten Konto ist noch da (Fehler: %v)", runde, an.hash, err)
+				}
+			}
+			if k, err := s.KennungVon(ctx, a); !errors.Is(err, ErrNichtGefunden) {
+				t.Fatalf("Runde %d: Kennung des gesperrten Kontos = %q, %v", runde, k, err)
+			}
+		}
+		if erfolge.Load() == 0 {
+			t.Fatal("keine einzige Anmeldung gelungen – das Rennen hat nie stattgefunden")
+		}
+		t.Logf("%d Anmeldungen gelungen, davon %d im alten Konto (danach gesperrt)", erfolge.Load(), imAltenKonto.Load())
+	})
+
 	// KRITISCH: Freischalten und Sperren überschneiden sich (E18, Review-Lauf 8):
 	// Danach ist das Gerät gesperrt, egal in welcher Reihenfolge. Ein
 	// Freischalten, das den alten Stand zurückschreibt, höbe die Sperre auf.
@@ -1511,3 +1663,49 @@ const (
 	gleichzeitigRunden  = 5
 	gleichzeitigAufrufe = 8
 )
+
+// entferneKontoDokument löscht nur das Konto-Dokument, an der Schnittstelle
+// vorbei (wie bei einem Konto aus einem älteren Stand ohne Dokument).
+func entferneKontoDokument(t *testing.T, s Speicher, kontoID string) {
+	t.Helper()
+	switch s := s.(type) {
+	case *Arbeitsspeicher:
+		s.mu.Lock()
+		delete(s.konten, kontoID)
+		s.mu.Unlock()
+	case *Firestore:
+		if _, err := s.c.Collection(sammlungKonten).Doc(kontoID).Delete(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+	default:
+		t.Fatalf("unbekannter Speicher %T", s)
+	}
+}
+
+// entferneGeraeteDokumente löscht nur die Geräte des Kontos, an der
+// Schnittstelle vorbei.
+func entferneGeraeteDokumente(t *testing.T, s Speicher, kontoID string) {
+	t.Helper()
+	switch s := s.(type) {
+	case *Arbeitsspeicher:
+		s.mu.Lock()
+		for id, g := range s.geraete {
+			if g.KontoID == kontoID {
+				delete(s.geraete, id)
+			}
+		}
+		s.mu.Unlock()
+	case *Firestore:
+		if err := s.loescheAlle(context.Background(), s.c.Collection(sammlungGeraete).Where("konto_id", "==", kontoID)); err != nil {
+			t.Fatal(err)
+		}
+	default:
+		t.Fatalf("unbekannter Speicher %T", s)
+	}
+}
+
+// sortiert liefert die IDs sortiert (Konto-IDs sind zufällig).
+func sortiert(ids ...string) []string {
+	slices.Sort(ids)
+	return ids
+}

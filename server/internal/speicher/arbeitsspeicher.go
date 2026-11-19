@@ -322,6 +322,43 @@ func (a *Arbeitsspeicher) KontoSperren(_ context.Context, kontoID string, jetzt 
 	return nil
 }
 
+func (a *Arbeitsspeicher) KontoBekannt(_ context.Context, kontoID string) (bool, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if _, ok := a.konten[kontoID]; ok {
+		return true, nil
+	}
+	for _, k := range a.kennungen {
+		if k == kontoID {
+			return true, nil
+		}
+	}
+	for _, g := range a.geraete {
+		if g.KontoID == kontoID {
+			return true, nil
+		}
+	}
+	for _, k := range a.grabsteine {
+		if k == kontoID {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (a *Arbeitsspeicher) BackupKonten(_ context.Context, vor time.Time) ([]string, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	ids := []string{}
+	for id, b := range a.backups {
+		if b.Geaendert.Before(vor) {
+			ids = append(ids, id)
+		}
+	}
+	slices.Sort(ids)
+	return ids, nil
+}
+
 func (a *Arbeitsspeicher) KontoEntfernen(_ context.Context, kontoID string, jetzt time.Time) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()

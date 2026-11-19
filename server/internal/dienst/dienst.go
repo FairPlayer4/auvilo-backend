@@ -321,6 +321,15 @@ func (d *anmeldeDienst) SitzungErneuern(ctx context.Context, req *connect.Reques
 	if !geraeteschluessel.IstGeraetID(geraetID) || req.Msg.GetZeitpunkt().CheckValid() != nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("Geräte-ID und Zeitpunkt sind Pflicht"))
 	}
+	// KRITISCH (ID8): Erst was nichts kostet, dann der Speicher. Ein falscher
+	// Zeitpunkt wird ohne Firestore-Lesen abgelehnt, mit derselben Antwort wie
+	// jede andere Ablehnung. Ohne Speicher geht nur das; Signatur und Sperre
+	// brauchen das Gerät.
+	jetzt := d.jetzt()
+	if err := sitzung.PruefeZeitpunkt(req.Msg.GetZeitpunkt().AsTime(), jetzt); err != nil {
+		slog.WarnContext(ctx, "Erneuern abgelehnt", "geraet", geraetID, "grund", err.Error())
+		return nil, errErneuernAbgelehnt()
+	}
 	g, err := d.speicher.Geraet(ctx, geraetID)
 	if errors.Is(err, speicher.ErrNichtGefunden) {
 		slog.WarnContext(ctx, "Erneuern für unbekanntes Gerät", "geraet", geraetID)
@@ -330,7 +339,6 @@ func (d *anmeldeDienst) SitzungErneuern(ctx context.Context, req *connect.Reques
 		return nil, speicherFehler(ctx, err)
 	}
 
-	jetzt := d.jetzt()
 	if err := sitzung.PruefeErneuerung(g, req.Msg.GetZeitpunkt().AsTime(), req.Msg.GetSignatur(), jetzt); err != nil {
 		slog.WarnContext(ctx, "Erneuern abgelehnt", "geraet", geraetID, "grund", err.Error())
 		if errors.Is(err, sitzung.ErrGesperrt) {

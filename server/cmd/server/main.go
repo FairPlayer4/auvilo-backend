@@ -344,7 +344,7 @@ func aufraeumen() error {
 		diagnose.NeuesCloudStorage(gcs, k.diagnoseBucket))
 	e, err := loescher.Aufraeumen(ctx, time.Now())
 	slog.Info("Aufräumen beendet", "begrabene_geraete", e.Begraben,
-		"vorgemerkte_konten", e.Vorgemerkt, "geloeschte_konten", e.Geloescht)
+		"vorgemerkte_konten", e.Vorgemerkt, "geloeschte_konten", e.Geloescht, "verwaist_geloescht", e.Verwaist)
 	return err
 }
 

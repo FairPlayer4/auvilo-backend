@@ -57,15 +57,6 @@ func errNichtFreigegeben(kennung string) error {
 	return err
 }
 
-// kennungImLog kürzt die Kennung für das Log: genug, um eine Anfrage
-// wiederzufinden, ohne die ganze Kennung in Cloud Logging abzulegen.
-func kennungImLog(kennung string) string {
-	if len(kennung) > 8 {
-		return kennung[:8]
-	}
-	return kennung
-}
-
 // pruefeFreigabe prüft beim Anmelden, ob das Google-Konto zugelassen ist.
 //
 // KRITISCH: Aufruf direkt nach der Prüfung des Google-Logins und vor jedem
@@ -75,7 +66,10 @@ func (d *anmeldeDienst) pruefeFreigabe(ctx context.Context, kennung string) erro
 	if d.freigabe.erlaubt(kennung) {
 		return nil
 	}
-	slog.WarnContext(ctx, "Anmeldung abgelehnt: Google-Konto nicht freigegeben", "kennung_anfang", kennungImLog(kennung))
+	// Die Kennung kommt nicht ins Log, auch nicht gekürzt: Sie bleibt über
+	// „Konto löschen“ hinweg gleich. Wer freigegeben werden will, schickt sie
+	// ohnehin selbst (sie steht im Fehlerdetail).
+	slog.WarnContext(ctx, "Anmeldung abgelehnt: Google-Konto nicht freigegeben")
 	return errNichtFreigegeben(kennung)
 }
 
@@ -99,7 +93,7 @@ func (d *anmeldeDienst) pruefeFreigabeDesKontos(ctx context.Context, kontoID str
 		return speicherFehler(ctx, err)
 	}
 	if !d.freigabe.erlaubt(kennung) {
-		slog.WarnContext(ctx, "Erneuern abgelehnt: Google-Konto nicht mehr freigegeben", "kennung_anfang", kennungImLog(kennung))
+		slog.WarnContext(ctx, "Erneuern abgelehnt: Google-Konto nicht mehr freigegeben", "konto", kontoID)
 		return errNichtFreigegeben(kennung)
 	}
 	return nil

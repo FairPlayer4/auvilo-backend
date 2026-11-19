@@ -131,8 +131,8 @@ Einzelheiten stehen in den Entwürfen, in git und in den Review-Berichten
 | B2b | Daten-Backup einer Person: Datensicherung in Cloud Storage, Freischaltung neuer Geräte (E-B2b-13), Tageslimits, Fassungen (R-4), Diagnose-Log ([b2b-entwurf.md](b2b-entwurf.md), [diagnose-entwurf.md](diagnose-entwurf.md)) | Server und Client fertig, zuletzt in der Cloud getestet am 2026-11-10 (Limits, Fassungen, Trennen ab 150 %); App-Einbindung: App-Repo `docs/stand.md` |
 | B3 | Teilen zwischen Personen | nicht begonnen; Vorgaben in [anforderungen.md](anforderungen.md) Kap. 4.6; davor die Sicherheitsphase |
 
-Letzter Deploy: PR #25 am 2026-11-14 (ID7/ID8: Freigabeliste, signierte Tokens, Anfrage-Alarm),
-Revision `server-00023-bm7` (mit beiden Kennungen), bereit; der Job `aufraeumen` hat dasselbe Image.
+Letzter Deploy: PR #26 am 2026-11-14 (Fristen aus P5: `zuletzt_aktiv`, Grabsteine),
+Revision `server-00024-2gg`, bereit; der Job `aufraeumen` hat dasselbe Image.
 
 ## Offen
 1. **Eigenbetrieb** seit 2026-11-07: Die App sichert Kevins echte Daten in der Cloud;
@@ -140,8 +140,9 @@ Revision `server-00023-bm7` (mit beiden Kennungen), bereit; der Job `aufraeumen`
    Sicherheitsphase (Checkliste „Vor dem ersten weiteren Nutzer“ in b2b-entwurf.md;
    `CLAUDE.md`). Die Desktop-Client-ID des Test-Clients bleibt bis dahin.
    **Vorher fertig** (Sicherheits- und Datenschutzprüfung 2026-11-12, Liste dort):
-   Konto löschen, Bestätigung mit der Displaysperre, Format v2 mit HKDF-Labels,
-   A-15 neu in der App, Dokumente. **Konto löschen:** Server und Client fertig
+   Konto löschen, Bestätigung mit der Displaysperre (beide in der App V1.3c2, noch
+   nicht installiert), Format v2 mit HKDF-Labels,
+   A-15 neu in der App (App V1.3c3, 2026-11-15, noch nicht installiert), Dokumente. **Konto löschen:** Server und Client fertig
    (2026-11-12). Die Infrastruktur steht in `infra/aufraeumen.tf`
    (Cloud Run Job `aufraeumen`, täglich 4 Uhr per Cloud Scheduler, Rolle
    „Objekte auflisten und löschen“ ohne Lesen, Alarm), angewendet und deployt am
@@ -155,15 +156,15 @@ Revision `server-00023-bm7` (mit beiden Kennungen), bereit; der Job `aufraeumen`
    Sofort löschen von einem freigeschalteten Gerät eines neuen Kontos: alles weg,
    der Test-Client hat das Gerät vergessen. Die lokalen Dateien der alten
    Testgeräte liegen in `%APPDATA%\avlreminder\testclient\alt-konto-8b07`.
-   Offen: die App. Ergebnis der Prüfung: Nach der Rotation ist die
+   In der App umgesetzt in V1.3c2 (App-Branch `feature/konto-loeschen`, 2026-11-14), noch nicht installiert ([datenschutz/README.md](datenschutz/README.md) K1). Ergebnis der Prüfung: Nach der Rotation ist die
    Sicherung für eine Person sicher; für die DSGVO fehlen vor allem Konto löschen
    und Fristen ([anforderungen.md](anforderungen.md) Kap. 4.4, 4.5, 11).
    **DSGVO-Dokumente** (Entwürfe, 2026-11-14) und die Liste, was noch fehlt:
-   [datenschutz/README.md](datenschutz/README.md). K2 ist **umgesetzt
-   (2026-11-14, auf `develop`, noch nicht deployt):** `zuletzt_aktiv`, Löschung nach
-   24 Monaten ohne Anmeldung, Grabsteine für Geräte nach 90 Tagen Sperre im Lauf
-   `aufraeumen`. Nach dem Deploy in der Cloud prüfen, dass der Lauf grün endet
-   (Log „Aufräumen beendet“ mit `begrabene_geraete`, `vorgemerkte_konten`).
+   [datenschutz/README.md](datenschutz/README.md). K2 ist **umgesetzt und
+   deployt (2026-11-14, PR #26):** `zuletzt_aktiv`, Löschung nach 24 Monaten ohne
+   Anmeldung, Grabsteine für Geräte nach 90 Tagen Sperre im Lauf `aufraeumen`.
+   Erster Lauf von Hand nach dem Deploy grün („Aufräumen beendet“, alle Zähler 0,
+   wie erwartet: noch kein Gerät 90 Tage gesperrt, kein Konto 24 Monate alt).
 2. **App-Einbindung** (Schritte 1–5, Wiederherstellen R-1…R-6): App-Repo
    `docs/stand.md`; dort auch die Gerätetests.
 3. **Review-Punkte:** `.review/state.md`, Abschnitt „Offen“.
@@ -174,6 +175,21 @@ Revision `server-00023-bm7` (mit beiden Kennungen), bereit; der Job `aufraeumen`
    Test-Konto; der Test-Client wurde vorher wie erwartet abgelehnt und meldet sich danach an. Offen: die App
    zeigt die Kennung bei „nicht freigegeben“ an (App-Repo). Die Server-URL bleibt
    beim Zurücksetzen dieselbe.
+6. **Review Lauf 11 umgesetzt (2026-11-19, auf `develop`, noch nicht in `main`):**
+   Konto löschen meldet gelöscht, sobald der Zugang weg ist, und der Client prüft
+   nach einem Fehler per Erneuern; die Kennung kommt nicht mehr ins Log; der Lauf
+   löscht Sicherungen und Schlüssel-Backups ohne Konto (älter als 1 h). Der
+   Anfragealarm meldet sich alle 30 Minuten erneut beim Kill-Switch
+   (`renotify_interval`, angewendet 2026-11-19). **Pfad Anfragealarm →
+   Kill-Switch in der Cloud getestet am 2026-11-19:** eine vorübergehende
+   Richtlinie wie `anfragen`, aber mit Schwelle 5 (eigene OpenTofu-Wurzel mit
+   lokalem Zustand, danach zerstört); 10 Anfragen an den Server um 13:41 UTC,
+   um 13:45:26 „Alarm-Meldung verarbeitet“ (WARNING, Aktion „Dienste sperren“,
+   1 Dienst, Richtlinie genannt), ab 13:47 antwortete der Server mit 403. Mit
+   `-var=gesperrte_dienste_oeffnen=true` kam nur `allUsers` zurück, ab 13:48
+   wieder offen, danach `tofu plan` ohne Änderungen. Vom Alarm bis zur Sperre
+   etwa 4 Minuten, bis 403 noch 1–2 Minuten. Die App gibt `ServerKontoLoeschen`
+   die Anmeldung mit (App-Repo, 2026-11-19).
 
 ## Befehle
 ```bash

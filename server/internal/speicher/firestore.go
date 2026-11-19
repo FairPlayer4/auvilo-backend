@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"cloud.google.com/go/firestore"
@@ -768,6 +769,40 @@ func (f *Firestore) KontoEntfernen(ctx context.Context, kontoID string, jetzt ti
 		return fmt.Errorf("Konto entfernen: %w", err)
 	}
 	return nil
+}
+
+// KontoBekannt erfüllt Speicher.KontoBekannt. Zuerst das Konto-Dokument (ein
+// Lesezugriff, bei fast jedem Konto der Treffer), dann je eine Abfrage nach
+// Kennung, Gerät und Grabstein.
+func (f *Firestore) KontoBekannt(ctx context.Context, kontoID string) (bool, error) {
+	if _, gibtEs, err := f.konto(ctx, kontoID); err != nil || gibtEs {
+		return gibtEs, err
+	}
+	for _, sammlung := range []string{sammlungKennungen, sammlungGeraete, sammlungGrabsteine} {
+		ids, err := f.idsVon(ctx, f.c.Collection(sammlung).Where("konto_id", "==", kontoID), 1)
+		if err != nil {
+			return false, fmt.Errorf("Konto bekannt (%s): %w", sammlung, err)
+		}
+		if len(ids) > 0 {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// BackupKonten erfüllt Speicher.BackupKonten (ohne Inhalte; Firestore zählt
+// trotzdem einen Lesezugriff je Backup).
+func (f *Firestore) BackupKonten(ctx context.Context, vor time.Time) ([]string, error) {
+	snaps, err := f.c.Collection(sammlungBackups).Where("geaendert_am", "<", vor.UTC()).Select().Documents(ctx).GetAll()
+	if err != nil {
+		return nil, fmt.Errorf("Backup-Konten: %w", err)
+	}
+	ids := make([]string, 0, len(snaps))
+	for _, snap := range snaps {
+		ids = append(ids, snap.Ref.ID)
+	}
+	slices.Sort(ids)
+	return ids, nil
 }
 
 // InaktiveKonten erfüllt Speicher.InaktiveKonten. Konten ohne zuletzt_aktiv

@@ -100,6 +100,17 @@ func Hash(token string) string {
 	return hex.EncodeToString(summe[:])
 }
 
+// PruefeZeitpunkt prüft nur, ob der Zeitpunkt einer Erneuerung nahe der
+// Serverzeit liegt. Das braucht kein Gerät und damit keinen Speicher, deshalb
+// prüft der Dienst es vor dem Lesen (ID8: Ungültiges früh und ohne Firestore
+// ablehnen). PruefeErneuerung prüft es trotzdem noch einmal.
+func PruefeZeitpunkt(zeitpunkt, jetzt time.Time) error {
+	if jetzt.Sub(zeitpunkt).Abs() > Toleranz {
+		return ErrZeitpunkt
+	}
+	return nil
+}
+
 // PruefeErneuerung prüft, ob ein Gerät eine neue Sitzung bekommt.
 //
 // KRITISCH: Nur ein nicht gesperrtes Gerät mit gültiger Signatur über seine
@@ -107,9 +118,8 @@ func Hash(token string) string {
 // Sperre wird zuletzt geprüft: Nur wer den Geräteschlüssel hat, erfährt, dass
 // das Gerät gesperrt ist.
 func PruefeErneuerung(g speicher.Geraet, zeitpunkt time.Time, signatur []byte, jetzt time.Time) error {
-	abstand := jetzt.Sub(zeitpunkt).Abs()
-	if abstand > Toleranz {
-		return ErrZeitpunkt
+	if err := PruefeZeitpunkt(zeitpunkt, jetzt); err != nil {
+		return err
 	}
 	schluessel, err := geraeteschluessel.Lese(g.Schluessel)
 	if err != nil {

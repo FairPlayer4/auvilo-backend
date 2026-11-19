@@ -180,3 +180,81 @@ func TestLaufMachtNachEinemFehlerBeimBegrabenWeiter(t *testing.T) {
 		t.Errorf("Ottos altes Gerät = %+v, Fehler %v; erwartet unverändert", g, err)
 	}
 }
+
+// Daten ohne Konto (Schritt 4 von Aufraeumen): Kommt nach dem Löschen eines
+// Kontos noch eine Sicherung oder ein Schlüssel-Backup an (die Anfrage war vor
+// dem Sperren angenommen), löscht der Lauf beides, sobald es älter als
+// FristVerwaist ist.
+//
+// KRITISCH: Daten eines bekannten Kontos (Anna) bleiben immer, jüngere Daten
+// ohne Konto bis zum nächsten Lauf.
+func TestLaufLoeschtSicherungUndBackupOhneKonto(t *testing.T) {
+	faelle := []struct {
+		name      string
+		alter     time.Duration
+		geloescht bool
+	}{
+		{"älter als die Frist: gelöscht", FristVerwaist + time.Millisecond, true},
+		{"genau so alt wie die Frist: bleibt", FristVerwaist, false},
+		{"eine Minute alt: bleibt", time.Minute, false},
+	}
+	for _, fall := range faelle {
+		t.Run(fall.name, func(t *testing.T) {
+			lt := neuerLoeschTest(t)
+			ctx := context.Background()
+			if res, err := lt.kontoLoeschen(lt.k.handySitzung); err != nil || !res.Geloescht {
+				t.Fatalf("KontoLoeschen = %+v, Fehler %v", res, err)
+			}
+			// Verspätet angekommen, an den Diensten vorbei (das Konto gibt es nicht mehr).
+			lauf := start.Add(2 * time.Hour) // Annas Daten sind von start, also älter
+			lt.jetzt = lauf.Add(-fall.alter)
+			if _, err := lt.ablage.Speichern(ctx, lt.k.kontoID, []byte("spät"), 0); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := lt.speicher.BackupSpeichern(ctx, lt.k.kontoID, []byte("spät"), []byte("fs"), 0, "", lt.jetzt); err != nil {
+				t.Fatal(err)
+			}
+			lt.jetzt = start // für Annas Sitzung beim Prüfen
+
+			e, err := lt.loescher.Aufraeumen(ctx, lauf)
+			erwartet := 0
+			if fall.geloescht {
+				erwartet = 2
+			}
+			if err != nil || e != (AufraeumErgebnis{Verwaist: erwartet}) {
+				t.Fatalf("Lauf = %+v, Fehler %v; erwartet %d verwaist gelöscht", e, err, erwartet)
+			}
+			f, err := lt.ablage.Fassungen(ctx, lt.k.kontoID)
+			if err != nil || (len(f) == 0) != fall.geloescht {
+				t.Errorf("Sicherung ohne Konto: %v, Fehler %v; gelöscht erwartet: %v", f, err, fall.geloescht)
+			}
+			_, err = lt.speicher.BackupHolen(ctx, lt.k.kontoID)
+			if errors.Is(err, speicher.ErrNichtGefunden) != fall.geloescht {
+				t.Errorf("Backup ohne Konto: Fehler %v; gelöscht erwartet: %v", err, fall.geloescht)
+			}
+			lt.erwarteAnnaUnberuehrt(t)
+		})
+	}
+}
+
+// bekanntFehlerSpeicher scheitert bei KontoBekannt, sonst wie der Arbeitsspeicher.
+type bekanntFehlerSpeicher struct{ *speicher.Arbeitsspeicher }
+
+func (bekanntFehlerSpeicher) KontoBekannt(context.Context, string) (bool, error) {
+	return false, errors.New("Firestore gestört")
+}
+
+// KRITISCH: Lässt sich nicht prüfen, ob es das Konto gibt, löscht der Lauf
+// nichts (auch nicht Annas Daten) und meldet den Fehler.
+func TestLaufLoeschtOhnePruefungNichts(t *testing.T) {
+	lt := neuerLoeschTest(t)
+	loescher := NeuerLoescher(bekanntFehlerSpeicher{lt.speicher}, lt.ablage, lt.diagnosen)
+	e, err := loescher.Aufraeumen(context.Background(), start.Add(2*time.Hour))
+	if err == nil || e.Verwaist != 0 {
+		t.Fatalf("Lauf = %+v, Fehler %v; erwartet nichts gelöscht und einen Fehler", e, err)
+	}
+	lt.erwarteAnnaUnberuehrt(t)
+	if f, err := lt.ablage.Fassungen(context.Background(), lt.k.kontoID); err != nil || len(f) == 0 {
+		t.Errorf("Kevins Sicherung = %v, Fehler %v; erwartet unberührt", f, err)
+	}
+}

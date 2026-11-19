@@ -8,7 +8,8 @@ selbst kann, ist der Normalweg; die Abläufe hier sind für alles andere.
   um zwei Monate verlängerbar, mit Begründung innerhalb des ersten Monats.
 - **Kostenlos.**
 - **Identität:** Der Server kennt weder Namen noch E-Mail-Adresse. Eine Anfrage lässt
-  sich nur über die **Konto-ID** zuordnen, die die App anzeigen muss (**offen**, App),
+  sich nur über die **Konto-ID** zuordnen, die die App unter *Einstellungen → Cloud-Backup (experimentell)*
+  zum Kopieren anzeigt (ab V1.3c2, sobald das Gerät eingerichtet ist),
   oder über die Kennung, falls die Person auf der Freigabeliste steht. Zweifel an der
   Identität: zusätzliche Bestätigung über die App verlangen (Art. 12 Abs. 6). Wer
   weder App noch Google-Konto hat, lässt sich nicht zuordnen (Art. 11 Abs. 2); das
@@ -38,9 +39,9 @@ Der Server speichert keine Angaben, die falsch sein können (nur Zufalls-IDs,
 Zeitpunkte, Chiffrate). Inhalte berichtigt die Person in der App.
 
 ## Löschung (Art. 17)
-- **Normalweg:** *Konto löschen* in der App (**offen**, App). Von einem
+- **Normalweg:** *Konto löschen* in der App (V1.3c2, noch nicht installiert). Von einem
   freigeschalteten Gerät sofort, sonst nach 7 Tagen Wartezeit (B1 in Kap. 3.5).
-  *Cloud-Daten löschen* löscht nur die Datensicherung.
+  *Sicherung löschen* löscht nur die Datensicherung.
 - **Von Hand** (z. B. App nicht mehr installiert, Person aber per Google-Konto
   zuordenbar): Termin in `konten/<id>` setzen (`loeschen_ab` = jetzt) und den Job
   `aufraeumen` starten (`gcloud run jobs execute aufraeumen --region=europe-west1`).

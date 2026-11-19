@@ -668,3 +668,136 @@ func TestAnmeldenUnterscheidetGoogleStoerungVonAblehnung(t *testing.T) {
 		})
 	}
 }
+
+// geraeteAusfall lässt Geraete und GeraetSperren scheitern, solange ausfall
+// gesetzt ist; alles andere (auch die Sitzungsprüfung) geht an den Speicher.
+type geraeteAusfall struct {
+	speicher.Speicher
+	ausfall bool
+}
+
+var errFirestoreWeg = errors.New("Firestore: Verbindung zu 10.1.2.3 abgebrochen")
+
+func (g *geraeteAusfall) Geraete(ctx context.Context, kontoID string) ([]speicher.Geraet, error) {
+	if g.ausfall {
+		return nil, errFirestoreWeg
+	}
+	return g.Speicher.Geraete(ctx, kontoID)
+}
+
+func (g *geraeteAusfall) GeraetSperren(ctx context.Context, kontoID, geraetID string, jetzt time.Time) error {
+	if g.ausfall {
+		return errFirestoreWeg
+	}
+	return g.Speicher.GeraetSperren(ctx, kontoID, geraetID, jetzt)
+}
+
+// Fällt der Speicher aus, melden Auflisten und Sperren „nicht verfügbar“ – nicht
+// Erfolg, nicht „nicht gefunden“ (die App hielte das Gerät sonst für gesperrt
+// bzw. gelöscht) – und verraten keine Einzelheiten des Speichers.
+// Gegenprobe: derselbe Aufruf ohne Ausfall gelingt.
+func TestGeraeteDienstMeldetSpeicherausfall(t *testing.T) {
+	faelle := []struct {
+		name    string
+		sperren bool
+		ausfall bool
+	}{
+		{"Auflisten gelingt ohne Ausfall", false, false},
+		{"Auflisten meldet Ausfall als nicht verfügbar", false, true},
+		{"Sperren gelingt ohne Ausfall", true, false},
+		{"Sperren meldet Ausfall als nicht verfügbar", true, true},
+	}
+	for _, fall := range faelle {
+		t.Run(fall.name, func(t *testing.T) {
+			spion := &geraeteAusfall{}
+			ts := neuerTestServerMit(t, datensicherung.NeuerArbeitsspeicher(), 0, func(k *Konfiguration) {
+				spion.Speicher = k.Speicher
+				k.Speicher = spion
+			})
+			ctx := context.Background()
+			handy := testhilfe.NeuesGeraet(t)
+			token := ts.anmelden(t, "google-kevin", handy).Sitzung.Token
+
+			spion.ausfall = fall.ausfall
+			var err error
+			if fall.sperren {
+				_, err = ts.geraete.GeraetSperren(ctx, mitSitzung(&v1.GeraetSperrenRequest{GeraetId: handy.ID()}, token))
+			} else {
+				_, err = ts.geraete.GeraeteAuflisten(ctx, mitSitzung(&v1.GeraeteAuflistenRequest{}, token))
+			}
+			spion.ausfall = false
+
+			if !fall.ausfall {
+				if err != nil {
+					t.Fatalf("unerwarteter Fehler: %v", err)
+				}
+				return
+			}
+			erwarteCode(t, err, connect.CodeUnavailable)
+			if strings.Contains(err.Error(), "10.1.2.3") || strings.Contains(err.Error(), "Firestore") {
+				t.Errorf("Antwort verrät den Speicher: %v", err)
+			}
+			// Das Sperren ist nicht passiert: Die Sitzung gilt weiter.
+			if _, err := ts.geraete.GeraeteAuflisten(ctx, mitSitzung(&v1.GeraeteAuflistenRequest{}, token)); err != nil {
+				t.Errorf("nach dem Ausfall: %v", err)
+			}
+		})
+	}
+}
+
+// geraetLeseSpion zählt, wie oft ein Gerät gelesen wird.
+type geraetLeseSpion struct {
+	speicher.Speicher
+	gelesen int
+}
+
+func (s *geraetLeseSpion) Geraet(ctx context.Context, geraetID string) (speicher.Geraet, error) {
+	s.gelesen++
+	return s.Speicher.Geraet(ctx, geraetID)
+}
+
+// KRITISCH (ID8, Review-Lauf 11): Ein Erneuern mit falschem Zeitpunkt wird
+// abgelehnt, ohne dass der Server Firestore liest. Gegenprobe: Mit passendem
+// Zeitpunkt wird gelesen, auch für ein unbekanntes Gerät.
+func TestErneuernMitFalschemZeitpunktLiestNichts(t *testing.T) {
+	faelle := []struct {
+		name     string
+		bekannt  bool
+		abstand  time.Duration // Zeitpunkt der Anfrage minus Serverzeit
+		wantCode connect.Code  // 0 = erneuert
+		liest    bool
+	}{
+		{"passender Zeitpunkt: liest und erneuert", true, 0, 0, true},
+		{"unbekanntes Gerät mit passendem Zeitpunkt: liest und lehnt ab", false, 0, connect.CodeUnauthenticated, true},
+		{"alter Zeitpunkt: lehnt ohne Lesen ab", true, -3 * time.Minute, connect.CodeUnauthenticated, false},
+		{"Zeitpunkt in der Zukunft: lehnt ohne Lesen ab", true, 3 * time.Minute, connect.CodeUnauthenticated, false},
+		{"unbekanntes Gerät mit altem Zeitpunkt: lehnt ohne Lesen ab", false, -3 * time.Minute, connect.CodeUnauthenticated, false},
+	}
+	for _, fall := range faelle {
+		t.Run(fall.name, func(t *testing.T) {
+			spion := &geraetLeseSpion{}
+			ts := neuerTestServerMit(t, datensicherung.NeuerArbeitsspeicher(), 0, func(k *Konfiguration) {
+				spion.Speicher = k.Speicher
+				k.Speicher = spion
+			})
+			handy := testhilfe.NeuesGeraet(t)
+			if fall.bekannt {
+				ts.anmelden(t, "google-kevin", handy)
+			}
+			spion.gelesen = 0
+
+			_, err := ts.anmelde.SitzungErneuern(context.Background(), connect.NewRequest(ts.erneuerAnfrage(t, handy, ts.jetzt.Add(fall.abstand))))
+
+			if fall.wantCode == 0 {
+				if err != nil {
+					t.Fatalf("unerwarteter Fehler: %v", err)
+				}
+			} else {
+				erwarteCode(t, err, fall.wantCode)
+			}
+			if (spion.gelesen > 0) != fall.liest {
+				t.Errorf("Gerät %d-mal gelesen, erwartet gelesen = %v", spion.gelesen, fall.liest)
+			}
+		})
+	}
+}

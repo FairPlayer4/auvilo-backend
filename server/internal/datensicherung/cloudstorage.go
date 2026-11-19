@@ -8,6 +8,8 @@ import (
 	"io"
 	"net/http"
 	"slices"
+	"strings"
+	"time"
 
 	"cloud.google.com/go/storage"
 	"google.golang.org/api/googleapi"
@@ -43,7 +45,10 @@ func NeuesCloudStorage(c *storage.Client, bucket string) *CloudStorage {
 }
 
 // objektname: Die Konto-ID ist ein Pseudonym (128 Bit Zufall), kein Name und keine E-Mail.
-func objektname(kontoID string) string { return "sicherung/" + kontoID }
+func objektname(kontoID string) string { return praefix + kontoID }
+
+// praefix steht vor jedem Objektnamen der Ablage.
+const praefix = "sicherung/"
 
 func (c *CloudStorage) Speichern(ctx context.Context, kontoID string, chiffrat []byte, erwartet int64) (int64, error) {
 	if kontoID == "" {
@@ -166,4 +171,34 @@ func uebersetze(err error) error {
 		return ErrVersionVeraltet
 	}
 	return err
+}
+
+// Konten liest dafür alle Objekte der Ablage mit allen Generationen, aber nur
+// Name und Zeitpunkt (eine Liste-Anfrage je 1000 Objekte).
+func (c *CloudStorage) Konten(ctx context.Context, vor time.Time) ([]string, error) {
+	q := &storage.Query{Prefix: praefix, Versions: true}
+	if err := q.SetAttrSelection([]string{"Name", "Created"}); err != nil {
+		return nil, err
+	}
+	gesehen := map[string]bool{}
+	ids := []string{}
+	it := c.bucket.Objects(ctx, q)
+	for {
+		attrs, err := it.Next()
+		if errors.Is(err, iterator.Done) {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		id := strings.TrimPrefix(attrs.Name, praefix)
+		// Nur Namen, wie objektname sie bildet; alles andere gehört keinem Konto.
+		if id == "" || strings.Contains(id, "/") || gesehen[id] || !attrs.Created.Before(vor) {
+			continue
+		}
+		gesehen[id] = true
+		ids = append(ids, id)
+	}
+	slices.Sort(ids)
+	return ids, nil
 }

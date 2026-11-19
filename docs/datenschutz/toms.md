@@ -56,8 +56,8 @@ Nutzer“). Einzelheiten stehen in den verlinkten Entwürfen und im Code (`// KR
 - Löschschutz für Firestore, Dienst und Bucket gegen `tofu destroy`.
 
 ## Wiederherstellbarkeit (lit. c)
-- Ältere Fassungen der Datensicherung 7 Tage; Wiederherstellungsschlüssel auf Papier
-  (Standard) für neue Geräte; lokales Backup der App unabhängig vom Server.
+- Ältere Fassungen der Datensicherung 7 Tage; Wiederherstellungsschlüssel im
+  Ende-zu-Ende-verschlüsselten Passwortmanager (Hauptweg) oder auf Papier für neue Geräte; lokales Backup der App unabhängig vom Server.
 - Infrastruktur vollständig in OpenTofu, Zustand versioniert.
 - **Offen:** Offline-Kopie des neuen Pfeffers (Sicherheitsphase); Wiederherstellung des
   Pfeffers einmal durchspielen (Kap. 11, 2026-11-07).
@@ -69,7 +69,10 @@ Nutzer“). Einzelheiten stehen in den verlinkten Entwürfen und im Code (`// KR
 - Fristen aus P5 im täglichen Lauf: Konten nach 24 Monaten ohne Anmeldung oder
   Erneuerung (Termin in 7 Tagen, dann der Löschweg), gesperrte Geräte nach 90 Tagen
   (Grabstein). Tests im Vertragstest des Speichers und in `dienst/aufraeumen_test.go`.
-- **Offen:** Konto löschen in der App ([README.md](README.md), K1).
+- Datensicherungen und Schlüssel-Backups ohne Konto (eine Anfrage, die kurz vor dem
+  Löschen angenommen war) löscht der tägliche Lauf, sobald sie älter als eine Stunde
+  sind (seit 2026-11-19).
+- Konto löschen in der App: umgesetzt in V1.3c2 (App-Branch `feature/konto-loeschen`, 2026-11-14), noch nicht installiert ([README.md](README.md), K1).
 
 ## Überprüfung und Organisation (lit. d)
 - Lokales Prüfskript wie die CI (`werkzeuge/pruefen.sh`), CI auf `main`, Tests in der
@@ -79,7 +82,7 @@ Nutzer“). Einzelheiten stehen in den verlinkten Entwürfen und im Code (`// KR
 - Regeln für KI-Werkzeuge: Claude liest keine Geheimnisse und keine Daten anderer
   Nutzer (`CLAUDE.md`, ab der Sicherheitsphase streng).
 - Ablauf bei Datenpannen: [datenpannen.md](datenpannen.md).
-- **Offen:** Bestätigung zerstörerischer Aktionen mit der Displaysperre (SE5).
+- *Konto löschen* und *Sicherung löschen* erst nach der Displaysperre (SE5, umgesetzt in der App V1.3c2 (2026-11-15, noch nicht installiert)).
 
 ## Bekannte Grenzen
 - **Metadaten:** Größe und Zeitpunkt der Sicherungen zeigen, wie viel jemand die App
@@ -88,5 +91,6 @@ Nutzer“). Einzelheiten stehen in den verlinkten Entwürfen und im Code (`// KR
   (B4) mit. Betrifft erst B3.
 - **Passwortdienst:** Liegt der Wiederherstellungsschlüssel ohne geräteinterne
   Verschlüsselung im Passwortmanager, kann ein Angreifer mit dem Google-Konto alles
-  entschlüsseln. Deshalb ist Papier der Standard.
+  entschlüsseln. Deshalb sagt die App das vor dem Speichern und rät, den Passwortmanager
+  selbst mit seinem Wiederherstellungscode auf Papier zu schützen (A-15, App V1.3c3, 2026-11-15, noch nicht installiert).
 - **Admin-Audit-Log** liegt global (`_Required`), enthält aber nur Betreiberaktionen.

@@ -250,16 +250,27 @@ func TestInterceptor(t *testing.T) {
 
 	// starte baut einen kleinen Server mit einer offenen und einer geschützten
 	// Prozedur; die Prozeduren merken sich die Identität aus dem Kontext.
-	starte := func(t *testing.T, lesen SitzungLesen) (string, *Identitaet) {
+	// Mit stream sind es Streaming-Prozeduren (Server sendet mehrere Antworten):
+	// Heute gibt es keine, aber eine spätere soll genauso geschützt sein.
+	starte := func(t *testing.T, lesen SitzungLesen, stream bool) (string, *Identitaet) {
 		var gesehen Identitaet
 		merke := func(ctx context.Context, _ *connect.Request[emptypb.Empty]) (*connect.Response[emptypb.Empty], error) {
 			gesehen, _ = IdentitaetAus(ctx)
 			return connect.NewResponse(&emptypb.Empty{}), nil
 		}
+		merkeStream := func(ctx context.Context, _ *connect.Request[emptypb.Empty], st *connect.ServerStream[emptypb.Empty]) error {
+			gesehen, _ = IdentitaetAus(ctx)
+			return st.Send(&emptypb.Empty{})
+		}
 		i := NeuerInterceptor(lesen, testAussteller, []string{offen}, func() time.Time { return jetzt })
 		mux := http.NewServeMux()
-		mux.Handle(offen, connect.NewUnaryHandler(offen, merke, connect.WithInterceptors(i)))
-		mux.Handle(geschuetzt, connect.NewUnaryHandler(geschuetzt, merke, connect.WithInterceptors(i)))
+		for _, p := range []string{offen, geschuetzt} {
+			if stream {
+				mux.Handle(p, connect.NewServerStreamHandler(p, merkeStream, connect.WithInterceptors(i)))
+			} else {
+				mux.Handle(p, connect.NewUnaryHandler(p, merke, connect.WithInterceptors(i)))
+			}
+		}
 		srv := httptest.NewServer(mux)
 		t.Cleanup(srv.Close)
 		return srv.URL, &gesehen
@@ -291,31 +302,52 @@ func TestInterceptor(t *testing.T) {
 		{"lehnt Sitzung ohne Gerät ab", geraetFehlt, geschuetzt, "Bearer " + uebrig, connect.CodeUnauthenticated, ""},
 		{"meldet Ausfall beim Lesen des Geräts als nicht verfügbar", geraetAusfall, geschuetzt, "Bearer " + uebrig, connect.CodeUnavailable, ""},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			url, gesehen := starte(t, tt.lesen)
-			client := connect.NewClient[emptypb.Empty, emptypb.Empty](http.DefaultClient, url+tt.prozedur)
-			req := connect.NewRequest(&emptypb.Empty{})
-			if tt.kopf != "" {
-				req.Header().Set("Authorization", tt.kopf)
-			}
+	// rufe ruft einmal auf, einfach oder als Stream, und liefert den Fehler.
+	rufe := func(client *connect.Client[emptypb.Empty, emptypb.Empty], req *connect.Request[emptypb.Empty], stream bool) error {
+		if !stream {
 			_, err := client.CallUnary(ctx, req)
-			if tt.wantCode == 0 {
-				if err != nil {
-					t.Fatalf("unerwarteter Fehler: %v", err)
+			return err
+		}
+		st, err := client.CallServerStream(ctx, req)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = st.Close() }()
+		for st.Receive() {
+		}
+		return st.Err()
+	}
+	for _, stream := range []bool{false, true} {
+		art := "einfach"
+		if stream {
+			art = "Stream"
+		}
+		for _, tt := range tests {
+			t.Run(art+"/"+tt.name, func(t *testing.T) {
+				url, gesehen := starte(t, tt.lesen, stream)
+				client := connect.NewClient[emptypb.Empty, emptypb.Empty](http.DefaultClient, url+tt.prozedur)
+				req := connect.NewRequest(&emptypb.Empty{})
+				if tt.kopf != "" {
+					req.Header().Set("Authorization", tt.kopf)
 				}
-				if gesehen.KontoID != tt.wantKonto {
-					t.Errorf("Konto im Kontext = %q, erwartet %q", gesehen.KontoID, tt.wantKonto)
+				err := rufe(client, req, stream)
+				if tt.wantCode == 0 {
+					if err != nil {
+						t.Fatalf("unerwarteter Fehler: %v", err)
+					}
+					if gesehen.KontoID != tt.wantKonto {
+						t.Errorf("Konto im Kontext = %q, erwartet %q", gesehen.KontoID, tt.wantKonto)
+					}
+					return
 				}
-				return
-			}
-			if connect.CodeOf(err) != tt.wantCode {
-				t.Errorf("Code = %v (%v), erwartet %v", connect.CodeOf(err), err, tt.wantCode)
-			}
-			if *gesehen != (Identitaet{}) {
-				t.Error("Prozedur wurde trotz Ablehnung ausgeführt")
-			}
-		})
+				if connect.CodeOf(err) != tt.wantCode {
+					t.Errorf("Code = %v (%v), erwartet %v", connect.CodeOf(err), err, tt.wantCode)
+				}
+				if *gesehen != (Identitaet{}) {
+					t.Error("Prozedur wurde trotz Ablehnung ausgeführt")
+				}
+			})
+		}
 	}
 }
 
