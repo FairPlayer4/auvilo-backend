@@ -131,8 +131,9 @@ Einzelheiten stehen in den Entwürfen, in git und in den Review-Berichten
 | B2b | Daten-Backup einer Person: Datensicherung in Cloud Storage, Freischaltung neuer Geräte (E-B2b-13), Tageslimits, Fassungen (R-4), Diagnose-Log ([b2b-entwurf.md](b2b-entwurf.md), [diagnose-entwurf.md](diagnose-entwurf.md)) | Server und Client fertig, zuletzt in der Cloud getestet am 2026-11-10 (Limits, Fassungen, Trennen ab 150 %); App-Einbindung: App-Repo `docs/stand.md` |
 | B3 | Teilen zwischen Personen | nicht begonnen; Vorgaben in [anforderungen.md](anforderungen.md) Kap. 4.6; davor die Sicherheitsphase |
 
-Letzter Deploy: PR #26 am 2026-11-14 (Fristen aus P5: `zuletzt_aktiv`, Grabsteine),
-Revision `server-00024-2gg`, bereit; der Job `aufraeumen` hat dasselbe Image.
+Letzter Deploy: PR #27 am 2026-11-19 (Review Lauf 11), Revision `server-00025-gh4`,
+bereit; der Job `aufraeumen` hat dasselbe Image, ein Lauf von Hand endete mit
+„Aufräumen beendet“ (`verwaist_geloescht=0`).
 
 ## Offen
 1. **Eigenbetrieb** seit 2026-11-07: Die App sichert Kevins echte Daten in der Cloud;
@@ -175,7 +176,7 @@ Revision `server-00024-2gg`, bereit; der Job `aufraeumen` hat dasselbe Image.
    Test-Konto; der Test-Client wurde vorher wie erwartet abgelehnt und meldet sich danach an. Offen: die App
    zeigt die Kennung bei „nicht freigegeben“ an (App-Repo). Die Server-URL bleibt
    beim Zurücksetzen dieselbe.
-6. **Review Lauf 11 umgesetzt (2026-11-19, auf `develop`, noch nicht in `main`):**
+6. **Review Lauf 11 umgesetzt und deployt (2026-11-19, PR #27):**
    Konto löschen meldet gelöscht, sobald der Zugang weg ist, und der Client prüft
    nach einem Fehler per Erneuern; die Kennung kommt nicht mehr ins Log; der Lauf
    löscht Sicherungen und Schlüssel-Backups ohne Konto (älter als 1 h). Der
