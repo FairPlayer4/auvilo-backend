@@ -49,6 +49,7 @@ func neuerLoeschTest(t *testing.T) *loeschTest {
 	t.Helper()
 	ablage := &loeschAblage{Arbeitsspeicher: datensicherung.NeuerArbeitsspeicher()}
 	ts := neuerTestServerMit(t, ablage, 0)
+	ablage.Uhr = func() time.Time { return ts.jetzt } // Sicherungen zur Uhr des Servers
 	lt := &loeschTest{testServer: ts, ablage: ablage, loescher: NeuerLoescher(ts.speicher, ablage, ts.diagnosen)}
 	lt.k = ts.kontoMitNeuemGeraet(t)
 	ts.diagnoseKonten[lt.k.kontoID] = true

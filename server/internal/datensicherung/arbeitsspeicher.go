@@ -2,6 +2,7 @@ package datensicherung
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"sync"
 	"time"
@@ -15,6 +16,9 @@ type Arbeitsspeicher struct {
 	// fassungen je Konto, die älteste zuerst; die letzte ist die aktuelle.
 	fassungen  map[string][]gespeichert
 	generation int64
+	// Uhr liefert den Zeitpunkt des Speicherns (nil = time.Now). Tests stellen
+	// sie, um „vor einer Stunde gespeichert“ nachzubauen.
+	Uhr func() time.Time
 }
 
 type gespeichert struct {
@@ -48,7 +52,11 @@ func (a *Arbeitsspeicher) Speichern(_ context.Context, kontoID string, chiffrat 
 	// kein Test und kein Client mit "+ 1" rechnet.
 	a.generation += 7
 	f := Fassung{Chiffrat: append([]byte(nil), chiffrat...), Version: a.generation}
-	a.fassungen[kontoID] = append(a.fassungen[kontoID], gespeichert{f, time.Now()})
+	jetzt := time.Now()
+	if a.Uhr != nil {
+		jetzt = a.Uhr()
+	}
+	a.fassungen[kontoID] = append(a.fassungen[kontoID], gespeichert{f, jetzt})
 	return a.generation, nil
 }
 
@@ -77,8 +85,24 @@ func (a *Arbeitsspeicher) Fassungen(_ context.Context, kontoID string) ([]Fassun
 }
 
 func (a *Arbeitsspeicher) Loeschen(_ context.Context, kontoID string) error {
+	if kontoID == "" {
+		return errors.New("Konto-ID fehlt") // wie Cloud Storage
+	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	delete(a.fassungen, kontoID)
 	return nil
+}
+
+func (a *Arbeitsspeicher) Konten(_ context.Context, vor time.Time) ([]string, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	ids := []string{}
+	for id, liste := range a.fassungen {
+		if slices.ContainsFunc(liste, func(g gespeichert) bool { return g.zeit.Before(vor) }) {
+			ids = append(ids, id)
+		}
+	}
+	slices.Sort(ids)
+	return ids, nil
 }

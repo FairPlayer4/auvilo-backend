@@ -56,6 +56,9 @@ type loeschSpeicher interface {
 	InaktivesKontoVormerken(ctx context.Context, kontoID string, grenze, ab time.Time) (bool, error)
 	LangeGesperrteGeraete(ctx context.Context, grenze time.Time, max int) ([]string, error)
 	GeraetBegraben(ctx context.Context, geraetID string, grenze time.Time) error
+	KontoBekannt(ctx context.Context, kontoID string) (bool, error)
+	BackupKonten(ctx context.Context, vor time.Time) ([]string, error)
+	BackupLoeschen(ctx context.Context, kontoID string) error
 }
 
 // kontoSpeicher ist, was der Konto-Dienst vom Speicher braucht.
@@ -76,16 +79,23 @@ type kontoAblage interface {
 	Loeschen(ctx context.Context, kontoID string) error
 }
 
+// sicherungsAblage: Für die Sicherungen braucht der Lauf auch die Liste der
+// Konten (datensicherung.Ablage).
+type sicherungsAblage interface {
+	kontoAblage
+	Konten(ctx context.Context, vor time.Time) ([]string, error)
+}
+
 // Loescher löscht Konten mit fälligem Termin: im Konto-Dienst (sofort) und im
 // regelmäßigen Lauf (Aufraeumen).
 type Loescher struct {
 	speicher    loeschSpeicher
-	sicherungen kontoAblage
+	sicherungen sicherungsAblage
 	diagnosen   kontoAblage
 }
 
 // NeuerLoescher für den regelmäßigen Lauf (cmd/server, Unterbefehl aufraeumen).
-func NeuerLoescher(s speicher.Speicher, sicherungen, diagnosen kontoAblage) *Loescher {
+func NeuerLoescher(s speicher.Speicher, sicherungen sicherungsAblage, diagnosen kontoAblage) *Loescher {
 	return &Loescher{speicher: s, sicherungen: sicherungen, diagnosen: diagnosen}
 }
 
@@ -127,14 +137,24 @@ type AufraeumErgebnis struct {
 	Begraben   int // gesperrte Geräte, durch Grabsteine ersetzt
 	Vorgemerkt int // inaktive Konten, die einen Löschtermin bekommen haben
 	Geloescht  int // Konten mit erreichtem Termin, gelöscht
+	Verwaist   int // Sicherungen und Schlüssel-Backups ohne Konto, gelöscht
 }
 
-// Aufraeumen ist ein Durchgang des regelmäßigen Laufs, in drei Schritten:
+// FristVerwaist: So alt muss eine Sicherung oder ein Backup ohne Konto sein,
+// bevor der Lauf es löscht. Abstand zu einem Löschen, das gerade läuft, und zu
+// einer Anfrage, die kurz vor dem Sperren angenommen wurde.
+const FristVerwaist = time.Hour
+
+// Aufraeumen ist ein Durchgang des regelmäßigen Laufs, in vier Schritten:
 //  1. Geräte, die länger als FristGesperrt gesperrt sind, begraben.
 //  2. Konten, die länger als FristInaktivMonate inaktiv sind, zur Löschung
 //     vormerken (Termin in WartezeitLoeschung). Die Geräte sehen den Termin wie
 //     bei einem Antrag, und ein freigeschaltetes Gerät kann abbrechen.
 //  3. Alle Konten löschen, deren Termin erreicht ist.
+//  4. Sicherungen und Schlüssel-Backups löschen, die älter als FristVerwaist
+//     sind und deren Konto es nicht mehr gibt (speicher.KontoBekannt). So
+//     entstehen sie: Eine Anfrage, die vor dem Sperren angenommen war, kommt
+//     erst nach dem Löschen an (docs/b2b-entwurf.md, Grenzfälle).
 //
 // Scheitert ein Gerät oder Konto, macht jeder Schritt mit den übrigen weiter,
 // und auch die folgenden Schritte laufen; die Fehler kommen gesammelt zurück.
@@ -182,7 +202,46 @@ func (l *Loescher) Aufraeumen(ctx context.Context, jetzt time.Time) (AufraeumErg
 		return nil
 	})...)
 
+	vor := jetzt.Add(-FristVerwaist)
+	fehler = append(fehler, l.verwaisteLoeschen(ctx, "Datensicherung", func() ([]string, error) {
+		return l.sicherungen.Konten(ctx, vor)
+	}, l.sicherungen.Loeschen, &e.Verwaist)...)
+	fehler = append(fehler, l.verwaisteLoeschen(ctx, "Schlüssel-Backup", func() ([]string, error) {
+		return l.speicher.BackupKonten(ctx, vor)
+	}, l.speicher.BackupLoeschen, &e.Verwaist)...)
+
 	return e, errors.Join(fehler...)
+}
+
+// verwaisteLoeschen löscht mit loeschen, was zu Konten gehört, die holen nennt
+// und die es nicht mehr gibt, und zählt es in anzahl.
+//
+// KRITISCH: Nur bei KontoBekannt = false. Ein Fehler bei der Prüfung löscht
+// nichts; das Konto kommt im nächsten Lauf wieder dran.
+func (l *Loescher) verwaisteLoeschen(ctx context.Context, was string, holen func() ([]string, error),
+	loeschen func(ctx context.Context, kontoID string) error, anzahl *int) []error {
+	ids, err := holen()
+	if err != nil {
+		return []error{fmt.Errorf("%s ohne Konto suchen: %w", was, err)}
+	}
+	var fehler []error
+	for _, id := range ids {
+		bekannt, err := l.speicher.KontoBekannt(ctx, id)
+		if err != nil {
+			fehler = append(fehler, fmt.Errorf("Konto %s prüfen: %w", id, err))
+			continue
+		}
+		if bekannt {
+			continue
+		}
+		if err := loeschen(ctx, id); err != nil {
+			fehler = append(fehler, fmt.Errorf("%s ohne Konto %s löschen: %w", was, id, err))
+			continue
+		}
+		*anzahl++
+		slog.InfoContext(ctx, was+" ohne Konto gelöscht (Lauf)", "konto", id)
+	}
+	return fehler
 }
 
 // jeEinmal ruft tu für jede ID auf, die holen liefert, für jede höchstens

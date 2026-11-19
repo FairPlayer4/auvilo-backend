@@ -30,7 +30,8 @@ Geprüft: `server/internal/dienst/konto.go`, `server/internal/speicher/firestore
   Point-in-Time-Recovery noch Sicherungen: Gelöscht ist wirklich gelöscht (Art. 17).
   Aus Googles eigenen Systemen verschwindet es spätestens nach 180 Tagen (CDPA 6.1).
 - Bricht das Löschen ab, macht der tägliche Lauf weiter; kein halb gelöschtes Konto
-  ohne Termin.
+  ohne Termin. Kommt danach noch eine Sicherung oder ein Schlüssel-Backup an, löscht
+  der Lauf es nach einer Stunde (seit 2026-11-19).
 - Die 7 Tage Wartezeit bei einem Antrag ohne freigeschaltetes Gerät passen zu
   Art. 12 Abs. 3 (Frist ein Monat) und Abs. 6 (begründete Zweifel an der Identität:
   ein übernommenes Google-Konto). Die Datenschutzerklärung muss sie nennen.

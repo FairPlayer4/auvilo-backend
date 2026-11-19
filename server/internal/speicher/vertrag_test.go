@@ -894,6 +894,91 @@ func pruefeVertrag(t *testing.T, neu func(t *testing.T) Speicher) {
 		})
 	}
 
+	bekannt := func(t *testing.T, s Speicher, kontoID string) bool {
+		t.Helper()
+		ok, err := s.KontoBekannt(ctx, kontoID)
+		muss(t, err)
+		return ok
+	}
+	t.Run("Konto bekannt bis zum Entfernen, unbekannte ID nie", func(t *testing.T) {
+		s := neu(t)
+		a, b := bereiteZweiKontenVor(t, s)
+		if !bekannt(t, s, a) || !bekannt(t, s, b) {
+			t.Fatal("angemeldetes Konto unbekannt")
+		}
+		if bekannt(t, s, "gibt-es-nicht") {
+			t.Error("unbekannte ID gilt als bekannt")
+		}
+		muss(t, s.KontoSperren(ctx, a, t0))
+		if !bekannt(t, s, a) {
+			t.Error("gesperrtes Konto (Löschung läuft) gilt als unbekannt")
+		}
+		muss(t, s.KontoEntfernen(ctx, a, t0))
+		if bekannt(t, s, a) {
+			t.Error("entferntes Konto gilt als bekannt")
+		}
+		if !bekannt(t, s, b) {
+			t.Error("Konto b unbekannt")
+		}
+	})
+
+	// KRITISCH: Auch ohne Konto-Dokument ist ein Konto bekannt, solange etwas auf
+	// es zeigt; sonst löschte der Lauf seine Sicherung und sein Backup.
+	ohneKontoDokument := []struct {
+		name    string
+		vorher  func(t *testing.T, s Speicher, a string)
+		bekannt bool
+	}{
+		{"mit Kennung und Geräten", func(*testing.T, Speicher, string) {}, true},
+		{"nur mit Kennung", func(t *testing.T, s Speicher, a string) {
+			entferneGeraeteDokumente(t, s, a)
+		}, true},
+		{"nur mit gesperrten Geräten", func(t *testing.T, s Speicher, a string) {
+			muss(t, s.KontoSperren(ctx, a, t0))
+		}, true},
+		{"nur mit Grabsteinen", func(t *testing.T, s Speicher, a string) {
+			muss(t, s.KontoSperren(ctx, a, t0))
+			for _, g := range []string{"geraet-1", "geraet-2"} {
+				muss(t, s.GeraetBegraben(ctx, g, t0.Add(time.Millisecond)))
+			}
+		}, true},
+		{"ohne alles", func(t *testing.T, s Speicher, a string) {
+			muss(t, s.KontoEntfernen(ctx, a, t0))
+		}, false},
+	}
+	for _, fall := range ohneKontoDokument {
+		t.Run("Konto ohne Konto-Dokument "+fall.name, func(t *testing.T) {
+			s := neu(t)
+			a, _ := bereiteZweiKontenVor(t, s)
+			fall.vorher(t, s, a)
+			entferneKontoDokument(t, s, a)
+			if got := bekannt(t, s, a); got != fall.bekannt {
+				t.Errorf("bekannt = %v, erwartet %v", got, fall.bekannt)
+			}
+		})
+	}
+
+	t.Run("Backup-Konten: nur vor der Grenze geänderte, gelöschte nicht", func(t *testing.T) {
+		s := neu(t)
+		a, b := bereiteZweiKontenVor(t, s) // Backups von a und b zu t0
+		ids, err := s.BackupKonten(ctx, t0)
+		muss(t, err)
+		if len(ids) != 0 {
+			t.Errorf("vor t0 = %v, erwartet keine", ids)
+		}
+		ids, err = s.BackupKonten(ctx, t0.Add(time.Millisecond))
+		muss(t, err)
+		if want := sortiert(a, b); !slices.Equal(ids, want) {
+			t.Errorf("Backup-Konten = %v, erwartet %v", ids, want)
+		}
+		muss(t, s.BackupLoeschen(ctx, a))
+		ids, err = s.BackupKonten(ctx, t0.Add(time.Millisecond))
+		muss(t, err)
+		if !slices.Equal(ids, []string{b}) {
+			t.Errorf("nach dem Löschen = %v, erwartet [%s]", ids, b)
+		}
+	})
+
 	t.Run("Sperren und Entfernen eines gelöschten Kontos ist kein Fehler", func(t *testing.T) {
 		s := neu(t)
 		a, _ := bereiteZweiKontenVor(t, s)
@@ -1511,3 +1596,49 @@ const (
 	gleichzeitigRunden  = 5
 	gleichzeitigAufrufe = 8
 )
+
+// entferneKontoDokument löscht nur das Konto-Dokument, an der Schnittstelle
+// vorbei (wie bei einem Konto aus einem älteren Stand ohne Dokument).
+func entferneKontoDokument(t *testing.T, s Speicher, kontoID string) {
+	t.Helper()
+	switch s := s.(type) {
+	case *Arbeitsspeicher:
+		s.mu.Lock()
+		delete(s.konten, kontoID)
+		s.mu.Unlock()
+	case *Firestore:
+		if _, err := s.c.Collection(sammlungKonten).Doc(kontoID).Delete(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+	default:
+		t.Fatalf("unbekannter Speicher %T", s)
+	}
+}
+
+// entferneGeraeteDokumente löscht nur die Geräte des Kontos, an der
+// Schnittstelle vorbei.
+func entferneGeraeteDokumente(t *testing.T, s Speicher, kontoID string) {
+	t.Helper()
+	switch s := s.(type) {
+	case *Arbeitsspeicher:
+		s.mu.Lock()
+		for id, g := range s.geraete {
+			if g.KontoID == kontoID {
+				delete(s.geraete, id)
+			}
+		}
+		s.mu.Unlock()
+	case *Firestore:
+		if err := s.loescheAlle(context.Background(), s.c.Collection(sammlungGeraete).Where("konto_id", "==", kontoID)); err != nil {
+			t.Fatal(err)
+		}
+	default:
+		t.Fatalf("unbekannter Speicher %T", s)
+	}
+}
+
+// sortiert liefert die IDs sortiert (Konto-IDs sind zufällig).
+func sortiert(ids ...string) []string {
+	slices.Sort(ids)
+	return ids
+}

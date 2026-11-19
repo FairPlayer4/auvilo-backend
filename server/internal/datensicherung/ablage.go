@@ -55,6 +55,10 @@ type Ablage interface {
 	// die Ablage (Cloud Storage: Lebenszyklus des Buckets, infra/).
 	Fassungen(ctx context.Context, kontoID string) ([]FassungsInfo, error)
 	// Loeschen entfernt die Sicherung mit allen älteren Fassungen. Gibt es keine,
-	// ist das kein Fehler.
+	// ist das kein Fehler; eine leere Konto-ID ist einer.
 	Loeschen(ctx context.Context, kontoID string) error
+	// Konten listet jedes Konto, von dem es eine Fassung gibt, die vor vor
+	// gespeichert wurde, einmal und sortiert. Für den regelmäßigen Lauf: Er
+	// sucht darunter Sicherungen, deren Konto es nicht mehr gibt.
+	Konten(ctx context.Context, vor time.Time) ([]string, error)
 }

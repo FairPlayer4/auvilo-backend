@@ -120,7 +120,8 @@ Zugang könnte die App mit einem Fehler nichts mehr anfangen. Derselbe Lauf
 setzt die Fristen aus P5 um: Er ersetzt Geräte, die seit 90 Tagen gesperrt sind,
 durch einen Grabstein (Geräte-ID und Konto bleiben, die Sperre auch) und merkt
 Konten, die sich 24 Monate weder angemeldet noch eine Sitzung erneuert haben
-(`zuletzt_aktiv`), zur Löschung in 7 Tagen vor; dann löscht er sie wie oben. Deshalb lehnt `KontoLoeschenAbbrechen` ab dem Termin ab. Die App verwirft
+(`zuletzt_aktiv`), zur Löschung in 7 Tagen vor; dann löscht er sie wie oben. Zuletzt
+löscht er Sicherungen und Schlüssel-Backups ohne Konto (Grenzfälle unten). Deshalb lehnt `KontoLoeschenAbbrechen` ab dem Termin ab. Die App verwirft
 Sitzung, Geräteschlüssel und Schlüssel nur nach `geloescht = true`
 (`protokoll.KontoLoeschen`) oder wenn nach einem Fehler (z. B. verlorene Antwort)
 `SitzungErneuern` das Gerät als gesperrt oder unbekannt ablehnt; bei einem Antrag zeigt sie den Termin, den alle Geräte
@@ -361,8 +362,14 @@ nicht; sie werden beim Zurücksetzen vor dem ersten weiteren Nutzer ohnehin gel�
   `schluessel.proto`); ein Grabstein kommt, wenn Clients höhere Versionen nutzen.
 - **Konto löschen und ein laufender Upload.** Eine Datensicherung, die schon vor dem
   Sperren angenommen war, kann nach dem Löschen der Inhalte noch ankommen und bleibt
-  dann liegen, ohne Konto (nur Chiffrat). Selten (Millisekunden); ein Aufräumen
-  verwaister Objekte gehört zu den Fristen aus P5.
+  dann liegen, ohne Konto (nur Chiffrat). Selten (Millisekunden). Seit 2026-11-19
+  löscht der tägliche Lauf Datensicherungen und Schlüssel-Backups ohne Konto, sobald
+  sie älter als eine Stunde sind (Schritt 4 von `Aufraeumen`). „Ohne Konto“ heißt:
+  kein Konto-Dokument, keine Kennung, kein Gerät, kein Grabstein
+  (`speicher.KontoBekannt`). Dafür liest der Lauf täglich die Liste aller
+  Sicherungen (eine Anfrage je 1000 Objekte) und je Schlüssel-Backup einen Eintrag,
+  dazu ein Konto-Dokument je Konto; bei wenigen Nutzern im Freikontingent.
+  Diagnosen ohne Konto laufen nach 14 Tagen über die Lebenszyklusregel ab.
 - **Konto löschen und die Tageszähler.** Sie bleiben bis zu ihrem Ablauf (TTL,
   nach wenigen Tagen); sie enthalten nur Zahlen und in der Dokument-ID die
   Konto-ID, die Geräte-ID oder, beim Zähler für neue Geräte, die Kennung.
