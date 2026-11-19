@@ -114,13 +114,16 @@ in dieser Reihenfolge (`dienst.Loescher`):
    dem Termin.
 
 Jeder Schritt ist wiederholbar. Bricht einer ab, bleibt der Termin, und der
-regelmäßige Lauf (`server aufraeumen`, täglich) holt das Konto nach. Derselbe Lauf
+regelmäßige Lauf (`server aufraeumen`, täglich) holt das Konto nach. Ist Schritt 1
+gelungen, antwortet der Server trotzdem `geloescht = true` (seit 2026-11-19): Ohne
+Zugang könnte die App mit einem Fehler nichts mehr anfangen. Derselbe Lauf
 setzt die Fristen aus P5 um: Er ersetzt Geräte, die seit 90 Tagen gesperrt sind,
 durch einen Grabstein (Geräte-ID und Konto bleiben, die Sperre auch) und merkt
 Konten, die sich 24 Monate weder angemeldet noch eine Sitzung erneuert haben
 (`zuletzt_aktiv`), zur Löschung in 7 Tagen vor; dann löscht er sie wie oben. Deshalb lehnt `KontoLoeschenAbbrechen` ab dem Termin ab. Die App verwirft
 Sitzung, Geräteschlüssel und Schlüssel nur nach `geloescht = true`
-(`protokoll.KontoLoeschen`); bei einem Antrag zeigt sie den Termin, den alle Geräte
+(`protokoll.KontoLoeschen`) oder wenn nach einem Fehler (z. B. verlorene Antwort)
+`SitzungErneuern` das Gerät als gesperrt oder unbekannt ablehnt; bei einem Antrag zeigt sie den Termin, den alle Geräte
 in Anmelden, SitzungErneuern und GeraeteAuflisten sehen. Test-Client:
 `konto-loeschen`, `konto-loeschen-abbrechen`.
 

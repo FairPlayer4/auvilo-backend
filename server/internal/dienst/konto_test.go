@@ -298,13 +298,16 @@ func TestLaufLoeschtBeantragteKontenAmTermin(t *testing.T) {
 	lt.erwarteAnnaUnberuehrt(t)
 }
 
-// KRITISCH: Scheitert das Löschen mittendrin, ist der Zugang schon weg, das
-// Konto bleibt fällig, und der nächste Lauf löscht den Rest.
+// KRITISCH: Scheitert das Löschen nach dem Sperren, ist der Zugang schon weg,
+// die App bekommt „gelöscht“ (sie könnte sonst nichts mehr tun), das Konto
+// bleibt fällig, und der nächste Lauf löscht den Rest.
 func TestAbgebrochenesLoeschenHoltDerLaufNach(t *testing.T) {
 	lt := neuerLoeschTest(t)
 	lt.ablage.kaputt = true
-	_, err := lt.kontoLoeschen(lt.k.handySitzung)
-	erwarteCode(t, err, connect.CodeUnavailable)
+	res, err := lt.kontoLoeschen(lt.k.handySitzung)
+	if err != nil || !res.Geloescht {
+		t.Fatalf("KontoLoeschen mit kaputter Ablage = %+v, Fehler %v; erwartet gelöscht", res, err)
+	}
 	_, err = lt.geraete.GeraeteAuflisten(context.Background(), mitSitzung(&v1.GeraeteAuflistenRequest{}, lt.k.handySitzung))
 	erwarteCode(t, err, connect.CodeUnauthenticated)
 
@@ -362,4 +365,29 @@ func (a *kaputteAblageFuer) Loeschen(ctx context.Context, kontoID string) error 
 		return errors.New("Cloud Storage nicht erreichbar")
 	}
 	return a.loeschAblage.Loeschen(ctx, kontoID)
+}
+
+// sperrFehlerSpeicher scheitert bei KontoSperren, sonst wie der Arbeitsspeicher.
+type sperrFehlerSpeicher struct{ *speicher.Arbeitsspeicher }
+
+func (sperrFehlerSpeicher) KontoSperren(context.Context, string, time.Time) error {
+	return errors.New("Firestore gestört")
+}
+
+// Ablehnungsfall zu TestAbgebrochenesLoeschenHoltDerLaufNach: Scheitert schon
+// das Sperren, meldet der Server nicht „gelöscht“, sondern unavailable, und
+// der Zugang bleibt (die App fragt später wieder).
+func TestGescheitertesSperrenMeldetNichtGeloescht(t *testing.T) {
+	vorher := neuerTestServer(t)
+	k := vorher.kontoMitNeuemGeraet(t)
+	nachher := neuerTestServerMit(t, datensicherung.NeuerArbeitsspeicher(), 0,
+		func(c *Konfiguration) { c.Speicher = sperrFehlerSpeicher{vorher.speicher} })
+	res, err := nachher.kontoLoeschen(k.handySitzung)
+	if res != nil {
+		t.Errorf("Antwort = %+v, erwartet keine", res)
+	}
+	erwarteCode(t, err, connect.CodeUnavailable)
+	if _, err := nachher.geraete.GeraeteAuflisten(context.Background(), mitSitzung(&v1.GeraeteAuflistenRequest{}, k.handySitzung)); err != nil {
+		t.Errorf("Zugang weg nach gescheitertem Sperren: %v", err)
+	}
 }

@@ -93,27 +93,30 @@ func NeuerLoescher(s speicher.Speicher, sicherungen, diagnosen kontoAblage) *Loe
 //
 // KRITISCH: Die Reihenfolge sorgt dafür, dass ein Abbruch nie ein Konto ohne
 // Termin, aber mit Daten hinterlässt:
-//  1. Zugang abschneiden (Kennung, Sitzungen, Geräte gesperrt). Danach lädt
-//     niemand mehr etwas hoch.
+//  1. Zugang abschneiden (Kennung, Sitzungen, Geräte gesperrt). Danach nimmt
+//     der Server nichts mehr an; nur eine Anfrage, die schon vorher
+//     angenommen war, kann noch ankommen (der Lauf räumt sie als verwaist auf).
 //  2. Datensicherung (alle Fassungen) und Diagnosen löschen.
 //  3. Geräte, Schlüssel-Backup und zuletzt das Konto mit dem Termin entfernen.
 //
 // Bricht ein Schritt ab, findet der nächste Lauf das Konto über den Termin
-// wieder, und alle Schritte sind wiederholbar.
-func (l *Loescher) loeschen(ctx context.Context, kontoID string, jetzt time.Time) error {
+// wieder, und alle Schritte sind wiederholbar. gesperrt sagt, ob Schritt 1
+// gelungen ist: Dann ist das Konto für die App gelöscht, auch wenn err einen
+// späteren Schritt meldet.
+func (l *Loescher) loeschen(ctx context.Context, kontoID string, jetzt time.Time) (gesperrt bool, err error) {
 	if err := l.speicher.KontoSperren(ctx, kontoID, jetzt); err != nil {
-		return fmt.Errorf("Zugang sperren: %w", err)
+		return false, fmt.Errorf("Zugang sperren: %w", err)
 	}
 	if err := l.sicherungen.Loeschen(ctx, kontoID); err != nil {
-		return fmt.Errorf("Datensicherung löschen: %w", err)
+		return true, fmt.Errorf("Datensicherung löschen: %w", err)
 	}
 	if err := l.diagnosen.Loeschen(ctx, kontoID); err != nil {
-		return fmt.Errorf("Diagnosen löschen: %w", err)
+		return true, fmt.Errorf("Diagnosen löschen: %w", err)
 	}
 	if err := l.speicher.KontoEntfernen(ctx, kontoID, jetzt); err != nil {
-		return fmt.Errorf("Konto entfernen: %w", err)
+		return true, fmt.Errorf("Konto entfernen: %w", err)
 	}
-	return nil
+	return true, nil
 }
 
 // jeAbfrage: So viele Treffer holt Aufraeumen je Abfrage auf einmal.
@@ -171,7 +174,7 @@ func (l *Loescher) Aufraeumen(ctx context.Context, jetzt time.Time) (AufraeumErg
 	fehler = append(fehler, jeEinmal(func(max int) ([]string, error) {
 		return l.speicher.FaelligeLoeschungen(ctx, jetzt, max)
 	}, func(id string) error {
-		if err := l.loeschen(ctx, id, jetzt); err != nil {
+		if _, err := l.loeschen(ctx, id, jetzt); err != nil {
 			return fmt.Errorf("Konto %s: %w", id, err)
 		}
 		e.Geloescht++
@@ -256,8 +259,17 @@ func (d *kontoDienst) KontoLoeschen(ctx context.Context, _ *connect.Request[v1.K
 	}
 	// Ohne Abbruch, wenn die App die Verbindung schließt: Ein halb gelöschtes
 	// Konto wäre zwar sicher (der Lauf macht weiter), aber unnötig.
-	if err := d.loescher.loeschen(context.WithoutCancel(ctx), id.KontoID, jetzt); err != nil {
+	gesperrt, err := d.loescher.loeschen(context.WithoutCancel(ctx), id.KontoID, jetzt)
+	if !gesperrt {
 		return nil, speicherFehler(ctx, err)
+	}
+	// KRITISCH: Ist der Zugang weg, ist das Konto für die App gelöscht, auch
+	// wenn ein späterer Schritt scheitert. Sonst stünde die App mit einem
+	// Fehler da und könnte nichts mehr tun: Jede weitere Anfrage, auch ein
+	// zweites KontoLoeschen, endet mit unauthenticated. Den Rest löscht der
+	// regelmäßige Lauf über den Termin.
+	if err != nil {
+		slog.ErrorContext(ctx, "Konto gesperrt, Rest löscht der Lauf", "konto", id.KontoID, "fehler", err)
 	}
 	slog.InfoContext(ctx, "Konto gelöscht", "konto", id.KontoID, "geraet", id.GeraetID)
 	return connect.NewResponse(&v1.KontoLoeschenResponse{Geloescht: true}), nil
