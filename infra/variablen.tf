@@ -79,7 +79,7 @@ variable "schwelle_trennen" {
 variable "github_repo" {
   description = "GitHub-Repo, das per Workload Identity Federation deployen darf"
   type        = string
-  default     = "FairPlayer4/avlreminder-backend"
+  default     = "FairPlayer4/auvilo-backend"
 }
 
 # Die Zahl bleibt gleich, auch wenn das Repo umbenannt oder gelöscht und unter
@@ -88,7 +88,7 @@ variable "github_repo" {
 variable "github_repo_id" {
   description = "Numerische ID des GitHub-Repos (Prüfung bei Workload Identity Federation)"
   type        = string
-  default     = "1441701583"
+  default     = "1469341517"
 }
 
 # Client-IDs sind nicht geheim (sie stehen in jeder App). Der Desktop-Client

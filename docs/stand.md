@@ -21,7 +21,8 @@ Etappe **B0** ist angelegt (OpenTofu, `infra/`):
 - Logs gehen in den Bucket `logs-eu` (europe-west1, 30 Tage); der globale
   `_Default`-Bucket bekommt nichts mehr. `_Required` (Admin-Audit) bleibt global.
 - Workload Identity Federation für GitHub Actions (nur Repo
-  `FairPlayer4/avlreminder-backend`, nur Branch `main`), Dienstkonto `deploy` darf
+  `FairPlayer4/auvilo-backend` über die Repo-ID, nur Branch `main`; bis 2026-11-23
+  `FairPlayer4/avlreminder-backend`), Dienstkonto `deploy` darf
   Images ins Repo `container` hochladen und den Dienst `server` ändern (B1)
 Etappe **B1** ist angelegt (2026-11-01, `infra/server.tf`):
 - Cloud-Run-Dienst `server` (0–2 Instanzen, 256 MiB, CPU nur bei Anfragen),
@@ -173,9 +174,12 @@ bereit; der Job `aufraeumen` hat dasselbe Image, ein Lauf von Hand endete mit
 5. **Vor der Veröffentlichung des App-Repos** (App-Anf. 7.34, 2026-11-14): Zugang nur
    nach Freigabe über Kennungen (ID7) und Kostengrenzen gegen Angriffe (ID8) sind
    **umgesetzt und deployt (2026-11-14, PR #25)**. Freigegeben sind App- und
-   Test-Konto; der Test-Client wurde vorher wie erwartet abgelehnt und meldet sich danach an. Offen: die App
-   zeigt die Kennung bei „nicht freigegeben“ an (App-Repo). Die Server-URL bleibt
-   beim Zurücksetzen dieselbe.
+   Test-Konto; der Test-Client wurde vorher wie erwartet abgelehnt und meldet sich danach an. Die App
+   zeigt die Kennung bei „nicht freigegeben“ an. Die Server-URL bleibt
+   beim Zurücksetzen dieselbe. **Umzug 2026-11-23:** Backend unverändert in das neue Repo
+   `FairPlayer4/auvilo-backend`, App mit bereinigter Historie nach `FairPlayer4/auvilo`
+   (App-Anf. 7.34 OV5); CI wieder auf `develop` und bei PRs (OV6). Die alten Repos
+   bleiben privat als Archiv.
 6. **Review Lauf 11 umgesetzt und deployt (2026-11-19, PR #27):**
    Konto löschen meldet gelöscht, sobald der Zugang weg ist, und der Client prüft
    nach einem Fehler per Erneuern; die Kennung kommt nicht mehr ins Log; der Lauf

@@ -1,19 +1,24 @@
 # Prüft Go-Code, Kotlin-Client, Schnittstelle (proto) und OpenTofu-Konfiguration.
 # Braucht keinen Zugang zu GCP.
 #
-# Läuft nur auf main (Entscheidung 2026-11-13, GitHub-Minuten sparen, solange das
-# Repo privat ist). develop und PRs prüft werkzeuge/pruefen.sh lokal; vor einem
-# PR nach main "werkzeuge/pruefen.sh voll". Von Hand startbar für jeden Branch
-# (Reiter "Actions", z. B. für einen Dependabot-Branch).
-# Wird das Repo öffentlich, kosten die Läufe nichts mehr: dann wieder auf develop
-# und bei PRs prüfen.
+# Läuft auf main, develop und bei PRs (wieder seit dem öffentlichen Repo,
+# 2026-11-23; vorher nur main, um GitHub-Minuten zu sparen). Lokal prüft
+# werkzeuge/pruefen.sh dasselbe; vor einem PR nach main "werkzeuge/pruefen.sh voll".
+# PRs aus Forks laufen erst nach Freigabe (Einstellung "Require approval for all
+# external contributors") und haben weder Secrets noch Zugang zu GCP; deployt
+# wird nur nach einem Push auf main (deploy.yml).
 name: CI
 
 on:
   push:
-    branches: [main]
-    # Reine Doku-Merges brauchen keine Prüfung (und lösen damit auch keinen
+    branches: [main, develop]
+    # Reine Doku-Änderungen brauchen keine Prüfung (und lösen damit auch keinen
     # Deploy aus, der Server ist dann ohnehin unverändert).
+    paths-ignore:
+      - "docs/**"
+      - "**.md"
+  pull_request:
+    branches: [main, develop]
     paths-ignore:
       - "docs/**"
       - "**.md"
