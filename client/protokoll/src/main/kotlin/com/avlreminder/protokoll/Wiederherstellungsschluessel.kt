@@ -15,7 +15,8 @@ class UngueltigerWiederherstellungsschluessel(grund: String) : Exception(grund)
 
 /**
  * Wiederherstellungsschlüssel: 256 Bit Zufall, nur auf Papier (Anforderung ID4).
- * Er entschlüsselt das Schlüssel-Backup auf dem Server.
+ * Aus ihm werden per HKDF mit je eigenem Label der Schlüssel für das
+ * Schlüssel-Backup auf dem Server und der Freischaltschlüssel abgeleitet (SE6).
  *
  * Ein echter Schlüssel statt eines Passworts: Es braucht keine Schlüssel-
  * ableitung, und Raten ist aussichtslos (Entscheidung E-B2-3).
@@ -33,11 +34,25 @@ class Wiederherstellungsschluessel private constructor(private val bytes: ByteAr
             .chunked(4)
             .joinToString("-")
 
-    /** Verschlüsselung mit diesem Schlüssel (XChaCha20-Poly1305). */
-    internal fun aead(): Aead {
-        val schluessel = XChaCha20Poly1305Key.create(SecretBytes.copyFrom(bytes, InsecureSecretKeyAccess.get()))
-        return XChaCha20Poly1305Aead.create(schluessel)
-    }
+    /**
+     * Verschlüsselung des Schlüssel-Backups (Format v2, XChaCha20-Poly1305).
+     *
+     * KRITISCH: Ein Schlüssel, ein Zweck (SE6). Der AEAD-Schlüssel ist nicht der
+     * Wiederherstellungsschlüssel selbst, sondern HKDF-SHA256 mit eigenem Label,
+     * wie der Seed des Freischaltschlüssels. Die beiden haben so nichts
+     * gemeinsam, auch wenn später weitere Schlüssel dazukommen.
+     */
+    internal fun backupAead(): Aead = xchacha(ableiten(Zweck.BACKUPSCHLUESSEL))
+
+    /**
+     * Verschlüsselung im alten Format v1: der Wiederherstellungsschlüssel direkt
+     * als AEAD-Schlüssel. Nur zum Lesen alter Backups; fällt mit der
+     * Sicherheitsphase weg (Checkliste in b2b-entwurf.md).
+     */
+    internal fun backupAeadV1(): Aead = xchacha(bytes)
+
+    private fun xchacha(schluessel: ByteArray): Aead =
+        XChaCha20Poly1305Aead.create(XChaCha20Poly1305Key.create(SecretBytes.copyFrom(schluessel, InsecureSecretKeyAccess.get())))
 
     /**
      * Öffentlicher Freischaltschlüssel (Ed25519, 32 Bytes). Geht mit dem
@@ -59,8 +74,14 @@ class Wiederherstellungsschluessel private constructor(private val bytes: ByteAr
      * Seed des Ed25519-Schlüssels: HKDF-SHA256 ohne Salz mit eigenem Zweck, damit
      * er nichts mit dem Schlüssel für das Backup gemein hat.
      */
-    private fun freischaltSeed(): ByteArray =
-        Hkdf.computeHkdf("HMACSHA256", bytes, ByteArray(0), Zweck.FREISCHALTSCHLUESSEL.toByteArray(), SEED_LAENGE)
+    private fun freischaltSeed(): ByteArray = ableiten(Zweck.FREISCHALTSCHLUESSEL)
+
+    /**
+     * Leitet einen 32-Byte-Schlüssel für [zweck] ab: HKDF-SHA256, Salz leer
+     * (der Wiederherstellungsschlüssel ist schon voller Zufall), info = Zweck.
+     */
+    private fun ableiten(zweck: String): ByteArray =
+        Hkdf.computeHkdf("HMACSHA256", bytes, ByteArray(0), zweck.toByteArray(), ABGELEITET_LAENGE)
 
     // Nie den Schlüssel in Logs oder Fehlermeldungen.
     override fun toString() = "Wiederherstellungsschluessel(***)"
@@ -69,7 +90,7 @@ class Wiederherstellungsschluessel private constructor(private val bytes: ByteAr
         private const val LAENGE = 32 // Bytes = 256 Bit
         private const val SCHLUESSEL_ZEICHEN = 52 // 52 × 5 Bit = 260 Bit ≥ 256 Bit
         private const val PRUEF_ZEICHEN = 4 // 20 Bit aus SHA-256 des Schlüssels
-        private const val SEED_LAENGE = 32 // Ed25519
+        private const val ABGELEITET_LAENGE = 32 // Ed25519-Seed und XChaCha20-Schlüssel
 
         /** Die Bytes, die [signiereFreischaltung] signiert. */
         internal fun freischaltNachricht(geraetId: String): ByteArray = (Zweck.FREISCHALTEN + geraetId).toByteArray()

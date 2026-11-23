@@ -27,13 +27,29 @@
 
 Tink-Konfiguration: `TinkConfig2026`, ausdrücklich je Aufruf (keine globale Registry).
 
-## Schlüssel-Backup (`avlreminder/backup/v1`)
+## Schlüssel-Backup (`avlreminder/backup/v2`)
+Format v2 seit 2026-11-23 (SE6, [anforderungen.md](anforderungen.md)): Jeder Schlüssel
+aus dem Wiederherstellungsschlüssel ist per HKDF mit eigenem Label abgeleitet.
 - Klartext: `SchluesselBackup` ([backup.proto](../proto/avlreminder/inhalt/v1/backup.proto)):
   die drei Keysets mit privatem Teil.
-- Verschlüsselt: XChaCha20-Poly1305 mit dem Wiederherstellungsschlüssel.
+- Backup-Schlüssel: HKDF-SHA256(Wiederherstellungsschlüssel, Salz leer, info
+  `"avlreminder/backupschluessel/v2"`, 32 Bytes).
+- Verschlüsselt: XChaCha20-Poly1305 mit dem Backup-Schlüssel.
   Chiffrat = 24 Bytes Nonce ‖ Chiffretext ‖ 16 Bytes Tag (kein Tink-Präfix).
-- Zugehörige Daten: `"avlreminder/backup/v1\n" + konto_id` (UTF-8). Ein Backup passt
+- Zugehörige Daten: `"avlreminder/backup/v2\n" + konto_id` (UTF-8). Ein Backup passt
   so nur zu seinem Konto.
+- Ein Versionsbyte gibt es nicht: Beim Lesen entscheidet die Authentifizierung, welches
+  Format passt (erst v2, dann v1). Mischformen (v1-Schlüssel mit v2-Daten und umgekehrt)
+  gehen nicht auf.
+- Testvektoren: [backup-v2.json](../proto/testvektoren/backup-v2.json), derselbe
+  Schlüsselbund wie das v1-Backup in [inhalt.json](../proto/testvektoren/inhalt.json);
+  geprüft in `BackupV2TestvektorenTest`, die Ableitung dort unabhängig von Tink.
+
+**Altes Format v1** (`avlreminder/backup/v1`, bis 2026-11-23 geschrieben): der
+Wiederherstellungsschlüssel direkt als XChaCha20-Poly1305-Schlüssel, zugehörige Daten
+`"avlreminder/backup/v1\n" + konto_id`. Wird nur noch gelesen, damit Kevins Backup aus
+dem Eigenbetrieb aufgeht; der Rückfall fällt zu Beginn der Sicherheitsphase weg
+(Checkliste in [b2b-entwurf.md](b2b-entwurf.md)).
 - Auf dem Server: `SchluesselDienst` ([schluessel.proto](../proto/avlreminder/v1/schluessel.proto)),
   höchstens 16 KiB, mit Version, dazu der öffentliche Freischaltschlüssel.
 

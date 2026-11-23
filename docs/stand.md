@@ -145,7 +145,8 @@ bereit; der Job `aufraeumen` hat dasselbe Image, ein Lauf von Hand endete mit
    `CLAUDE.md`). Die Desktop-Client-ID des Test-Clients bleibt bis dahin.
    **Vorher fertig** (Sicherheits- und Datenschutzprüfung 2026-11-12, Liste dort):
    Konto löschen, Bestätigung mit der Displaysperre (beide in der App V1.3c2, noch
-   nicht installiert), Format v2 mit HKDF-Labels,
+   nicht installiert), Format v2 mit HKDF-Labels (in `protokoll` seit 2026-11-23, App
+   bekommt es mit dem nächsten backend-commit),
    A-15 neu in der App (App V1.3c3, 2026-11-15, noch nicht installiert), Dokumente. **Konto löschen:** Server und Client fertig
    (2026-11-12). Die Infrastruktur steht in `infra/aufraeumen.tf`
    (Cloud Run Job `aufraeumen`, täglich 4 Uhr per Cloud Scheduler, Rolle

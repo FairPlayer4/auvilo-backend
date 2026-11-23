@@ -99,6 +99,20 @@ internal object InhaltTestvektorenErzeuger {
         )
     }
 
+    /**
+     * Der Schlüsselbund aus dem v1-Backup in inhalt.json. Liest über den
+     * v1-Rückfall von [Schluesselbund.ausBackup]; fällt der mit der
+     * Sicherheitsphase weg, kommt der Bund aus backup-v2.json.
+     */
+    fun bundAusV1(verzeichnis: File): Schluesselbund {
+        val v = Json.decodeFromString<InhaltVektoren>(File(verzeichnis, "inhalt.json").readText())
+        return Schluesselbund.ausBackup(
+            Base64.getDecoder().decode(v.schluessel_backup_base64),
+            Wiederherstellungsschluessel.ausText(v.wiederherstellungsschluessel),
+            v.konto_id,
+        )
+    }
+
     /** Schreibt die Datei, aber nie über eine vorhandene. */
     fun schreiben(datei: File) {
         check(!datei.exists()) { "$datei gibt es schon - Testvektoren werden nie neu erzeugt" }

@@ -7,8 +7,20 @@ package com.avlreminder.protokoll
  * wie beim Geräteschlüssel (proto/avlreminder/v1/anmeldung.proto).
  */
 internal object Zweck {
-    /** Schlüssel-Backup, verschlüsselt mit dem Wiederherstellungsschlüssel; dahinter die Konto-ID. */
-    const val BACKUP = "avlreminder/backup/v1\n"
+    /**
+     * Schlüssel-Backup (Format v2), verschlüsselt mit dem aus dem
+     * Wiederherstellungsschlüssel abgeleiteten Backup-Schlüssel; dahinter die Konto-ID.
+     */
+    const val BACKUP = "avlreminder/backup/v2\n"
+
+    /**
+     * Schlüssel-Backup im alten Format v1: direkt mit dem Wiederherstellungsschlüssel
+     * verschlüsselt. Nur noch zum Lesen, bis zur Sicherheitsphase (SE6, b2b-entwurf.md).
+     */
+    const val BACKUP_V1 = "avlreminder/backup/v1\n"
+
+    /** HKDF-info: leitet aus dem Wiederherstellungsschlüssel den Backup-Schlüssel ab (Format v2, SE6). */
+    const val BACKUPSCHLUESSEL = "avlreminder/backupschluessel/v2"
 
     /** Datensicherung, verschlüsselt mit dem Tresorschlüssel; dahinter die Konto-ID. */
     const val DATENSICHERUNG = "avlreminder/datensicherung/v1\n"

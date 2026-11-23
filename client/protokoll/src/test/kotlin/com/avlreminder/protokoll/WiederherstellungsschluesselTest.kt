@@ -36,9 +36,9 @@ class WiederherstellungsschluesselTest {
 
     @Test
     fun `ein anderer Schlüssel entschlüsselt nicht`() {
-        val chiffrat = fest.aead().encrypt(byteArrayOf(1), byteArrayOf())
+        val chiffrat = fest.backupAead().encrypt(byteArrayOf(1), byteArrayOf())
         assertThrows<java.security.GeneralSecurityException> {
-            Wiederherstellungsschluessel.erzeugen().aead().decrypt(chiffrat, byteArrayOf())
+            Wiederherstellungsschluessel.erzeugen().backupAead().decrypt(chiffrat, byteArrayOf())
         }
     }
 
@@ -58,8 +58,8 @@ class WiederherstellungsschluesselTest {
         val gelesen = Wiederherstellungsschluessel.ausText(fall.eingabe(text))
         assertEquals(text, gelesen.alsText())
         // Derselbe Schlüssel heißt: Er entschlüsselt, was der Originalschlüssel verschlüsselt hat.
-        val chiffrat = fest.aead().encrypt(byteArrayOf(1, 2, 3), byteArrayOf())
-        assertArrayEquals(byteArrayOf(1, 2, 3), gelesen.aead().decrypt(chiffrat, byteArrayOf()))
+        val chiffrat = fest.backupAead().encrypt(byteArrayOf(1, 2, 3), byteArrayOf())
+        assertArrayEquals(byteArrayOf(1, 2, 3), gelesen.backupAead().decrypt(chiffrat, byteArrayOf()))
     }
 
     // Abgelehnt: Alles, was nicht genau dieser Schlüssel ist.

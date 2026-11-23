@@ -15,7 +15,9 @@ Nutzer“). Einzelheiten stehen in den verlinkten Entwürfen und im Code (`// KR
 - **Datenminimierung:** Konto mit Erstellungstag und Tag der letzten Aktivität statt
   Zeitpunkten; nach 90 Tagen Sperre bleibt vom Gerät nur ein Grabstein; Logs ohne Inhalte;
   Diagnose-Logger nimmt keine freien Zeichenketten an.
-- **Offen:** Format v2 mit HKDF-Labels (SE6).
+- **Ein Schlüssel, ein Zweck:** Backup-Schlüssel und Freischaltschlüssel sind per HKDF
+  mit eigenem Label aus dem Wiederherstellungsschlüssel abgeleitet (Format v2, SE6,
+  seit 2026-11-23).
 
 ## Vertraulichkeit (lit. b)
 - **Zugang zum Dienst:** nur Google-Konten auf der Freigabeliste (ID7); neue Geräte

@@ -46,7 +46,7 @@ mittel / hoch, **nach** den Maßnahmen aus [toms.md](toms.md).
 | R1 | Angriff auf Server oder Speicher legt Inhalte offen | E2E: Schlüssel nie auf dem Server; Server sieht nur Chiffrate | gering | gering (nur Metadaten) |
 | R2 | Übernahme des Google-Kontos | Neues Gerät braucht Freischaltung oder Wiederherstellungsschlüssel; Löschen ohne Freischaltung nur mit 7 Tagen Wartezeit, sichtbar auf allen Geräten | mittel | gering; **hoch**, wenn der Wiederherstellungsschlüssel ungeschützt im Passwortdienst liegt (daher vor dem Speichern der Hinweis auf Ende-zu-Ende-Verschlüsselung; A-15, App V1.3c3) |
 | R3 | Übernahme der Betreiberkonten (GCP, GitHub) | Krypto nur im Client: Ein manipulierter Server kann nichts entschlüsseln. Möglich: Daten löschen, Metadaten lesen, Dienst sperren | gering | mittel (Verfügbarkeit, Metadaten). GitHub mit Passkey seit 2026-11-14 |
-| R4 | Fehler in der Kryptografie | Tink statt Eigenbau, feste Testvektoren, Reviews, Format v2 (SE6, offen) | gering | hoch |
+| R4 | Fehler in der Kryptografie | Tink statt Eigenbau, feste Testvektoren, Reviews, Format v2 (SE6, 2026-11-23) | gering | hoch |
 | R5 | Metadaten verraten Nutzungsmuster (Größe, Zeitpunkt, IP-Adresse) | 30 Tage Logs, Zugriff nur Kevin, kein Profil | mittel | gering |
 | R6 | Datenverlust (Kill-Switch, Löschung durch Fremden mit entsperrtem Handy, Fehler) | lokal-first, ältere Fassungen 7 Tage, lokales Backup; Displaysperre vor dem Löschen (SE5, App V1.3c2) | mittel | mittel |
 | R7 | Daten bleiben unbegrenzt, wenn die Person ihr Google-Konto verliert | Frist 24 Monate ohne Anmeldung oder Erneuerung (P5, seit 2026-11-14): Termin in 7 Tagen, dann Löschung wie B1; gesperrte Geräte nach 90 Tagen nur noch als Grabstein | gering | gering (nur Chiffrate) |

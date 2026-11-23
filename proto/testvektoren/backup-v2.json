@@ -1,0 +1,9 @@
+{
+    "beschreibung": "Feste Testvektoren für das Schlüssel-Backup im Format v2 (docs/formate.md, SE6): derselbe Wegwerf-Schlüsselbund wie das v1-Backup in inhalt.json, verschlüsselt mit dem abgeleiteten Backup-Schlüssel. Keine echten Daten. Nie neu erzeugen.",
+    "konto_id": "testkonto-0123456789abcdef",
+    "wiederherstellungsschluessel": "EVP0-J73Z-5X7R-GV2Q-KZA9-NTSH-G71V-7SYQ-CAKA-2C6T-4SKS-CNFY-DHF0-7BQV",
+    "wiederherstellungsschluessel_hex": "76ec091c7f2f4f886c579fd49aeb3181c3b3e7d762a6a130da26679655fe6c5e",
+    "backupschluessel_hex": "56f7fb89cd56156b567e4a2768c61eab85264dcfb86f3117fbfd5ca22f5ee659",
+    "schluessel_backup_base64": "/iay3mTO+nW5vMki2K/D988u268D18QI25Z228+b2Ip472grUpwjg3YHf7w/dIT3aghDzhDA09JLxqUU1kba7jxd98u7jTyPpztLvErZnsNgVZ/VxlfF1elcuvBM/z0V8wLOo2jDLA+GHUqIzvNd8Pe8eyeyLCw1u59c2sEOfLg3DoLumQ0a6xK2f68kdS2mIUdnxmU7wmUPdEFgxn8CELvsheIQED7FpqGhkc2gojrutZYDhGbYqg7AjK6HXlluiCe96QSvNUotZ/tDnJfF4pL3yM75yj7fMt1u4dG2Qj02hZKa2iRcSLfB3jhGwu6ckabxB1uNQwGhANn+RD1eaNC+lnT4yhVI/yCDITqNcnhp82pDEL92JMgXGMJzdDVGWEWYPT+D+dY293VCCBV4EUsy21PQZ4ffD9F0WziAXwzuMvwlP9n3Qn8BubydbOVjB5XX/ow8OBUs6zbLOhkf5sgDXoqVZdbAXyFoIha4enjZuqZb3Gf8xq1LRhjXzu6hWsTpiBh0luHrPKiilj+Nk6Nz/pOM8w79k4AmEjDxX+8kaxmtgSn4LnpRbtTDQV8ITlUS8mvkA9GD4KprwzrhJDl3eYXSZqgTnHnurGptYL80dtoVif7zfrxVtbaBoF2Z",
+    "fingerabdruck": "GWZ6-0KJR-A05K-KY4M-DWZZ-T27G-H4"
+}

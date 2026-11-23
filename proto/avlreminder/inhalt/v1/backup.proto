@@ -7,8 +7,8 @@ package avlreminder.inhalt.v1;
 option java_multiple_files = true;
 option java_package = "com.avlreminder.protokoll.inhalt.v1";
 
-// Inhalt des Schlüssel-Backups, bevor es mit dem Wiederherstellungsschlüssel
-// verschlüsselt wird. Die Felder sind Tink-Keysets im Binärformat
+// Inhalt des Schlüssel-Backups, bevor es mit dem aus dem Wiederherstellungsschlüssel
+// abgeleiteten Backup-Schlüssel verschlüsselt wird (Format v2, docs/formate.md). Die Felder sind Tink-Keysets im Binärformat
 // (TinkProtoKeysetFormat), jeweils mit dem privaten Teil.
 message SchluesselBackup {
   // Personenschlüssel zum Entpacken (HPKE mit X25519): Andere verpacken

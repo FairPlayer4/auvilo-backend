@@ -45,8 +45,9 @@ Test-Client                                              Server
   |<------------------------------- neues_konto = true ----|
   | Personenschlüssel (X25519 + Ed25519) und
   | Tresorschlüssel erzeugen, Wiederherstellungsschlüssel
-  | erzeugen, Backup = AEAD(Wiederherstellungsschl., Keysets,
-  |               zugehörig: "avlreminder/backup/v1\n" + konto_id)
+  | erzeugen, Backup = AEAD(HKDF(Wiederherstellungsschl.), Keysets,
+  |               zugehörig: "avlreminder/backup/v2\n" + konto_id)
+  |               (Format v2 seit 2026-11-23, docs/formate.md)
   | Wiederherstellungsschlüssel anzeigen ("bitte ausdrucken"),
   | Bestätigung abwarten (sonst Abbruch, nichts gespeichert)
   | lokal ablegen: Keysets + offenes Backup

@@ -190,7 +190,9 @@ erster Tester, Veröffentlichung im Play Store.
 - **Bestätigung mit der Displaysperre** für *Konto löschen* und *Sicherung löschen* (SE5;
   *Cloud-Daten löschen* gibt es seit 2026-11-14 nicht mehr): umgesetzt in der App V1.3c2 (2026-11-15, noch nicht installiert).
 - **Format v2:** Schlüssel aus dem Wiederherstellungsschlüssel per HKDF mit eigenem
-  Label (SE6). Danach muss kein v1-Backup mehr gelesen werden.
+  Label (SE6). **Erledigt 2026-11-23** in `protokoll` ([formate.md](formate.md));
+  die App bekommt es mit dem nächsten Stand von `gradle/backend-commit.txt`, und der
+  muss installiert sein, bevor Punkt 5 unten das neue Backup anlegt.
 - **App A-15 neu:** Passwortmanager als Hauptweg, nur nach dem Hinweis (Ende-zu-Ende,
   Papiercode des Passwortmanagers), Papier als Ausweg (Kap. 11, 2026-11-15): App V1.3c3, 2026-11-15, noch nicht installiert.
 - **`DIAGNOSE_KONTEN`** enthält nach Punkt 5 nur Kevins neues Konto (P9).
@@ -239,6 +241,9 @@ gleich danach neu sichern. Checkliste:
    Kevin, auf Papier; kein Terminal, kein Screenshot, kein Gespräch mit Claude.
    Danach sofort sichern und einmal wiederherstellen (Probe). Einen alten
    Wiederherstellungsschlüssel im Passwortmanager löschen.
+   Danach den **v1-Rückfall entfernen** (SE6): `backupAeadV1`, `Zweck.BACKUP_V1` und
+   den zweiten Versuch in `Schluesselbund.ausBackup`; die v1-Tests werden zu
+   Ablehnungsfällen, und `InhaltTestvektorenTest` holt den Bund aus `backup-v2.json`.
 6. **Prüfen:** Ab jetzt meldet Claude, wenn eine Aufgabe einen der Werte bräuchte,
    statt ihn zu lesen. Die alten Claude-Gesprächsverläufe beider Repos löschen
    (`*.jsonl` unter `~/.claude/projects/E--src-avlreminder-backend` und

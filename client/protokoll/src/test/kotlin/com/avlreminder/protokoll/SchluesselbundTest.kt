@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
+import java.security.GeneralSecurityException
 
 class SchluesselbundTest {
 
@@ -101,9 +102,85 @@ class SchluesselbundTest {
             Ablehnung("lehnt ein leeres Backup ab") { _ -> Schluesselbund.ausBackup(byteArrayOf(), wh, KONTO) },
             Ablehnung("lehnt ein richtig verschlüsseltes Backup mit unsinnigem Inhalt ab") { _ ->
                 // Simuliert einen fehlerhaften Client: Verschlüsselung stimmt, Inhalt nicht.
-                val unsinn = wh.aead().encrypt(byteArrayOf(10, 3, 1, 2, 3), (Zweck.BACKUP + KONTO).toByteArray())
+                val unsinn = wh.backupAead().encrypt(byteArrayOf(10, 3, 1, 2, 3), V2_ZWECK + KONTO.toByteArray())
                 Schluesselbund.ausBackup(unsinn, wh, KONTO)
             },
         )
+
+        @JvmStatic
+        fun ablehnungenV1() = listOf(
+            Ablehnung("lehnt ein v1-Backup mit einem anderen Wiederherstellungsschlüssel ab") { c ->
+                Schluesselbund.ausBackup(c, Wiederherstellungsschluessel.erzeugen(), KONTO)
+            },
+            Ablehnung("lehnt das v1-Backup eines anderen Kontos ab") { c -> Schluesselbund.ausBackup(c, wh, "konto-b") },
+            Ablehnung("lehnt ein verändertes v1-Backup ab") { c -> Schluesselbund.ausBackup(c.kippe(c.size / 2), wh, KONTO) },
+        )
+
+        @JvmStatic
+        fun mischformen() = listOf(
+            Mischform("Schlüssel aus v1, zugehörige Daten aus v2") { bund ->
+                wh.backupAeadV1().encrypt(bund.geheimeBytes(), V2_ZWECK + KONTO.toByteArray())
+            },
+            Mischform("Schlüssel aus v2, zugehörige Daten aus v1") { bund ->
+                wh.backupAead().encrypt(bund.geheimeBytes(), V1_ZWECK + KONTO.toByteArray())
+            },
+            Mischform("Schlüssel aus v2, ohne Zweck in den zugehörigen Daten") { bund ->
+                wh.backupAead().encrypt(bund.geheimeBytes(), KONTO.toByteArray())
+            },
+        )
+
+        // Absichtlich ausgeschrieben statt Zweck.BACKUP: Ändert jemand die
+        // Präfixe, passen alte Backups nicht mehr, und diese Tests werden rot.
+        private val V1_ZWECK = "avlreminder/backup/v1\n".toByteArray()
+        private val V2_ZWECK = "avlreminder/backup/v2\n".toByteArray()
+
+        /** Ein Backup, wie es die Version vor Format v2 geschrieben hat. */
+        private fun v1Backup(bund: Schluesselbund): ByteArray =
+            wh.backupAeadV1().encrypt(bund.geheimeBytes(), V1_ZWECK + KONTO.toByteArray())
+    }
+
+    // KRITISCH: Format v2 (SE6). Neue Backups sind nie mehr direkt mit dem
+    // Wiederherstellungsschlüssel verschlüsselt, sondern mit dem abgeleiteten
+    // Backup-Schlüssel und dem Zweck v2.
+    @Test
+    fun `schreibt das Backup im Format v2`() {
+        val bund = Schluesselbund.erzeugen()
+        val chiffrat = bund.backupVerschluesseln(wh, KONTO)
+
+        assertArrayEquals(bund.geheimeBytes(), wh.backupAead().decrypt(chiffrat, V2_ZWECK + KONTO.toByteArray()))
+        for (zugehoerig in listOf(V1_ZWECK, V2_ZWECK)) {
+            assertThrows<GeneralSecurityException>("nicht mit dem Wiederherstellungsschlüssel direkt") {
+                wh.backupAeadV1().decrypt(chiffrat, zugehoerig + KONTO.toByteArray())
+            }
+        }
+    }
+
+    // Erlaubt bis zur Sicherheitsphase: Kevins vorhandenes Backup ist noch v1.
+    @Test
+    fun `liest ein Backup im alten Format v1`() {
+        val bund = Schluesselbund.erzeugen()
+        assertTrue(bund.gleicheSchluessel(Schluesselbund.ausBackup(v1Backup(bund), wh, KONTO)))
+    }
+
+    // KRITISCH: Für v1 gelten dieselben Ablehnungen wie für v2.
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("ablehnungenV1")
+    fun `lehnt v1-Backup ab`(fall: Ablehnung) {
+        val chiffrat = v1Backup(Schluesselbund.erzeugen())
+        assertThrows<EntschluesselnFehlgeschlagen> { fall.versuch(chiffrat) }
+    }
+
+    data class Mischform(val name: String, val verschluesseln: (Schluesselbund) -> ByteArray) {
+        override fun toString() = name
+    }
+
+    // KRITISCH: Ein Backup geht nur in genau einem Format auf, mit dessen
+    // Schlüssel und dessen Zweck. Sonst ließe sich ein Chiffrat in einen
+    // anderen Zusammenhang umdeuten.
+    @ParameterizedTest(name = "lehnt Mischform ab: {0}")
+    @MethodSource("mischformen")
+    fun `lehnt Mischformen aus v1 und v2 ab`(fall: Mischform) {
+        val chiffrat = fall.verschluesseln(Schluesselbund.erzeugen())
+        assertThrows<EntschluesselnFehlgeschlagen> { Schluesselbund.ausBackup(chiffrat, wh, KONTO) }
     }
 }

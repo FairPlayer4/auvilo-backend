@@ -73,9 +73,8 @@ Angaben, Entscheidung).
 7. **DSFA abschließen** ([dsfa.md](dsfa.md)): R7 ist mit K2 erledigt; Ergebnis
    bestätigen, sobald die App mit SE5 und A-15 installiert ist (V1.3c2, V1.3c3,
    2026-11-15).
-8. **TOMs nachziehen:** Format v2 (SE6); die Liste in [toms.md](toms.md) markiert es als
-   offen. Erledigt: GitHub mit Passkey (2026-11-14), Displaysperre (SE5, App V1.3c2,
-   2026-11-15).
+8. **TOMs nachziehen:** Erledigt: GitHub mit Passkey (2026-11-14), Displaysperre (SE5,
+   App V1.3c2, 2026-11-15), Format v2 (SE6, 2026-11-23, in [toms.md](toms.md)).
 9. **Kevin:** zuständige Aufsichtsbehörde in [datenpannen.md](datenpannen.md) eintragen.
 
 **Mit B3 bis B5:** Datenschutzerklärung, VVT und DSFA um Teilen (Mitglieder sehen
