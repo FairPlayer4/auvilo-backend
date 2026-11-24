@@ -71,7 +71,7 @@ jobs:
               google/cloud-sdk:591.0.0-emulators@sha256:9e5a9baf12623ab50709909aea09ea1328b6674a25a7787da38a168a6d0db309 \
               gcloud emulators firestore start --host-port=0.0.0.0:8086
           ' > "$RUNNER_TEMP/emulatoren.log" 2>&1 &
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: server/go.mod
           cache-dependency-path: server/go.sum
@@ -129,7 +129,7 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0 # buf breaking vergleicht mit dem vorherigen Stand von main
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: server/go.mod
           cache-dependency-path: |
@@ -265,7 +265,7 @@ jobs:
           persist-credentials: false
       - name: Gradle-Wrapper prüfen
         uses: gradle/actions/wrapper-validation@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
-      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+      - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
         with:
           distribution: microsoft # wie lokal (docs/entwicklungsumgebung.md)
           java-version: 21
