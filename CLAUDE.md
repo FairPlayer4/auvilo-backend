@@ -31,8 +31,8 @@ Kommunikation auf **Deutsch, mit ß**.
 - Tests prüfen Verhalten, nicht die geprüfte Konstante selbst (kein `VERSUCHE == 3`).
 - Lokal prüft `werkzeuge/pruefen.sh` (Git Bash, Docker) wie die CI; Go und OpenTofu
   laufen dort in Linux-Containern wie in der CI (Smart App Control blockierte sie früher
-  zeitweise, [entwicklungsumgebung.md](docs/entwicklungsumgebung.md)). actionlint
-  steckt in `pruefen.sh voll`.
+  zeitweise, [entwicklungsumgebung.md](docs/entwicklungsumgebung.md)). Es ist ein
+  Werkzeug, keine Pflicht (siehe Git).
 
 ## Zusammenarbeit
 - Kevin entwickelt die Anforderungen iterativ mit Claude: Feedback und Rückfragen geben,
@@ -92,9 +92,10 @@ Kommunikation auf **Deutsch, mit ß**.
   2026-11-15); ohne Bestätigung direkt auf `develop` arbeiten, in beiden Repos.
 - Commit-Nachrichten auf Deutsch.
 - Vor Commit/Push fragen, solange Kevin das nicht anders sagt (er schaut vorher drüber).
-- CI läuft auf `main`, `develop` und bei PRs (wieder seit dem öffentlichen Repo,
-  2026-11-23); PRs aus Forks erst nach Freigabe. Trotzdem vor jedem Push mit Code-Änderungen (Go, Kotlin,
-  Proto, OpenTofu, Skripte, CI) `werkzeuge/pruefen.sh` und vor einem PR nach `main`
-  (auch Dependabot-Branches) `werkzeuge/pruefen.sh voll`, beide grün. Reine Doku
-  (Markdown) braucht kein Prüfskript (Kevin, 2026-11-14). Bei kleinen Code-Änderungen
-  darf man abwägen, im Zweifel aber lieber einmal zu viel prüfen. Nach dem Merge die CI auf `main` ansehen; ist sie rot, folgt kein Deploy.
+- **Die CI ist die maßgebliche Prüfung** (Kevin, 2026-11-24): Sie läuft auf `main`,
+  `develop` und bei PRs (seit dem öffentlichen Repo kostenlos), PRs aus Forks erst nach
+  Freigabe. Nach jedem Push mit Code-Änderungen (Go, Kotlin, Proto, OpenTofu, Skripte,
+  CI) den Lauf abwarten; ist er rot, zuerst ihn reparieren. Ein PR nach `main` (auch
+  Dependabot) wird nur mit grüner PR-CI gemergt. `werkzeuge/pruefen.sh` ist nur noch
+  Werkzeug: einen roten Lauf nachstellen oder beim Arbeiten schneller prüfen. Reine Doku
+  startet keine CI. Nach dem Merge die CI auf `main` ansehen; ist sie rot, folgt kein Deploy.

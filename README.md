@@ -121,11 +121,15 @@ Voraussetzungen: Git Bash, Docker Desktop und ein JDK 21 (Details in
 Linux-Containern wie in der CI, Kotlin über den Gradle-Wrapper.
 
 ```bash
-werkzeuge/pruefen.sh        # vor jedem Push: Go-Tests mit Firestore-Emulator, Lint, Kotlin, OpenTofu
-werkzeuge/pruefen.sh voll   # vor jedem PR nach main: dazu Race-Detector, govulncheck, buf breaking,
+werkzeuge/pruefen.sh        # schnell: Go-Tests mit Firestore-Emulator, Lint, Kotlin, OpenTofu
+werkzeuge/pruefen.sh voll   # alles wie die CI: dazu Race-Detector, govulncheck, buf breaking,
                             # tofu test, Server-Image bauen und starten, actionlint
 cd client && ./gradlew check   # nur der Kotlin-Teil
 ```
+
+- **Maßgeblich ist die CI** ([ci.yml](.github/workflows/ci.yml)) auf `develop`, `main`
+  und bei Pull Requests. `pruefen.sh` prüft lokal dasselbe, um einen roten Lauf
+  nachzustellen oder schneller Rückmeldung zu bekommen.
 
 - **Tests sind die Spezifikation:** tabellengetrieben, mit deutschen Testfallnamen, zu
   jeder Erlaubnis ein Ablehnungsfall. Sicherheitskritischer Code ist mit `// KRITISCH:`

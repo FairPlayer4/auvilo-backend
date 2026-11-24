@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# Prüft das Repo lokal wie die CI (.github/workflows/ci.yml und der Image-Test aus
-# deploy.yml). Die CI läuft nur noch auf main (Entscheidung 2026-11-13); alles
-# davor muss dieses Skript abfangen.
+# Prüft das Repo lokal wie die CI (.github/workflows/ci.yml). Maßgeblich ist seit
+# 2026-11-24 die CI (läuft auf develop, main und bei PRs); dieses Skript ist ein
+# Werkzeug: einen roten CI-Lauf lokal nachstellen oder beim Arbeiten schneller
+# Rückmeldung bekommen als über einen Push. Pflicht ist es nicht mehr.
 #
 # Aufruf im Repo, in Git Bash (Docker Desktop muss laufen):
-#   werkzeuge/pruefen.sh          # = schnell, vor jedem Push
-#   werkzeuge/pruefen.sh voll     # vor jedem PR nach main und für Dependabot-Branches
+#   werkzeuge/pruefen.sh          # = schnell, etwa 35 s mit warmen Caches
+#   werkzeuge/pruefen.sh voll     # alles, was die CI prüft
 #
 # schnell: Go (server, infra/killswitch): gofmt, vet, Tests mit Firestore-Emulator
 #          und fake-gcs-server (Pflicht, nichts wird übersprungen), golangci-lint;

@@ -24,10 +24,11 @@ angegeben.
 - `gcloud components install …` verweigert im nicht-interaktiven Modus (Claude Code)
   das Update mit dem mitgelieferten Python. Abhilfe vorher in PowerShell:
   `$env:CLOUDSDK_PYTHON = (gcloud.cmd components copy-bundled-python).Trim()`
-- **Alles prüfen wie die CI:** `werkzeuge/pruefen.sh` (Git Bash, Docker Desktop muss
-  laufen), vor jedem Push; `werkzeuge/pruefen.sh voll` vor einem PR nach `main`. Die CI
-  läuft nur auf `main` (seit 2026-11-13). Was die Stufen prüfen, steht im Kopf des
-  Skripts. Go (gofmt, vet, Tests, golangci-lint, govulncheck) und OpenTofu laufen in
+- **Lokal prüfen wie die CI:** `werkzeuge/pruefen.sh` (Git Bash, Docker Desktop muss
+  laufen), `werkzeuge/pruefen.sh voll` für alles. Maßgeblich ist seit 2026-11-24 die
+  CI auf `develop`, `main` und bei PRs; das Skript ist ein Werkzeug, um einen roten Lauf
+  nachzustellen oder schneller Rückmeldung zu bekommen. Was die Stufen prüfen, steht im
+  Kopf des Skripts. Go (gofmt, vet, Tests, golangci-lint, govulncheck) und OpenTofu laufen in
   Linux-Containern mit Firestore-Emulator (`google/cloud-sdk:591.0.0-emulators`) und
   fake-gcs-server in einem eigenen Docker-Netz; Caches in den Volumes
   `avlreminder-gomod` und `avlreminder-cache`. Dauer mit warmen Caches: `schnell` etwa
@@ -55,8 +56,8 @@ angegeben.
   `BUF_SHA256` (die CI lädt das fertige Programm von der Release-Seite).
 - Emulator-Images (Firestore, fake-gcs-server) stehen mit Prüfsumme in `ci.yml` (Job
   `server`) und in `werkzeuge/pruefen.sh`; beim Aktualisieren beide Stellen ändern.
-- Nach Änderungen an `.github/workflows/` actionlint ausführen (steckt auch in
-  `pruefen.sh voll`, nicht in der CI), im Wurzelverzeichnis des Repos in Git Bash:
+- actionlint prüft die Workflows in der CI (Job `rest`) und in `pruefen.sh voll`.
+  Einzeln, im Wurzelverzeichnis des Repos in Git Bash:
   `MSYS_NO_PATHCONV=1 docker run --rm -v "$(pwd -W):/repo" -w /repo rhysd/actionlint:1.7.12 -no-color -oneline`
   (PowerShell: `docker run --rm -v "${PWD}:/repo" -w /repo rhysd/actionlint:1.7.12 -no-color -oneline`).
   Ohne Ausgabe und mit Exit-Code 0 ist alles in Ordnung.

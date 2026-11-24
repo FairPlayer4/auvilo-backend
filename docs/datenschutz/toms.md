@@ -77,7 +77,8 @@ Nutzer“). Einzelheiten stehen in den verlinkten Entwürfen und im Code (`// KR
 - Konto löschen in der App: umgesetzt in V1.3c2 (App-Branch `feature/konto-loeschen`, 2026-11-14), noch nicht installiert ([README.md](README.md), K1).
 
 ## Überprüfung und Organisation (lit. d)
-- Lokales Prüfskript wie die CI (`werkzeuge/pruefen.sh`), CI auf `main`, Tests in der
+- CI auf `develop`, `main` und bei PRs, nach `main` nur mit grüner CI; lokales
+  Prüfskript wie die CI (`werkzeuge/pruefen.sh`), Tests in der
   Cloud nach Änderungen an Löschen, Limits und Kill-Switch (`stand.md`).
 - Review-Läufe mit Gedächtnis (`.review/state.md`); Sicherheits- und
   Datenschutzprüfung 2026-11-12.

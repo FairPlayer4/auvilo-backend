@@ -2,8 +2,10 @@
 # Braucht keinen Zugang zu GCP.
 #
 # Läuft auf main, develop und bei PRs (wieder seit dem öffentlichen Repo,
-# 2026-11-23; vorher nur main, um GitHub-Minuten zu sparen). Lokal prüft
-# werkzeuge/pruefen.sh dasselbe; vor einem PR nach main "werkzeuge/pruefen.sh voll".
+# 2026-11-23; vorher nur main, um GitHub-Minuten zu sparen). Seit 2026-11-24 ist
+# diese CI die maßgebliche Prüfung: auf develop pushen und das Ergebnis abwarten,
+# nach main nur mit grüner PR-CI. werkzeuge/pruefen.sh prüft lokal dasselbe und
+# ist nur noch Werkzeug (Fehler nachstellen, schnelle Rückmeldung beim Arbeiten).
 # PRs aus Forks laufen erst nach Freigabe (Einstellung "Require approval for all
 # external contributors") und haben weder Secrets noch Zugang zu GCP; deployt
 # wird nur nach einem Push auf main (deploy.yml).
@@ -38,8 +40,8 @@ concurrency:
 # fremden Code umhängen). Die Version steht als Kommentar dahinter; Dependabot
 # schlägt Updates vor (.github/dependabot.yml).
 #
-# Das Server-Image baut erst der Deploy (deploy.yml) und prüft dort vor dem
-# Hochladen, dass es startet. Ein eigener Job hier kostete jedes Mal 3 Minuten.
+# Der Job "image" baut das Server-Image und prüft, dass es startet; der Deploy
+# (deploy.yml) baut es auf main noch einmal und prüft es vor dem Hochladen erneut.
 
 jobs:
   server:
@@ -107,10 +109,10 @@ jobs:
       - name: govulncheck
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
 
-  # Die kleinen Prüfungen in einem Job: GitHub rechnet jeden Job auf volle
-  # Minuten auf, einzeln kosteten Kill-Switch, Schnittstelle und OpenTofu je eine.
+  # Die kleinen Prüfungen in einem Job (aus der Zeit, als die Minuten zählten;
+  # einzeln wären sie kaum schneller, weil jeder Job Go neu einrichtet).
   rest:
-    name: Kill-Switch, Schnittstelle (buf), OpenTofu
+    name: Kill-Switch, Schnittstelle (buf), OpenTofu, Workflows
     runs-on: ubuntu-latest
     timeout-minutes: 15
     # Versionen wie lokal (werkzeuge/buf.sh liest sie hier aus). Andere Versionen der
@@ -175,9 +177,8 @@ jobs:
           git add -N ../server/gen # neue Dateien im Vergleich mitzählen
           git diff --exit-code -- ../server/gen
       # Inkompatible Änderungen (z. B. Feld umnummeriert) würden installierte Apps
-      # brechen. Verglichen wird mit dem Stand vor diesem Push auf main; von Hand
-      # gestartet mit main (auf main selbst mit dem Commit davor).
-      # Vor dem Merge prüft das lokal werkzeuge/pruefen.sh voll (gegen main).
+      # brechen. Verglichen wird bei einem Push mit dem Stand davor, bei einem PR
+      # und von Hand gestartet mit main (auf main selbst mit dem Commit davor).
       - name: "buf: Keine inkompatiblen Änderungen"
         working-directory: proto
         env:
@@ -221,6 +222,32 @@ jobs:
       - name: "OpenTofu: Tests (simulierte Provider, kein GCP-Zugang)"
         working-directory: infra
         run: tofu test
+
+      # --- Workflows ---
+      # actionlint prüft die Workflows samt eingebetteter Shell-Skripte (shellcheck).
+      # Image fest mit Prüfsumme; dieselbe Version wie in werkzeuge/pruefen.sh.
+      - name: actionlint
+        run: |
+          docker run --rm -v "$PWD:/repo:ro" -w /repo             rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667             -color
+
+  # Server-Image wie im Deploy bauen: Ohne Konfiguration muss das Programm mit genau
+  # dieser Meldung abbrechen. Das zeigt, dass die Datei im Image läuft (statisch,
+  # als Nicht-root), bevor ein Merge nach main den Deploy auslöst.
+  image:
+    name: Server-Image bauen und starten
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Bauen und starten
+        working-directory: server
+        run: |
+          docker build -t avlreminder-server:ci .
+          ausgabe=$(docker run --rm avlreminder-server:ci 2>&1 || true)
+          echo "$ausgabe"
+          grep -q "PROJEKT fehlt" <<< "$ausgabe"
 
   # Kotlin-Client (client/): Protokoll, Verbindung und Test-Client. Gradle kommt über
   # den Wrapper; dessen JAR wird vorher gegen die offiziellen Prüfsummen geprüft.

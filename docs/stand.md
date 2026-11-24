@@ -53,8 +53,9 @@ Etappe **B2b** ist angelegt (2026-11-03 bis 11-10):
 - Egress-Alarm (`infra/alarm.tf`: Mail bei mehr als 1 GiB in 23 Stunden) und
   Absenz-Alarm („Kill-Switch wird nicht mehr aufgerufen“, 23,5 h).
 - Deploy nur nach grüner CI auf `main` (WIF-Bedingung auf `deploy.yml`, seit 2026-11-10).
-  Seit 2026-11-13 läuft die CI nur noch auf `main` (ohne reine Doku-Merges); lokal
-  prüft `werkzeuge/pruefen.sh`. Das Server-Image prüft erst der Deploy vor dem Hochladen.
+  Die CI läuft auf `develop`, `main` und bei PRs (ohne reine Doku-Änderungen) und ist
+  seit 2026-11-24 die maßgebliche Prüfung, mit actionlint und Image-Test;
+  `werkzeuge/pruefen.sh` ist nur noch Werkzeug.
 - Zustand von OpenTofu: Bucket `avlreminder-exp-1ef2-tfstate` (europe-west1,
   versioniert), angelegt per `gcloud`
 
